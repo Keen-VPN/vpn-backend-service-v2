@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                      String                   @id @default(uuid())
+  firebaseUid             String?                  @unique @map("firebase_uid")
+  appleUserId             String?                  @unique @map("apple_user_id")
+  googleUserId            String?                  @unique @map("google_user_id")
+  email                   String                   @unique
+  displayName             String?                  @map("display_name")
+  provider                String                   @default("google")
+  emailVerified           Boolean                  @default(false) @map("email_verified")
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+  stripeCustomerId        String?                  @unique @map("stripe_customer_id")
+  trialActive             Boolean                  @default(false) @map("trial_active")
+  trialStartsAt            DateTime?                @map("trial_starts_at")
+  trialEndsAt              DateTime?                @map("trial_ends_at")
+  trialTier                String?                  @map("trial_tier")
+  subscriptions           Subscription[]
+  appleIAPPurchases       AppleIAPPurchase[]
+
+  @@map("users")
+}
+
+model Subscription {
+  id                         String    @id @default(uuid())
+  userId                     String    @map("user_id")
+  stripeCustomerId           String?   @map("stripe_customer_id")
+  stripeSubscriptionId       String?   @map("stripe_subscription_id")
+  status                     String    @default("inactive")
+  planId                     String?   @map("plan_id")
+  planName                   String?   @map("plan_name")
+  priceAmount                Decimal?  @map("price_amount") @db.Decimal(10, 2)
+  priceCurrency              String?   @default("USD") @map("price_currency")
+  billingPeriod              String?   @map("billing_period")
+  currentPeriodStart         DateTime? @map("current_period_start")
+  currentPeriodEnd           DateTime? @map("current_period_end")
+  cancelAtPeriodEnd          Boolean   @default(false) @map("cancel_at_period_end")
+  cancelledAt                DateTime? @map("cancelled_at")
+  createdAt                  DateTime  @default(now()) @map("created_at")
+  updatedAt                  DateTime  @updatedAt @map("updated_at")
+  appleEnvironment           String?   @map("apple_environment")
+  appleOriginalTransactionId String?   @map("apple_original_transaction_id")
+  appleProductId             String?   @map("apple_product_id")
+  appleTransactionId         String?   @unique @map("apple_transaction_id")
+  subscriptionType           String    @default("stripe") @map("subscription_type")
+  user                       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([stripeSubscriptionId, currentPeriodStart], map: "subscription_period_unique")
+  @@index([userId])
+  @@index([subscriptionType])
+  @@index([stripeCustomerId])
+  @@index([appleTransactionId])
+  @@index([appleOriginalTransactionId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+model AppleIAPPurchase {
+  id                    String    @id @default(uuid())
+  transactionId         String    @unique @map("transaction_id")
+  originalTransactionId String    @unique @map("original_transaction_id")
+  productId             String    @map("product_id")
+  environment           String?   @map("environment")
+  purchaseDate          DateTime  @map("purchase_date")
+  expiresDate           DateTime? @map("expires_date")
+  receiptData           String?   @map("receipt_data")
+  linkedUserId          String?   @map("linked_user_id")
+  linkedEmail           String?   @map("linked_email")
+  linkedAt              DateTime? @map("linked_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  linkedUser            User?     @relation(fields: [linkedUserId], references: [id], onDelete: SetNull)
+
+  @@index([linkedUserId])
+  @@map("apple_iap_purchases")
+}
+

@@ -10,7 +10,8 @@ import { configValidationSchema } from './config.schema';
         `.env.${process.env.NODE_ENV || 'development'}`,
         '.env',
       ],
-      validationSchema: configValidationSchema,
+      // Skip validation in test mode - tests will override ConfigService
+      validationSchema: process.env.NODE_ENV === 'test' ? undefined : configValidationSchema,
       validationOptions: {
         allowUnknown: true,
         abortEarly: false,
