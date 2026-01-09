@@ -1,30 +1,58 @@
 import { Injectable } from '@nestjs/common';
-import { Node } from '../node-management/interfaces/node.interface';
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { Node, NodeStatus } from '../node-management/interfaces/node.interface';
 
 @Injectable()
 export class AllocationService {
-  selectOptimalNode(): Promise<Node | null> {
-    // TODO:
-    // 1. Query Redis Sorted Set for the region (or all regions if not specified)
-    // 2. Use ZRANGE to get the node with the lowest score (best available) in O(1)
-    // 3. Score calculation based on:
-    //    - CPU usage (lower is better)
-    //    - Bandwidth usage (lower is better)
-    //    - Connection count (lower is better)
-    // 4. Return the selected node details from NodeDB
-    // 5. If no nodes available, return null
+  private readonly HEARTBEAT_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
-    console.log('selectOptimalNode not implemented yet');
-    return Promise.resolve(null);
-  }
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
-  calculateNodeScore(): number {
-    // TODO:
-    // Calculate composite score for node ranking
-    // Example formula: score = (cpuUsage * 0.4) + (bandwidthUsage * 0.3) + (connectionCount * 0.3)
-    // Lower score = better node
+  async selectOptimalNode(region?: string): Promise<Node | null> {
+    const redisKey = region ? `nodes:${region}` : 'nodes:global';
 
-    console.log('calculateNodeScore not implemented yet');
-    return 0;
+    const nodeIds = await this.redisService.zrange(redisKey, 0, 0);
+
+    if (!nodeIds || nodeIds.length === 0) {
+      return null;
+    }
+
+    const node = await this.prismaService.node.findUnique({
+      where: { id: nodeIds[0] },
+    });
+
+    if (!node) {
+      return null;
+    }
+
+    if (node.status !== 'active') {
+      return null;
+    }
+
+    const heartbeatAge = Date.now() - new Date(node.lastHeartbeat).getTime();
+    if (heartbeatAge > this.HEARTBEAT_THRESHOLD_MS) {
+      return null;
+    }
+
+    return {
+      id: node.id,
+      ipAddress: node.ipAddress,
+      publicKey: node.publicKey,
+      region: node.region,
+      city: node.city ?? undefined,
+      country: node.country,
+      status: node.status as NodeStatus,
+      capacity: node.capacity,
+      currentConnections: node.currentConnections,
+      cpuUsage: node.cpuUsage,
+      bandwidthUsage: node.bandwidthUsage,
+      lastHeartbeat: new Date(node.lastHeartbeat),
+      createdAt: new Date(node.createdAt),
+      updatedAt: new Date(node.updatedAt),
+    };
   }
 }

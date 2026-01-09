@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
 
 export enum AlertType {
   HIGH_LOAD = 'high_load',
@@ -16,16 +19,50 @@ export interface Alert {
 
 @Injectable()
 export class NotificationService {
-  sendSlackAlert(_alert: Alert): Promise<void> {
-    // TODO:
-    // 1. Format alert message for Slack
-    // 2. Include relevant metadata (node ID, metrics, timestamp)
-    // 3. Send POST request to Slack Webhook URL (#ops-infrastructure)
-    // 4. Handle failures gracefully (log but don't block main flow)
-    // 5. Consider rate limiting to avoid alert spam
+  private readonly logger = new Logger(NotificationService.name);
 
-    console.log('Slack alert not implemented yet:', _alert);
-    return Promise.resolve();
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  async sendSlackAlert(alert: Alert): Promise<void> {
+    const webhookUrl = this.configService.get<string>('SLACK_WEBHOOK_URL');
+
+    if (!webhookUrl) {
+      this.logger.warn('SLACK_WEBHOOK_URL not configured, skipping alert');
+      return;
+    }
+
+    const emoji = this.getSeverityEmoji(alert.severity);
+    const formattedMessage = `${emoji} *${alert.type.toUpperCase()}*\n${alert.message}`;
+
+    try {
+      await firstValueFrom(
+        this.httpService.post(webhookUrl, {
+          text: formattedMessage,
+        }),
+      );
+      this.logger.log(`Alert sent to Slack: ${alert.type}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send Slack alert: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+    }
+  }
+
+  private getSeverityEmoji(severity: 'info' | 'warning' | 'critical'): string {
+    switch (severity) {
+      case 'critical':
+        return '🔴';
+      case 'warning':
+        return '⚠️';
+      case 'info':
+        return 'ℹ️';
+      default:
+        return '📢';
+    }
   }
 
   async notifyHighLoad(

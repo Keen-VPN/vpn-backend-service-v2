@@ -18,7 +18,7 @@ export class LocationController {
     description: 'List of available locations',
     type: [LocationResponseDto],
   })
-  getLocations(): LocationResponseDto[] {
+  async getLocations(): Promise<LocationResponseDto[]> {
     return this.locationService.getAvailableLocations();
   }
 }
