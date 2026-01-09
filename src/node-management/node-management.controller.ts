@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { NodeManagementService } from './node-management.service';
 import { RegisterNodeDto } from './dto/register-node.dto';
@@ -34,6 +34,7 @@ export class NodeManagementController {
   }
 
   @Post('pulse')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Submit node heartbeat and metrics',
     description:

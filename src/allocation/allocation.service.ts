@@ -4,7 +4,7 @@ import { Node } from '../node-management/interfaces/node.interface';
 @Injectable()
 export class AllocationService {
   selectOptimalNode(): Promise<Node | null> {
-    // TODO: Phase 2
+    // TODO:
     // 1. Query Redis Sorted Set for the region (or all regions if not specified)
     // 2. Use ZRANGE to get the node with the lowest score (best available) in O(1)
     // 3. Score calculation based on:
@@ -14,15 +14,17 @@ export class AllocationService {
     // 4. Return the selected node details from NodeDB
     // 5. If no nodes available, return null
 
-    throw new Error('Not implemented');
+    console.log('selectOptimalNode not implemented yet');
+    return Promise.resolve(null);
   }
 
   calculateNodeScore(): number {
-    // TODO: Phase 2
+    // TODO:
     // Calculate composite score for node ranking
     // Example formula: score = (cpuUsage * 0.4) + (bandwidthUsage * 0.3) + (connectionCount * 0.3)
     // Lower score = better node
 
-    throw new Error('Not implemented');
+    console.log('calculateNodeScore not implemented yet');
+    return 0;
   }
 }

@@ -16,16 +16,16 @@ export interface Alert {
 
 @Injectable()
 export class NotificationService {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   sendSlackAlert(_alert: Alert): Promise<void> {
-    // TODO: Phase 2
+    // TODO:
     // 1. Format alert message for Slack
     // 2. Include relevant metadata (node ID, metrics, timestamp)
     // 3. Send POST request to Slack Webhook URL (#ops-infrastructure)
     // 4. Handle failures gracefully (log but don't block main flow)
     // 5. Consider rate limiting to avoid alert spam
 
-    throw new Error('Not implemented');
+    console.log('Slack alert not implemented yet:', _alert);
+    return Promise.resolve();
   }
 
   async notifyHighLoad(
@@ -33,7 +33,7 @@ export class NotificationService {
     cpuUsage: number,
     threshold: number,
   ): Promise<void> {
-    // TODO: Phase 2
+    // TODO:
     // Trigger alert when node CPU usage exceeds threshold (e.g., 90%)
     const alert: Alert = {
       type: AlertType.HIGH_LOAD,
@@ -45,7 +45,7 @@ export class NotificationService {
   }
 
   async notifyNodeDeath(nodeId: string, lastHeartbeat: Date): Promise<void> {
-    // TODO: Phase 2
+    // TODO:
     // Trigger alert when node becomes unresponsive
     const alert: Alert = {
       type: AlertType.NODE_DEATH,
@@ -57,7 +57,7 @@ export class NotificationService {
   }
 
   async notifyNodeRegistered(nodeId: string, region: string): Promise<void> {
-    // TODO: Phase 2
+    // TODO:
     // Trigger info alert when new node joins fleet
     const alert: Alert = {
       type: AlertType.NODE_REGISTERED,
