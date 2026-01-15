@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuthController } from '../../../src/auth/auth.controller';
 import { AuthService } from '../../../src/auth/auth.service';
+import { AccountService } from '../../../src/account/account.service';
+import { SessionAuthGuard } from '../../../src/auth/guards/session-auth.guard';
+import { PrismaService } from '../../../src/prisma/prisma.service';
 import {
   createMockUser,
   createMockSubscription,
@@ -9,19 +13,30 @@ import {
 } from '../../setup/test-helpers';
 import {
   createMockFirebaseConfig,
+  createMockConfigService,
+  createMockPrismaClient,
 } from '../../setup/mocks';
 import { FirebaseConfig } from '../../../src/config/firebase.config';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let authService: jest.Mocked<AuthService>;
+  let accountService: jest.Mocked<AccountService>;
 
   beforeEach(async () => {
     const mockAuthService = {
       login: jest.fn(),
       logout: jest.fn(),
+      googleSignIn: jest.fn(),
+      appleSignIn: jest.fn(),
+      verifySession: jest.fn(),
+    };
+    const mockAccountService = {
+      deleteAccount: jest.fn(),
     };
     const mockFirebaseConfig = createMockFirebaseConfig();
+    const mockConfigService = createMockConfigService();
+    const mockPrismaService = createMockPrismaClient();
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
@@ -31,14 +46,28 @@ describe('AuthController', () => {
           useValue: mockAuthService,
         },
         {
+          provide: AccountService,
+          useValue: mockAccountService,
+        },
+        {
           provide: FirebaseConfig,
           useValue: mockFirebaseConfig,
         },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
+        },
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
+        },
+        SessionAuthGuard,
       ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
     authService = module.get(AuthService);
+    accountService = module.get(AccountService);
   });
 
   afterEach(() => {

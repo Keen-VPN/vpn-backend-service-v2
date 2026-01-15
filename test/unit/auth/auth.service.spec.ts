@@ -1,11 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../../../src/auth/auth.service';
 import { FirebaseConfig } from '../../../src/config/firebase.config';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { AppleTokenVerifierService } from '../../../src/auth/apple-token-verifier.service';
 import {
   createMockFirebaseAuth,
   createMockPrismaClient,
+  createMockConfigService,
   MockPrismaClient,
 } from '../../setup/mocks';
 import {
@@ -19,10 +22,12 @@ describe('AuthService', () => {
   let mockPrisma: MockPrismaClient;
   let mockFirebaseAuth: ReturnType<typeof createMockFirebaseAuth>;
   let mockFirebaseConfig: any;
+  let mockConfigService: ReturnType<typeof createMockConfigService>;
 
   beforeEach(async () => {
     mockPrisma = createMockPrismaClient();
     mockFirebaseAuth = createMockFirebaseAuth();
+    mockConfigService = createMockConfigService();
     mockFirebaseConfig = {
       getAuth: jest.fn().mockReturnValue(mockFirebaseAuth),
     };
@@ -38,6 +43,11 @@ describe('AuthService', () => {
           provide: FirebaseConfig,
           useValue: mockFirebaseConfig,
         },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
+        },
+        AppleTokenVerifierService,
       ],
     }).compile();
 
