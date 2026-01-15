@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -24,6 +25,10 @@ model User {
   trialTier                String?                  @map("trial_tier")
   subscriptions           Subscription[]
   appleIAPPurchases       AppleIAPPurchase[]
+  connectionSessions      ConnectionSession[]
+  trialGrant              TrialGrant?
+  deviceTrialFingerprints DeviceTrialFingerprint[]
+  pushTokens              PushToken[]
 
   @@map("users")
 }
@@ -81,5 +86,182 @@ model AppleIAPPurchase {
 
   @@index([linkedUserId])
   @@map("apple_iap_purchases")
+}
+
+model ConnectionSession {
+  id                 String            @id @default(uuid())
+  userId             String            @map("user_id")
+  sessionStart       DateTime          @map("session_start")
+  sessionEnd         DateTime?         @map("session_end")
+  durationSeconds    Int               @default(0) @map("duration_seconds")
+  serverLocation     String?           @map("server_location")
+  serverAddress      String?           @map("server_address")
+  platform           String
+  appVersion         String?           @map("app_version")
+  bytesTransferred   BigInt            @default(0) @map("bytes_transferred")
+  isAnonymized       Boolean           @default(false) @map("is_anonymized")
+  subscriptionTier   String?           @map("subscription_tier")
+  terminationReason  TerminationReason @default(USER_TERMINATION) @map("termination_reason")
+  eventType          EventType         @default(SESSION_START) @map("event_type")
+  heartbeatTimestamp DateTime?         @map("heartbeat_timestamp")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionStart])
+  @@index([sessionEnd])
+  @@index([durationSeconds])
+  @@index([platform])
+  @@index([serverLocation])
+  @@index([terminationReason])
+  @@index([eventType])
+  @@index([heartbeatTimestamp])
+  @@index([createdAt])
+  @@index([isAnonymized])
+  @@index([subscriptionTier])
+  @@map("connection_sessions")
+}
+
+model SessionAggregate {
+  id               String   @id @default(uuid())
+  aggregationDate  DateTime @map("aggregation_date")
+  platform         String
+  serverLocation   String   @map("server_location")
+  subscriptionTier String?  @map("subscription_tier")
+  totalSessions    Int      @map("total_sessions")
+  totalDuration    Int      @map("total_duration")
+  totalBytes       BigInt   @map("total_bytes")
+  avgDuration      Int      @map("avg_duration")
+  avgBytes         BigInt   @map("avg_bytes")
+  uniqueUsers      Int      @map("unique_users")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@unique([aggregationDate, platform, serverLocation, subscriptionTier])
+  @@index([aggregationDate])
+  @@index([platform])
+  @@index([serverLocation])
+  @@index([subscriptionTier])
+  @@map("session_aggregates")
+}
+
+model SalesContact {
+  id                       String   @id @default(uuid())
+  referenceId              String   @unique @map("reference_id") // Human-readable reference for customer
+  companyName              String   @map("company_name")
+  workEmail                String   @map("work_email")
+  teamSize                 Int      @map("team_size")
+  countryRegion            String?  @map("country_region")
+  hasConsent               Boolean  @map("has_consent")
+  phone                    String?  @map("phone")
+  useCase                  String?  @map("use_case")
+  preferredContactMethod   String?  @map("preferred_contact_method")
+  preferredContactTime     String?  @map("preferred_contact_time")
+  message                  String?  @map("message")
+  userAgent                String?  @map("user_agent") // For basic request tracking
+  status                   String   @default("pending") @map("status") // pending, contacted, converted, spam
+  salesTeamNotified        Boolean  @default(false) @map("sales_team_notified")
+  customerConfirmationSent Boolean  @default(false) @map("customer_confirmation_sent")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  @@index([workEmail])
+  @@index([referenceId])
+  @@index([createdAt])
+  @@index([status])
+  @@map("sales_contacts")
+}
+
+model ProcessedSession {
+  id                      String   @id @default(uuid())
+  sessionId               String   @unique @map("session_id")
+  userId                  String   @map("user_id")
+  dataConsumed            Decimal  @map("data_consumed") @db.Decimal(15, 2)
+  averageSessionBandwidth Decimal  @map("average_session_bandwidth") @db.Decimal(15, 2)
+  sessionDuration         Decimal  @map("session_duration") @db.Decimal(10, 2)
+  startedAt               DateTime @map("started_at") @db.Timestamptz
+  endedAt                 DateTime @map("ended_at") @db.Timestamptz
+  terminationReason       String   @map("termination_reason")
+  serverLocation          String?  @map("server_location")
+  processedAt             DateTime @default(now()) @map("processed_at") @db.Timestamptz
+
+  @@index([userId])
+  @@index([startedAt])
+  @@index([endedAt])
+  @@index([serverLocation])
+  @@index([terminationReason])
+  @@index([processedAt])
+  @@map("processed_sessions")
+}
+
+model VpnConfig {
+  id        String   @id @default(uuid())
+  version   String   @unique
+  payload   Json
+  etag      String?  @map("etag")
+  isActive  Boolean  @default(false) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive, createdAt])
+  @@map("vpn_configs")
+}
+
+model TrialGrant {
+  id         String   @id @default(uuid())
+  userId     String   @unique @map("user_id")
+  deviceHash String   @map("device_hash")
+  grantedAt  DateTime @default(now()) @map("granted_at")
+  expiresAt  DateTime @map("expires_at")
+  channel    String   @default("auto")
+  metadata   Json?    @db.JsonB
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([deviceHash], map: "trial_grants_device_hash")
+  @@map("trial_grants")
+}
+
+model DeviceTrialFingerprint {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  hash      String   @unique
+  platform  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  lastSeen  DateTime @default(now()) @map("last_seen")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "trial_device_fingerprints_user_id")
+  @@map("trial_device_fingerprints")
+}
+
+model PushToken {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  token       String   @unique
+  deviceHash  String?  @map("device_hash")
+  platform    String?  @map("platform")
+  environment String?  @map("environment")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "push_tokens_user_id")
+  @@map("push_tokens")
+}
+
+enum TerminationReason {
+  USER_TERMINATION @map("user_termination")
+  CONNECTION_LOST  @map("connection_lost")
+
+  @@map("termination_reason")
+}
+
+enum EventType {
+  SESSION_START @map("session_start")
+  HEARTBEAT     @map("heartbeat")
+  SESSION_END   @map("session_end")
+
+  @@map("event_type")
 }
 

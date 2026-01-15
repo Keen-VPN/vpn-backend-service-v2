@@ -9,6 +9,9 @@ import { AuthModule } from './auth/auth.module';
 import { CryptoModule } from './crypto/crypto.module';
 import { AccountModule } from './account/account.module';
 import { PaymentModule } from './payment/payment.module';
+import { SubscriptionModule } from './subscription/subscription.module';
+import { ConnectionModule } from './connection/connection.module';
+import { VPNConfigModule } from './config/vpn-config.module';
 import { SecurityMiddleware } from './common/middleware/security.middleware';
 
 @Module({
@@ -26,6 +29,9 @@ import { SecurityMiddleware } from './common/middleware/security.middleware';
     CryptoModule,
     AccountModule,
     PaymentModule,
+    SubscriptionModule,
+    ConnectionModule,
+    VPNConfigModule,
   ],
   controllers: [AppController],
   providers: [

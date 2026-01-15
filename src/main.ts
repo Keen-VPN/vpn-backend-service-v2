@@ -52,6 +52,9 @@ async function bootstrap() {
   // Global logging interceptor
   app.useGlobalInterceptors(new LoggingInterceptor());
 
+  // Set global API prefix
+  app.setGlobalPrefix('api');
+
   // Swagger/OpenAPI setup
   const config = new DocumentBuilder()
     .setTitle('Keen Backend API')

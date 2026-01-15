@@ -5,18 +5,19 @@ import { PrismaClient } from '@prisma/client';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor(private configService: ConfigService) {
-    super({
-      // Prisma 7 reads DATABASE_URL from environment variable automatically
-      // But we can also set it explicitly if needed
-    });
+    const databaseUrl = configService.get<string>('DATABASE_URL');
     
-    // Ensure DATABASE_URL is set
-    if (!process.env.DATABASE_URL) {
-      const dbUrl = this.configService.get<string>('DATABASE_URL');
-      if (dbUrl) {
-        process.env.DATABASE_URL = dbUrl;
-      }
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL is required');
     }
+
+    super({
+      datasources: {
+        db: {
+          url: databaseUrl,
+        },
+      },
+    });
   }
 
   async onModuleInit() {

@@ -17,7 +17,7 @@ export class StripeService {
       throw new Error('STRIPE_SECRET_KEY is required');
     }
     this.stripe = new Stripe(secretKey, {
-      apiVersion: '2024-12-18.acacia',
+      apiVersion: '2025-12-15.clover',
     });
   }
 
@@ -173,9 +173,11 @@ export class StripeService {
 
     const planInfo = this.extractPlanInfo(subscription);
     const currentPeriodStart = new Date(
-      subscription.current_period_start * 1000,
+      (subscription as any).current_period_start * 1000,
     );
-    const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    const currentPeriodEnd = new Date(
+      (subscription as any).current_period_end * 1000,
+    );
 
     // Check for existing subscription with same period
     const existing = await this.prisma.subscription.findFirst({
@@ -243,11 +245,12 @@ export class StripeService {
 
   private async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // Update subscription status if needed
-    if (invoice.subscription) {
+    const subscriptionRef = (invoice as any).subscription;
+    if (subscriptionRef) {
       const subscriptionId =
-        typeof invoice.subscription === 'string'
-          ? invoice.subscription
-          : invoice.subscription.id;
+        typeof subscriptionRef === 'string'
+          ? subscriptionRef
+          : subscriptionRef.id;
       const subscription = await this.stripe.subscriptions.retrieve(
         subscriptionId,
       );

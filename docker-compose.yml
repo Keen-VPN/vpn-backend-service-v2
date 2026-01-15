@@ -9,7 +9,7 @@ services:
     ports:
       - '3000:3000'
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=postgresql://keen_user:keen_password@postgres:5432/keen_db
       - REDIS_URL=redis://redis:6379

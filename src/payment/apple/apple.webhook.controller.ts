@@ -6,7 +6,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { AppleService } from './apple.service';
 import { SafeLogger } from '../../common/utils/logger.util';
 
