@@ -1,7 +1,13 @@
-import { Injectable } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SafeLogger } from '../../common/utils/logger.util';
+import { TrialService } from '../../subscription/trial.service';
 
 const APPLE_RECEIPT_URLS = {
   sandbox: 'https://sandbox.itunes.apple.com/verifyReceipt',
@@ -13,6 +19,8 @@ export class AppleService {
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
+    @Inject(forwardRef(() => TrialService))
+    private trialService: TrialService,
   ) {}
 
   async verifyReceipt(receiptData: string) {
@@ -184,6 +192,31 @@ export class AppleService {
           cancelAtPeriodEnd: false,
         },
       });
+
+      // Grant trial if eligible (after subscription is created)
+      try {
+        const fullUser = await this.prisma.user.findUnique({
+          where: { id: userId },
+        });
+        if (fullUser) {
+          const trialResult = await this.trialService.grantIfEligible(
+            fullUser,
+            null,
+          );
+          if (trialResult.granted) {
+            SafeLogger.info('Trial granted on subscription', {
+              userId: trialResult.userId,
+              trialEndsAt: trialResult.trialEndsAt?.toISOString(),
+            });
+          }
+        }
+      } catch (trialError) {
+        // Don't fail subscription creation if trial grant fails
+        SafeLogger.warn(
+          'Failed to grant trial on subscription (non-fatal)',
+          trialError,
+        );
+      }
     }
   }
 
@@ -210,7 +243,7 @@ export class AppleService {
     receiptData: string | undefined,
     environment: string | undefined,
     deviceFingerprint?: string,
-    devicePlatform?: string,
+    _devicePlatform?: string, // eslint-disable-line @typescript-eslint/no-unused-vars
   ) {
     try {
       // Verify device fingerprint if provided
@@ -233,7 +266,9 @@ export class AppleService {
       }
 
       const purchaseDate = new Date(parseInt(purchaseDateMs));
-      const expiresDate = expiresDateMs ? new Date(parseInt(expiresDateMs)) : null;
+      const expiresDate = expiresDateMs
+        ? new Date(parseInt(expiresDateMs))
+        : null;
 
       // Check if purchase already exists
       const existing = await this.prisma.appleIAPPurchase.findUnique({
@@ -291,7 +326,7 @@ export class AppleService {
     productId: string,
     receiptData: string,
     deviceFingerprint?: string,
-    devicePlatform?: string,
+    _devicePlatform?: string, // eslint-disable-line @typescript-eslint/no-unused-vars
   ) {
     try {
       // Verify device fingerprint if provided
@@ -309,7 +344,9 @@ export class AppleService {
       });
 
       if (!purchase) {
-        throw new Error('Purchase not found. Please complete the purchase first.');
+        throw new Error(
+          'Purchase not found. Please complete the purchase first.',
+        );
       }
 
       // Check if already linked to a different user
@@ -367,6 +404,31 @@ export class AppleService {
             cancelAtPeriodEnd: false,
           },
         });
+
+        // Grant trial if eligible (after subscription is created)
+        try {
+          const fullUser = await this.prisma.user.findUnique({
+            where: { id: userId },
+          });
+          if (fullUser) {
+            const trialResult = await this.trialService.grantIfEligible(
+              fullUser,
+              null,
+            );
+            if (trialResult.granted) {
+              SafeLogger.info('Trial granted on subscription', {
+                userId: trialResult.userId,
+                trialEndsAt: trialResult.trialEndsAt?.toISOString(),
+              });
+            }
+          }
+        } catch (trialError) {
+          // Don't fail subscription creation if trial grant fails
+          SafeLogger.warn(
+            'Failed to grant trial on subscription (non-fatal)',
+            trialError,
+          );
+        }
       }
 
       SafeLogger.info('Apple IAP purchase linked to user', {
@@ -398,7 +460,7 @@ export class AppleService {
       productId: string;
     }>,
     deviceFingerprint?: string,
-    devicePlatform?: string,
+    _devicePlatform?: string, // eslint-disable-line @typescript-eslint/no-unused-vars
   ) {
     try {
       // Verify device fingerprint if provided
@@ -418,41 +480,69 @@ export class AppleService {
         subscriptionId: string;
       }> = [];
       const errors: Array<{
-        transaction: { transactionId: string; originalTransactionId: string; productId: string };
+        transaction: {
+          transactionId: string;
+          originalTransactionId: string;
+          productId: string;
+        };
         error: string;
       }> = [];
 
       for (const txInfo of transactionIds) {
         try {
           // Validate transaction IDs
-          if (!txInfo.transactionId || !txInfo.originalTransactionId || !txInfo.productId) {
+          if (
+            !txInfo.transactionId ||
+            !txInfo.originalTransactionId ||
+            !txInfo.productId
+          ) {
             errors.push({
               transaction: txInfo,
-              error: 'Missing required fields: transactionId, originalTransactionId, productId',
+              error:
+                'Missing required fields: transactionId, originalTransactionId, productId',
             });
             continue;
           }
 
           // Skip invalid transaction IDs (like "0" or empty strings)
           // Apple transaction IDs are typically very large numbers, so "0" indicates an invalid/uninitialized value
-          const isInvalidTransactionId = 
-            txInfo.transactionId === '0' || 
-            txInfo.transactionId.trim() === '' ||
-            txInfo.originalTransactionId === '0' || 
-            txInfo.originalTransactionId.trim() === '';
-            
+          // In development, we allow "0" for testing purposes
+          const isProduction =
+            this.configService.get<string>('NODE_ENV') === 'production';
+          const isInvalidTransactionId =
+            (txInfo.transactionId === '0' ||
+              txInfo.transactionId.trim() === '' ||
+              txInfo.originalTransactionId === '0' ||
+              txInfo.originalTransactionId.trim() === '') &&
+            isProduction; // Only reject "0" in production
+
           if (isInvalidTransactionId) {
             SafeLogger.warn('Invalid transaction ID detected - skipping', {
               transactionId: txInfo.transactionId,
               originalTransactionId: txInfo.originalTransactionId,
               productId: txInfo.productId,
-              reason: 'Transaction ID is "0" or empty, indicating purchase may not be completed yet',
+              reason:
+                'Transaction ID is "0" or empty, indicating purchase may not be completed yet',
             });
             errors.push({
               transaction: txInfo,
-              error: 'Invalid transaction ID. This usually means the purchase has not been completed yet or the transaction is still being processed by Apple.',
+              error:
+                'Invalid transaction ID. This usually means the purchase has not been completed yet or the transaction is still being processed by Apple.',
             });
             continue;
+          }
+
+          // In development, log but allow "0" transactions
+          if (
+            !isProduction &&
+            (txInfo.transactionId === '0' ||
+              txInfo.originalTransactionId === '0')
+          ) {
+            SafeLogger.info('Allowing transaction with ID "0" in development', {
+              transactionId: txInfo.transactionId,
+              originalTransactionId: txInfo.originalTransactionId,
+              productId: txInfo.productId,
+            });
           }
 
           // Find the captured purchase by originalTransactionId first (like vpn-backend-service)
@@ -494,10 +584,14 @@ export class AppleService {
                 originalTransactionId: txInfo.originalTransactionId,
               });
             } catch (captureError) {
-              SafeLogger.error('Failed to auto-capture purchase', captureError, {
-                transactionId: txInfo.transactionId,
-                originalTransactionId: txInfo.originalTransactionId,
-              });
+              SafeLogger.error(
+                'Failed to auto-capture purchase',
+                captureError,
+                {
+                  transactionId: txInfo.transactionId,
+                  originalTransactionId: txInfo.originalTransactionId,
+                },
+              );
               errors.push({
                 transaction: txInfo,
                 error: `Failed to capture purchase: ${captureError instanceof Error ? captureError.message : 'Unknown error'}`,
@@ -537,7 +631,9 @@ export class AppleService {
             where: { originalTransactionId: txInfo.originalTransactionId },
             data: {
               linkedUserId: userId,
-              linkedEmail: (await this.prisma.user.findUnique({ where: { id: userId } }))?.email || null,
+              linkedEmail:
+                (await this.prisma.user.findUnique({ where: { id: userId } }))
+                  ?.email || null,
               linkedAt: new Date(),
             },
           });
@@ -555,7 +651,9 @@ export class AppleService {
           // If not found, check by originalTransactionId (for renewals)
           if (!existingSubscription) {
             existingSubscription = await this.prisma.subscription.findFirst({
-              where: { appleOriginalTransactionId: txInfo.originalTransactionId },
+              where: {
+                appleOriginalTransactionId: txInfo.originalTransactionId,
+              },
             });
           }
 
@@ -587,10 +685,37 @@ export class AppleService {
               userId,
               status: isActive ? 'active' : 'inactive',
             });
+
+            // Grant trial if eligible (after subscription is created)
+            try {
+              const fullUser = await this.prisma.user.findUnique({
+                where: { id: userId },
+              });
+              if (fullUser) {
+                const trialResult = await this.trialService.grantIfEligible(
+                  fullUser,
+                  null,
+                );
+                if (trialResult.granted) {
+                  SafeLogger.info('Trial granted on subscription', {
+                    userId: trialResult.userId,
+                    trialEndsAt: trialResult.trialEndsAt?.toISOString(),
+                  });
+                }
+              }
+            } catch (trialError) {
+              // Don't fail subscription creation if trial grant fails
+              SafeLogger.warn(
+                'Failed to grant trial on subscription (non-fatal)',
+                trialError,
+              );
+            }
           } else {
             subscriptionId = existingSubscription.id;
             // Update subscription status if needed
-            if (existingSubscription.status !== (isActive ? 'active' : 'inactive')) {
+            if (
+              existingSubscription.status !== (isActive ? 'active' : 'inactive')
+            ) {
               await this.prisma.subscription.update({
                 where: { id: existingSubscription.id },
                 data: {
@@ -620,7 +745,10 @@ export class AppleService {
           });
           errors.push({
             transaction: txInfo,
-            error: error instanceof Error ? error.message : 'Unknown error during linking',
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Unknown error during linking',
           });
         }
       }
@@ -644,9 +772,11 @@ export class AppleService {
         errors: errors.length > 0 ? errors : undefined,
       };
     } catch (error) {
-      SafeLogger.error('Error linking Apple IAP purchases with transaction IDs', error);
+      SafeLogger.error(
+        'Error linking Apple IAP purchases with transaction IDs',
+        error,
+      );
       throw error;
     }
   }
 }
-

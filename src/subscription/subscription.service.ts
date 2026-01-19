@@ -2,6 +2,8 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
+import { TrialService } from './trial.service';
+import { serializeTrialStatus } from './trial.util';
 import * as jwt from 'jsonwebtoken';
 
 @Injectable()
@@ -9,6 +11,7 @@ export class SubscriptionService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
+    private trialService: TrialService,
   ) {}
 
   async getStatusWithSession(sessionToken: string) {
@@ -35,11 +38,13 @@ export class SubscriptionService {
         throw new UnauthorizedException('User not found');
       }
 
-      // Get active subscription
+      // Get active subscription (includes both "active" and "trialing" status)
       const activeSubscription = await this.prisma.subscription.findFirst({
         where: {
           userId: user.id,
-          status: 'active',
+          status: {
+            in: ['active', 'trialing'], // Include both active and trialing subscriptions
+          },
           OR: [
             { currentPeriodEnd: null },
             { currentPeriodEnd: { gte: new Date() } },
@@ -48,22 +53,18 @@ export class SubscriptionService {
         orderBy: { createdAt: 'desc' },
       });
 
-      // Check for trial status
-      const trialActive = user.trialActive || false;
-      const trialEndsAt = user.trialEndsAt;
-      let daysRemaining = 0;
-      if (trialEndsAt && trialEndsAt > new Date()) {
-        const diff = trialEndsAt.getTime() - new Date().getTime();
-        daysRemaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
-      }
+      // Check if subscription is active (includes both "active" and "trialing" status)
+      const hasActiveSubscription =
+        activeSubscription !== null &&
+        (activeSubscription.status === 'active' ||
+          activeSubscription.status === 'trialing');
 
-      const trial = {
-        trialActive,
-        trialEndsAt: trialEndsAt?.toISOString() || null,
-        daysRemaining,
-        isPaid: !!activeSubscription,
-        tier: user.trialTier || null,
-      };
+      // Get trial status using TrialService (automatically expires if needed)
+      await this.trialService.expireIfNeeded(user.id);
+      const trialStatus = await this.trialService.status(user.id);
+
+      // Serialize trial status for API response
+      const trial = serializeTrialStatus(trialStatus);
 
       SafeLogger.info('Subscription status checked', {
         userId: user.id,
@@ -73,15 +74,27 @@ export class SubscriptionService {
 
       return {
         success: true,
-        hasActiveSubscription: !!activeSubscription,
+        hasActiveSubscription,
         subscription: activeSubscription
           ? {
               status: activeSubscription.status,
-              endDate: activeSubscription.currentPeriodEnd?.toISOString() || null,
+              plan: activeSubscription.planName || '',
+              endDate: activeSubscription.currentPeriodEnd?.toISOString() || '',
+              customerId:
+                activeSubscription.stripeCustomerId ||
+                activeSubscription.appleTransactionId ||
+                '',
               cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd || false,
               subscriptionType: activeSubscription.subscriptionType,
             }
-          : null,
+          : {
+              status: 'inactive',
+              plan: '',
+              endDate: '',
+              customerId: '',
+              cancelAtPeriodEnd: false,
+              subscriptionType: 'stripe',
+            },
         trial,
       };
     } catch (error) {
@@ -99,11 +112,13 @@ export class SubscriptionService {
       throw new UnauthorizedException('User not found');
     }
 
-    // Find active subscription
+    // Find active subscription (includes both "active" and "trialing" status)
     const activeSubscription = await this.prisma.subscription.findFirst({
       where: {
         userId,
-        status: 'active',
+        status: {
+          in: ['active', 'trialing'], // Include both active and trialing subscriptions
+        },
         OR: [
           { currentPeriodEnd: null },
           { currentPeriodEnd: { gte: new Date() } },
@@ -135,9 +150,9 @@ export class SubscriptionService {
 
     return {
       success: true,
-      message: 'Subscription will be cancelled at the end of the current period',
+      message:
+        'Subscription will be cancelled at the end of the current period',
       error: null,
     };
   }
 }
-

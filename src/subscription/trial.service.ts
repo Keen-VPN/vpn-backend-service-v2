@@ -1,0 +1,309 @@
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
+import { SafeLogger } from '../common/utils/logger.util';
+import {
+  addDaysUtc,
+  isBeforeUtc,
+  computeTrialDaysRemaining,
+} from './trial-helpers';
+
+const TRIAL_DURATION_DAYS = 30;
+const TRIAL_TIER_NAME = 'free_trial';
+
+export interface GrantResult {
+  granted: boolean;
+  reason?: string;
+  userId: string;
+  trialEndsAt?: Date;
+}
+
+export interface TrialStatus {
+  trialActive: boolean;
+  trialEndsAt: Date | null;
+  daysRemaining: number;
+  isPaid: boolean;
+  tier: string | null;
+}
+
+@Injectable()
+export class TrialService {
+  constructor(
+    private prisma: PrismaService,
+    private configService: ConfigService,
+  ) {}
+
+  /**
+   * Grants a trial to a user if they are eligible
+   * Requirements:
+   * - Feature flag must be enabled (FF_TRIALS_ENABLED)
+   * - User must not already have a trial grant (one-time only)
+   * - User must have an active subscription (status "active" or "trialing")
+   * - Device fingerprint validation (if provided)
+   */
+  async grantIfEligible(
+    user: { id: string; email: string; provider: string | null },
+    deviceHash: string | null,
+  ): Promise<GrantResult> {
+    SafeLogger.info('TrialService.grantIfEligible called', {
+      userId: user.id,
+      email: user.email,
+      deviceHash: deviceHash || 'null',
+      FF_TRIALS_ENABLED: this.configService.get<string>('FF_TRIALS_ENABLED'),
+    });
+
+    // Check feature flag
+    const trialsEnabled =
+      this.configService.get<string>('FF_TRIALS_ENABLED') === 'true';
+    if (!trialsEnabled) {
+      SafeLogger.info('Trial feature flag is disabled');
+      return { granted: false, reason: 'feature_disabled', userId: user.id };
+    }
+
+    const now = new Date();
+    const expiresAt = addDaysUtc(now, TRIAL_DURATION_DAYS);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Check if user already has a trial grant (one-time only)
+      const existingGrant = await tx.trialGrant.findUnique({
+        where: { userId: user.id },
+      });
+
+      if (existingGrant) {
+        SafeLogger.info('Trial blocked: User already has a trial grant', {
+          userId: user.id,
+        });
+        return { granted: false, reason: 'existing_grant', userId: user.id };
+      }
+
+      // Free trial is one-time only per user (regardless of IAP or Stripe subscription)
+      // REQUIRED: User must have a subscription (trialing or active) to get a trial
+      // Trials are only granted when users subscribe, not on sign-up
+      const activeSubscription = await tx.subscription.findFirst({
+        where: {
+          userId: user.id,
+          status: {
+            in: ['active', 'trialing'], // Include both active and trialing subscriptions
+          },
+          OR: [
+            { currentPeriodEnd: null },
+            { currentPeriodEnd: { gte: new Date() } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const hasSubscription = activeSubscription !== null;
+      const subscriptionStatus = activeSubscription?.status;
+
+      SafeLogger.info('Checking for subscription', {
+        hasSubscription,
+        subscriptionStatus,
+        subscriptionId: activeSubscription?.id,
+      });
+
+      if (!hasSubscription) {
+        SafeLogger.info(
+          'Trial blocked: User does not have a subscription (trials only granted when subscribing)',
+        );
+        return {
+          granted: false,
+          reason: 'no_subscription',
+          userId: user.id,
+        };
+      }
+
+      // Device fingerprint validation (if provided)
+      if (deviceHash) {
+        const existingFingerprint = await tx.deviceTrialFingerprint.findUnique({
+          where: { hash: deviceHash },
+        });
+
+        if (existingFingerprint && existingFingerprint.userId !== user.id) {
+          SafeLogger.info(
+            'Trial blocked: Device hash already used by another user',
+            {
+              userId: user.id,
+              existingUserId: existingFingerprint.userId,
+            },
+          );
+          return {
+            granted: false,
+            reason: 'device_hash_exists',
+            userId: user.id,
+          };
+        }
+
+        // Upsert device fingerprint
+        await tx.deviceTrialFingerprint.upsert({
+          where: { hash: deviceHash },
+          update: {
+            userId: user.id,
+            lastSeen: now,
+            platform: user.provider || undefined,
+          },
+          create: {
+            hash: deviceHash,
+            userId: user.id,
+            platform: user.provider || undefined,
+          },
+        });
+      }
+
+      // Create trial grant
+      const trial = await tx.trialGrant.create({
+        data: {
+          userId: user.id,
+          deviceHash: deviceHash ?? 'unknown',
+          expiresAt,
+        },
+      });
+
+      // Update user with trial information
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          trialActive: true,
+          trialStartsAt: now,
+          trialEndsAt: expiresAt,
+          trialTier: TRIAL_TIER_NAME,
+        },
+      });
+
+      SafeLogger.info('Trial granted', {
+        userId: user.id,
+        grantId: trial.id,
+        expiresAt: expiresAt.toISOString(),
+      });
+
+      return { granted: true, userId: user.id, trialEndsAt: expiresAt };
+    });
+
+    return result;
+  }
+
+  /**
+   * Updates device fingerprint for trial abuse prevention
+   */
+  async touchDeviceFingerprint(
+    userId: string,
+    deviceHash: string | null,
+    platform: string | null = null,
+  ): Promise<void> {
+    if (!deviceHash) return;
+
+    const now = new Date();
+    await this.prisma.deviceTrialFingerprint.upsert({
+      where: { hash: deviceHash },
+      update: {
+        userId,
+        lastSeen: now,
+        platform: platform || undefined,
+      },
+      create: {
+        hash: deviceHash,
+        userId,
+        platform: platform || undefined,
+      },
+    });
+  }
+
+  /**
+   * Gets the current trial status for a user
+   * Automatically checks if trial has expired
+   */
+  async status(userId: string): Promise<TrialStatus> {
+    // First, expire if needed
+    await this.expireIfNeeded(userId);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        trialActive: true,
+        trialEndsAt: true,
+        trialTier: true,
+      },
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const now = new Date();
+    const trialEndsAt = user.trialEndsAt ?? null;
+    const trialActive = Boolean(
+      user.trialActive && trialEndsAt && isBeforeUtc(now, trialEndsAt),
+    );
+    const daysRemaining = trialEndsAt
+      ? computeTrialDaysRemaining(trialEndsAt, now)
+      : 0;
+
+    // Check if user has active subscription (includes "active" and "trialing")
+    const hasActiveSubscription = await this.hasActiveSubscription(userId);
+
+    return {
+      trialActive,
+      trialEndsAt,
+      daysRemaining,
+      isPaid: hasActiveSubscription,
+      tier: user.trialTier ?? null,
+    };
+  }
+
+  /**
+   * Checks and expires trials that have passed their end date
+   * Should be called before checking trial status
+   */
+  async expireIfNeeded(userId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          trialActive: true,
+          trialEndsAt: true,
+        },
+      });
+
+      if (!user?.trialActive || !user.trialEndsAt) {
+        return;
+      }
+
+      const now = new Date();
+      if (!isBeforeUtc(now, user.trialEndsAt)) {
+        // Trial has expired
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            trialActive: false,
+            trialTier: null,
+          },
+        });
+
+        SafeLogger.info('Trial expired', {
+          userId,
+          expiredAt: now.toISOString(),
+        });
+      }
+    });
+  }
+
+  /**
+   * Checks if user has an active subscription (status "active" or "trialing")
+   */
+  private async hasActiveSubscription(userId: string): Promise<boolean> {
+    const activeSubscription = await this.prisma.subscription.findFirst({
+      where: {
+        userId,
+        status: {
+          in: ['active', 'trialing'],
+        },
+        OR: [
+          { currentPeriodEnd: null },
+          { currentPeriodEnd: { gte: new Date() } },
+        ],
+      },
+    });
+
+    return activeSubscription !== null;
+  }
+}

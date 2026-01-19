@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SafeLogger } from '../../common/utils/logger.util';
+import { TrialService } from '../../subscription/trial.service';
 
 @Injectable()
 export class StripeService {
@@ -11,6 +12,8 @@ export class StripeService {
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
+    @Inject(forwardRef(() => TrialService))
+    private trialService: TrialService,
   ) {
     const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
     if (!secretKey) {
@@ -103,28 +106,20 @@ export class StripeService {
 
     switch (event.type) {
       case 'checkout.session.completed':
-        await this.handleCheckoutSessionCompleted(
-          event.data.object as Stripe.Checkout.Session,
-        );
+        await this.handleCheckoutSessionCompleted(event.data.object);
         break;
 
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
-        await this.handleSubscriptionCreatedOrUpdated(
-          event.data.object as Stripe.Subscription,
-        );
+        await this.handleSubscriptionCreatedOrUpdated(event.data.object);
         break;
 
       case 'customer.subscription.deleted':
-        await this.handleSubscriptionDeleted(
-          event.data.object as Stripe.Subscription,
-        );
+        await this.handleSubscriptionDeleted(event.data.object);
         break;
 
       case 'invoice.payment_succeeded':
-        await this.handleInvoicePaymentSucceeded(
-          event.data.object as Stripe.Invoice,
-        );
+        await this.handleInvoicePaymentSucceeded(event.data.object);
         break;
 
       default:
@@ -172,10 +167,15 @@ export class StripeService {
     }
 
     const planInfo = this.extractPlanInfo(subscription);
+    // Stripe subscription object uses snake_case properties not in TypeScript types
+
     const currentPeriodStart = new Date(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       (subscription as any).current_period_start * 1000,
     );
+
     const currentPeriodEnd = new Date(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       (subscription as any).current_period_end * 1000,
     );
 
@@ -221,12 +221,27 @@ export class StripeService {
           cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
         },
       });
+
+      // Grant trial if eligible (after subscription is created)
+      try {
+        const trialResult = await this.trialService.grantIfEligible(user, null);
+        if (trialResult.granted) {
+          SafeLogger.info('Trial granted on subscription', {
+            userId: trialResult.userId,
+            trialEndsAt: trialResult.trialEndsAt?.toISOString(),
+          } as Record<string, any>);
+        }
+      } catch (trialError) {
+        // Don't fail subscription creation if trial grant fails
+        SafeLogger.warn(
+          'Failed to grant trial on subscription (non-fatal)',
+          trialError,
+        );
+      }
     }
   }
 
-  private async handleSubscriptionDeleted(
-    subscription: Stripe.Subscription,
-  ) {
+  private async handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     const existing = await this.prisma.subscription.findFirst({
       where: { stripeSubscriptionId: subscription.id },
     });
@@ -245,15 +260,19 @@ export class StripeService {
 
   private async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // Update subscription status if needed
+    // Stripe Invoice subscription property can be string or object
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const subscriptionRef = (invoice as any).subscription;
     if (subscriptionRef) {
-      const subscriptionId =
+      const subscriptionId: string =
         typeof subscriptionRef === 'string'
           ? subscriptionRef
-          : subscriptionRef.id;
-      const subscription = await this.stripe.subscriptions.retrieve(
-        subscriptionId,
-      );
+          : // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            (subscriptionRef.id as string);
+
+      const subscription =
+        await this.stripe.subscriptions.retrieve(subscriptionId);
       await this.handleSubscriptionCreatedOrUpdated(subscription);
     }
   }
@@ -304,16 +323,13 @@ export class StripeService {
   private getPriceIdForPlan(planId: string): string | null {
     const priceMap: Record<string, string> = {
       'individual-annual':
-        this.configService.get<string>(
-          'STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID',
-        ) || '',
+        this.configService.get<string>('STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID') ||
+        '',
       'individual-monthly':
-        this.configService.get<string>(
-          'STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID',
-        ) || '',
+        this.configService.get<string>('STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID') ||
+        '',
     };
 
     return priceMap[planId] || null;
   }
 }
-
