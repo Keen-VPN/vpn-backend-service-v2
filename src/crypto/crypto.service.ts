@@ -18,7 +18,7 @@ export class CryptoService {
 
     try {
       this.privateKey = crypto.createPrivateKey(privateKeyPem);
-    } catch (error) {
+    } catch {
       throw new Error('Invalid BLIND_SIGNING_PRIVATE_KEY format');
     }
   }
@@ -41,7 +41,9 @@ export class CryptoService {
       // RSA-FDH: Sign the blinded token directly
       // In a full implementation, you would hash first, but for blind signing
       // we sign the blinded value directly
-      const signature = crypto.sign(null, blindedBuffer, this.privateKey);
+      const signature = await Promise.resolve(
+        crypto.sign(null, blindedBuffer, this.privateKey),
+      );
 
       // Log only metadata (never the token content)
       SafeLogger.info('Blind signing operation', {
@@ -67,5 +69,37 @@ export class CryptoService {
     const publicKey = crypto.createPublicKey(this.privateKey);
     return publicKey.export({ type: 'spki', format: 'pem' }) as string;
   }
-}
 
+  /**
+   * Verify a blind-signed token
+   * @param token The original token (before blinding)
+   * @param signature The blind-signed signature (after unblinding)
+   * @returns true if signature is valid, false otherwise
+   */
+  verifyBlindSignedToken(token: string, signature: string): boolean {
+    try {
+      const tokenBuffer = Buffer.from(token, 'base64');
+      const signatureBuffer = Buffer.from(signature, 'base64');
+      const publicKey = crypto.createPublicKey(this.privateKey);
+
+      // Verify the signature using the public key
+      const isValid = crypto.verify(
+        null,
+        tokenBuffer,
+        publicKey,
+        signatureBuffer,
+      );
+
+      SafeLogger.info('Blind token verification', {
+        tokenLength: token.length,
+        signatureLength: signature.length,
+        isValid,
+      });
+
+      return isValid;
+    } catch (error) {
+      SafeLogger.error('Blind token verification failed', error);
+      return false;
+    }
+  }
+}
