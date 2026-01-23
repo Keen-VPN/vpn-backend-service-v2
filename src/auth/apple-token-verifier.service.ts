@@ -40,9 +40,27 @@ export class AppleTokenVerifierService {
       },
     });
 
-    this.bundleId =
-      this.configService.get<string>('APPLE_BUNDLE_ID') ||
-      'com.keenvpn.KeenVPN.keenVPN';
+    const configuredBundleId =
+      this.configService.get<string>('APPLE_BUNDLE_ID');
+    this.bundleId = configuredBundleId || 'com.keenvpn.KeenVPN.keenVPN';
+
+    // Log if using default or if configured value looks like a placeholder
+    if (!configuredBundleId) {
+      SafeLogger.info('Using default Apple bundle ID', {
+        bundleId: this.bundleId,
+        note: 'Set APPLE_BUNDLE_ID environment variable to override',
+      });
+    } else if (
+      configuredBundleId.includes('yourcompany') ||
+      configuredBundleId.includes('yourapp')
+    ) {
+      SafeLogger.warn('Apple bundle ID appears to be a placeholder', {
+        configured: configuredBundleId,
+        using: this.bundleId,
+        recommendation:
+          'Update APPLE_BUNDLE_ID environment variable to match your app',
+      });
+    }
   }
 
   async verifyIdentityToken(identityToken: string): Promise<AppleTokenPayload> {
@@ -87,6 +105,8 @@ export class AppleTokenVerifierService {
             {
               expected: this.bundleId,
               error: errorMessage,
+              recommendation:
+                'Consider updating APPLE_BUNDLE_ID environment variable to match the token audience',
             },
           );
 
