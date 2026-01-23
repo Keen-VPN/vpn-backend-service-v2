@@ -1,13 +1,16 @@
 import {
   Controller,
   Get,
+  Post,
   Headers,
+  Body,
   HttpCode,
   HttpStatus,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { VPNConfigService } from './vpn-config.service';
+import { VpnCredentialDto } from '../common/dto/vpn-credential.dto';
 import { Throttle } from '@nestjs/throttler';
 import { SafeLogger } from '../common/utils/logger.util';
 
@@ -50,5 +53,23 @@ export class VPNConfigController {
 
     return res.json(result.config);
   }
-}
 
+  @Post('vpn/credentials')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 50, ttl: 60000 } }) // 50 requests per minute
+  async getVPNCredentials(@Body() credentialDto: VpnCredentialDto) {
+    const credentials =
+      await this.vpnConfigService.generateTokenBasedCredentials(
+        credentialDto.token,
+        credentialDto.signature,
+        credentialDto.serverId,
+      );
+
+    SafeLogger.info('VPN credentials generated', {
+      serverId: credentialDto.serverId,
+      // Never log token or signature
+    });
+
+    return credentials;
+  }
+}
