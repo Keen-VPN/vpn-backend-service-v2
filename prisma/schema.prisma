@@ -1,0 +1,34 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Node {
+  id                 String   @id @default(uuid())
+  ipAddress          String   @map("ip_address")
+  publicKey          String   @unique @map("public_key")
+  region             String
+  city               String?
+  country            String
+  status             String   @default("active")
+  capacity           Int
+  currentConnections Int      @default(0) @map("current_connections")
+  cpuUsage           Float    @default(0) @map("cpu_usage")
+  bandwidthUsage     Float    @default(0) @map("bandwidth_usage")
+  lastHeartbeat      DateTime @default(now()) @map("last_heartbeat")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@index([region])
+  @@index([status])
+  @@map("nodes")
+}

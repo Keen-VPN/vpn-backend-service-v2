@@ -7,4 +7,5 @@ export const configValidationSchema = Joi.object({
   PORT: Joi.number().default(3000),
   DATABASE_URL: Joi.string().required(),
   REDIS_URL: Joi.string().default('redis://localhost:6379'),
+  SLACK_WEBHOOK_URL: Joi.string().optional(),
 });

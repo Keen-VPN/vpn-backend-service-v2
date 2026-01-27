@@ -8,6 +8,7 @@ dist
 .env
 .env.local
 .env.*.local
+.env.development
 
 # Logs
 *.log
@@ -28,3 +29,5 @@ coverage
 # OS
 .DS_Store
 Thumbs.db
+
+/generated/prisma
