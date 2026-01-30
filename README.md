@@ -31,6 +31,43 @@
 $ yarn install
 ```
 
+## Environment Configuration
+
+1. **Copy the example environment file**:
+```bash
+cp .env.example .env
+```
+
+2. **Fill in your environment variables** in `.env`:
+
+### Required Variables
+
+- **Database**: `DATABASE_URL` - PostgreSQL connection string
+- **Firebase**: 
+  - `FIREBASE_PROJECT_ID`
+  - `FIREBASE_PRIVATE_KEY_ID`
+  - `FIREBASE_PRIVATE_KEY` (PEM format with newlines as `\n`)
+  - `FIREBASE_CLIENT_EMAIL`
+  - `FIREBASE_CLIENT_ID`
+- **Stripe**: 
+  - `STRIPE_SECRET_KEY`
+  - `STRIPE_WEBHOOK_SECRET`
+- **Blind Signing**: 
+  - `BLIND_SIGNING_PRIVATE_KEY` (RSA private key in PEM format)
+
+### Optional Variables
+
+- `STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID` - Stripe price ID for annual plan
+- `STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID` - Stripe price ID for monthly plan
+- `APPLE_SHARED_SECRET` - Apple IAP shared secret
+- `APPLE_KEY_ID` - Apple App Store Server API key ID
+- `APPLE_ISSUER_ID` - Apple App Store Server API issuer ID
+- `APPLE_BUNDLE_ID` - Your app bundle ID
+- `JWT_SECRET` - JWT secret for additional operations
+- `REDIS_URL` - Redis connection URL (defaults to `redis://localhost:6379`)
+
+See `.env.example` for the complete list with descriptions.
+
 ## Compile and run the project
 
 ```bash

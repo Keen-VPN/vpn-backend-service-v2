@@ -1,0 +1,218 @@
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
+import { SafeLogger } from '../common/utils/logger.util';
+import { generateWeakEtag } from '../utils/etag';
+import * as fs from 'fs';
+import * as path from 'path';
+
+interface VPNServer {
+  id: string;
+  name: string;
+  country: string;
+  city: string;
+  serverAddress: string;
+  remoteIdentifier?: string;
+  credentialId: string;
+  assetKey?: string;
+  flagUrl?: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  isDefault?: boolean;
+  sortOrder?: number;
+  metadata?: Record<string, string>;
+}
+
+interface VPNCredential {
+  id: string;
+  username: string;
+  password: string;
+  sharedSecret?: string;
+  certificate?: string;
+  certificatePassword?: string;
+  metadata?: Record<string, string>;
+}
+
+interface VPNConfig {
+  version: string;
+  updatedAt: string | null;
+  servers: VPNServer[];
+  credentials: VPNCredential[];
+  featureFlags?: Record<string, boolean> | null;
+  rollout?: {
+    minAppVersion?: string;
+    maxAppVersion?: string;
+    allowDuringReview?: boolean;
+    stagedPercentage?: number;
+    channels?: string[];
+    metadata?: Record<string, string>;
+  } | null;
+  metadata?: Record<string, string>;
+}
+
+@Injectable()
+export class VPNConfigService implements OnModuleInit {
+  private cachedConfig: VPNConfig | null = null;
+  private cachedEtag: string | null = null;
+
+  constructor(
+    private configService: ConfigService,
+    private prisma: PrismaService,
+  ) {}
+
+  async onModuleInit() {
+    // Load config from database on startup
+    await this.loadConfigFromDatabase();
+  }
+
+  async getVPNConfig(
+    etag?: string,
+    clientToken?: string,
+  ): Promise<{ status: 'ok' | 'not-modified'; config?: VPNConfig; etag: string }> {
+    // Validate client token if provided
+    const expectedToken = this.configService.get<string>('CONFIG_CLIENT_TOKEN');
+    if (clientToken && expectedToken && clientToken !== expectedToken) {
+      SafeLogger.warn('Invalid config client token', {
+        provided: clientToken.substring(0, 8) + '...',
+      });
+      // Continue anyway, but log it
+    }
+
+    // Reload config from database to ensure we have the latest
+    await this.loadConfigFromDatabase();
+
+    // Check if client has current version
+    if (etag && etag === this.cachedEtag) {
+      return {
+        status: 'not-modified',
+        etag: this.cachedEtag!,
+      };
+    }
+
+    // Ensure config is valid before returning
+    if (!this.cachedConfig) {
+      SafeLogger.error('VPN config is null, using fallback');
+      this.cachedConfig = this.getDefaultConfig();
+      this.cachedEtag = generateWeakEtag(this.cachedConfig);
+    }
+
+    // Validate servers and credentials arrays are not empty
+    if (!this.cachedConfig.servers || this.cachedConfig.servers.length === 0) {
+      SafeLogger.error('VPN config has no servers, using fallback');
+      this.cachedConfig = this.getDefaultConfig();
+      this.cachedEtag = generateWeakEtag(this.cachedConfig);
+    }
+
+    if (!this.cachedConfig.credentials || this.cachedConfig.credentials.length === 0) {
+      SafeLogger.error('VPN config has no credentials, using fallback');
+      this.cachedConfig = this.getDefaultConfig();
+      this.cachedEtag = generateWeakEtag(this.cachedConfig);
+    }
+
+    // Return current config
+    return {
+      status: 'ok',
+      config: this.cachedConfig!,
+      etag: this.cachedEtag!,
+    };
+  }
+
+  private async loadConfigFromDatabase(): Promise<void> {
+    try {
+      // Get active VPN config from database
+      const dbConfig = await this.prisma.vpnConfig.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (dbConfig && dbConfig.payload) {
+        // Use config from database
+        // Prisma returns JSON as Prisma.JsonValue, need to properly cast it
+        const payload = dbConfig.payload as unknown as VPNConfig;
+        
+        // Validate and ensure servers array exists and is not empty
+        if (!payload.servers || !Array.isArray(payload.servers) || payload.servers.length === 0) {
+          SafeLogger.warn('VPN config from database has invalid or empty servers array, using default', {
+            version: dbConfig.version,
+            serversType: typeof payload.servers,
+            serversLength: Array.isArray(payload.servers) ? payload.servers.length : 'not an array',
+          });
+          this.cachedConfig = this.getDefaultConfig();
+          this.cachedEtag = generateWeakEtag(this.cachedConfig);
+          return;
+        }
+        
+        // Validate and ensure credentials array exists and is not empty
+        if (!payload.credentials || !Array.isArray(payload.credentials) || payload.credentials.length === 0) {
+          SafeLogger.warn('VPN config from database has invalid or empty credentials array, using default', {
+            version: dbConfig.version,
+            credentialsType: typeof payload.credentials,
+            credentialsLength: Array.isArray(payload.credentials) ? payload.credentials.length : 'not an array',
+          });
+          this.cachedConfig = this.getDefaultConfig();
+          this.cachedEtag = generateWeakEtag(this.cachedConfig);
+          return;
+        }
+        
+        // Ensure updatedAt is either a string or null (not undefined)
+        const normalizedConfig: VPNConfig = {
+          ...payload,
+          updatedAt: payload.updatedAt ?? null,
+          featureFlags: payload.featureFlags ?? null,
+          rollout: payload.rollout ?? null,
+        };
+        
+        this.cachedConfig = normalizedConfig;
+        this.cachedEtag = dbConfig.etag || generateWeakEtag(normalizedConfig);
+        SafeLogger.info('Loaded VPN config from database', {
+          version: dbConfig.version,
+          etag: this.cachedEtag.substring(0, 16) + '...',
+          serversCount: normalizedConfig.servers.length,
+          credentialsCount: normalizedConfig.credentials.length,
+        });
+      } else {
+        // Fallback to default config file
+        this.cachedConfig = this.getDefaultConfig();
+        this.cachedEtag = generateWeakEtag(this.cachedConfig);
+        SafeLogger.warn('No active VPN config in database, using default config file');
+      }
+    } catch (error) {
+      SafeLogger.error('Failed to load VPN config from database', error);
+      // Fallback to default config
+      this.cachedConfig = this.getDefaultConfig();
+      this.cachedEtag = generateWeakEtag(this.cachedConfig);
+    }
+  }
+
+  private getDefaultConfig(): VPNConfig {
+    try {
+      // Try to load from default config file
+      const configPath = path.join(__dirname, 'default-vpn-config.json');
+      if (fs.existsSync(configPath)) {
+        const configContent = fs.readFileSync(configPath, 'utf-8');
+        const config = JSON.parse(configContent) as VPNConfig;
+        SafeLogger.info('Loaded default VPN config from file');
+        return config;
+      }
+    } catch (error) {
+      SafeLogger.error('Failed to load default VPN config file', error);
+    }
+
+    // Ultimate fallback - return empty config
+    return {
+      version: '1.0.0',
+      updatedAt: new Date().toISOString(),
+      servers: [],
+      credentials: [],
+      featureFlags: {},
+      rollout: {
+        allowDuringReview: false,
+        channels: ['production'],
+      },
+      metadata: {},
+    };
+  }
+}
+

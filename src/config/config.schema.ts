@@ -7,4 +7,33 @@ export const configValidationSchema = Joi.object({
   PORT: Joi.number().default(3000),
   DATABASE_URL: Joi.string().required(),
   REDIS_URL: Joi.string().default('redis://localhost:6379'),
+  
+  // Firebase Configuration
+  FIREBASE_PROJECT_ID: Joi.string().required(),
+  FIREBASE_PRIVATE_KEY_ID: Joi.string().required(),
+  FIREBASE_PRIVATE_KEY: Joi.string().required(),
+  FIREBASE_CLIENT_EMAIL: Joi.string().required(),
+  FIREBASE_CLIENT_ID: Joi.string().required(),
+  FIREBASE_AUTH_URI: Joi.string().default('https://accounts.google.com/o/oauth2/auth'),
+  FIREBASE_TOKEN_URI: Joi.string().default('https://oauth2.googleapis.com/token'),
+  FIREBASE_AUTH_PROVIDER_X509_CERT_URL: Joi.string().optional(),
+  FIREBASE_CLIENT_X509_CERT_URL: Joi.string().optional(),
+  
+  // Stripe Configuration
+  STRIPE_SECRET_KEY: Joi.string().required(),
+  STRIPE_WEBHOOK_SECRET: Joi.string().required(),
+  STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID: Joi.string().optional(),
+  STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID: Joi.string().optional(),
+  
+  // Apple IAP Configuration
+  APPLE_SHARED_SECRET: Joi.string().optional(),
+  APPLE_KEY_ID: Joi.string().optional(),
+  APPLE_ISSUER_ID: Joi.string().optional(),
+  APPLE_BUNDLE_ID: Joi.string().optional(),
+  
+  // Blind Signing Configuration
+  BLIND_SIGNING_PRIVATE_KEY: Joi.string().required(),
+  
+  // JWT Configuration
+  JWT_SECRET: Joi.string().optional(),
 });

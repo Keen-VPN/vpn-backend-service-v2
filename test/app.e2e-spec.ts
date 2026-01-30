@@ -3,6 +3,10 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { FirebaseConfig } from '../src/config/firebase.config';
+import { createMockConfigService, createMockPrismaClient, createMockFirebaseConfig } from './setup/mocks';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -10,10 +14,23 @@ describe('AppController (e2e)', () => {
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(ConfigService)
+      .useValue(createMockConfigService())
+      .overrideProvider(PrismaService)
+      .useValue(createMockPrismaClient())
+      .overrideProvider(FirebaseConfig)
+      .useValue(createMockFirebaseConfig())
+      .compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();
+  });
+
+  afterEach(async () => {
+    if (app) {
+      await app.close();
+    }
   });
 
   it('/ (GET)', () => {

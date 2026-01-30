@@ -1,1 +1,14 @@
-yarn lint-staged
+#!/usr/bin/env sh
+# Load nvm if available (for yarn)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# Try yarn, fallback to npx if yarn not found
+if command -v yarn >/dev/null 2>&1; then
+  yarn lint-staged
+elif command -v npx >/dev/null 2>&1; then
+  npx lint-staged
+else
+  echo "⚠️  Neither yarn nor npx found, skipping lint-staged"
+  exit 0
+fi
