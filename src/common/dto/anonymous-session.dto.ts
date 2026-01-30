@@ -5,13 +5,19 @@ import {
   IsNumber,
   IsInt,
   Min,
+  IsBase64,
 } from 'class-validator';
 
-export class ConnectionSessionDto {
-  /** Optional when user is identified by Bearer token (anonymized session recording). */
+export class AnonymousSessionDto {
   @IsString()
-  @IsOptional()
-  email?: string;
+  @IsNotEmpty()
+  @IsBase64()
+  token: string; // The original token (before blinding)
+
+  @IsString()
+  @IsNotEmpty()
+  @IsBase64()
+  signature: string; // The blind-signed signature (after unblinding)
 
   @IsString()
   @IsNotEmpty()

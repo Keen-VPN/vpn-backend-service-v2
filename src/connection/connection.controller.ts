@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ConnectionService } from './connection.service';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
+import { AnonymousSessionDto } from '../common/dto/anonymous-session.dto';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Throttle } from '@nestjs/throttler';
@@ -26,7 +27,7 @@ export class ConnectionController {
   @Throttle({ default: { limit: 100, ttl: 60000 } })
   async recordSession(
     @Body() sessionDto: ConnectionSessionDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: { uid: string; email: string },
   ) {
     return this.connectionService.recordSession(user.uid, sessionDto);
   }
@@ -37,7 +38,7 @@ export class ConnectionController {
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   async getSessions(
     @Param('email') email: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: { uid: string; email: string },
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
@@ -58,7 +59,7 @@ export class ConnectionController {
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   async getStats(
     @Param('email') email: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: { uid: string; email: string },
   ) {
     // Verify user owns this email
     if (user.email !== email) {
@@ -67,5 +68,11 @@ export class ConnectionController {
 
     return this.connectionService.getStats(email);
   }
-}
 
+  @Post('session/anonymous')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 100, ttl: 60000 } }) // Same rate limit as regular sessions
+  async recordAnonymousSession(@Body() sessionDto: AnonymousSessionDto) {
+    return this.connectionService.recordAnonymousSession(sessionDto);
+  }
+}
