@@ -1,9 +1,17 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsInt, Min } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsNumber,
+  IsInt,
+  Min,
+} from 'class-validator';
 
 export class ConnectionSessionDto {
+  /** Optional when user is identified by Bearer token (anonymized session recording). */
   @IsString()
-  @IsNotEmpty()
-  email: string;
+  @IsOptional()
+  email?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -41,4 +49,3 @@ export class ConnectionSessionDto {
   @IsOptional()
   bytes_transferred?: number;
 }
-

@@ -17,16 +17,32 @@ export class ConnectionService {
 
   async recordSession(userId: string, sessionDto: ConnectionSessionDto) {
     try {
-      // Find user by email to get userId if not provided
-      let targetUserId = userId;
-      if (!targetUserId) {
-        const user = await this.prisma.user.findUnique({
-          where: { email: sessionDto.email },
-        });
-        if (!user) {
-          throw new Error('User not found');
+      // Anonymized request: client omitted email (identifies only via Bearer token).
+      // Store under anonymous user so no userId link is persisted (true anonymization).
+      const isAnonymized =
+        sessionDto.email === undefined ||
+        sessionDto.email === null ||
+        String(sessionDto.email).trim() === '';
+
+      let targetUserId: string;
+      let isAnonymizedFlag = false;
+
+      if (isAnonymized) {
+        await this.ensureAnonymousUserExists();
+        targetUserId = this.ANONYMOUS_USER_ID;
+        isAnonymizedFlag = true;
+      } else {
+        // Identified request: resolve user from provided userId or email
+        targetUserId = userId;
+        if (!targetUserId) {
+          const user = await this.prisma.user.findUnique({
+            where: { email: sessionDto.email },
+          });
+          if (!user) {
+            throw new Error('User not found');
+          }
+          targetUserId = user.id;
         }
-        targetUserId = user.id;
       }
 
       const sessionStart = new Date(sessionDto.session_start);
@@ -34,7 +50,7 @@ export class ConnectionService {
         ? new Date(sessionDto.session_end)
         : null;
 
-      // Store connection session in database
+      // Store connection session in database (no user link when anonymized)
       await this.prisma.connectionSession.create({
         data: {
           userId: targetUserId,
@@ -49,14 +65,14 @@ export class ConnectionService {
           bytesTransferred: sessionDto.bytes_transferred
             ? BigInt(sessionDto.bytes_transferred)
             : BigInt(0),
-          terminationReason: 'USER_TERMINATION' as const, // Default, can be updated if needed
-          eventType: 'SESSION_START' as const, // Default, can be updated if needed
+          isAnonymized: isAnonymizedFlag,
+          terminationReason: 'USER_TERMINATION' as const,
+          eventType: 'SESSION_START' as const,
         },
       });
 
       SafeLogger.info('Connection session recorded', {
-        userId: userId,
-        email: '[REDACTED]',
+        anonymized: isAnonymizedFlag,
         duration: sessionDto.duration_seconds,
         platform: sessionDto.platform,
       });
