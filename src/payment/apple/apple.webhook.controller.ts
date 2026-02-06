@@ -45,4 +45,3 @@ export class AppleWebhookController {
     return result;
   }
 }
-

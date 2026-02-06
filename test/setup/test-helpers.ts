@@ -103,10 +103,7 @@ export function createMockDecodedFirebaseToken() {
   };
 }
 
-export function createMockStripeEvent(
-  type: string,
-  data: any,
-): any {
+export function createMockStripeEvent(type: string, data: any): any {
   return {
     id: `evt_${faker.string.alphanumeric(24)}`,
     object: 'event',
@@ -157,7 +154,9 @@ export function createMockStripeSubscription(): any {
     customer: `cus_${faker.string.alphanumeric(24)}`,
     status: 'active',
     current_period_start: Math.floor(Date.now() / 1000),
-    current_period_end: Math.floor((Date.now() + 365 * 24 * 60 * 60 * 1000) / 1000),
+    current_period_end: Math.floor(
+      (Date.now() + 365 * 24 * 60 * 60 * 1000) / 1000,
+    ),
     cancel_at_period_end: false,
     items: {
       data: [
@@ -176,4 +175,3 @@ export function createMockStripeSubscription(): any {
     },
   };
 }
-

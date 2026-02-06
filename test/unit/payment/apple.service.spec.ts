@@ -5,8 +5,10 @@ import { PrismaService } from '../../../src/prisma/prisma.service';
 import {
   createMockPrismaClient,
   createMockConfigService,
+  createMockTrialService,
   MockPrismaClient,
 } from '../../setup/mocks';
+import { TrialService } from '../../../src/subscription/trial.service';
 import {
   createMockAppleReceipt,
   createMockAppleIAPPurchase,
@@ -35,6 +37,10 @@ describe('AppleService', () => {
         {
           provide: ConfigService,
           useValue: mockConfigService,
+        },
+        {
+          provide: TrialService,
+          useValue: createMockTrialService(),
         },
       ],
     }).compile();
@@ -125,7 +131,10 @@ describe('AppleService', () => {
               transaction_id: 'new-transaction-id',
               product_id: 'com.keenvpn.premium.annual',
               purchase_date_ms: Date.now().toString(),
-              expires_date_ms: (Date.now() + 365 * 24 * 60 * 60 * 1000).toString(),
+              expires_date_ms: (
+                Date.now() +
+                365 * 24 * 60 * 60 * 1000
+              ).toString(),
             },
           ],
         },
@@ -172,4 +181,3 @@ describe('AppleService', () => {
     });
   });
 });
-

@@ -29,4 +29,3 @@ export class LinkPurchaseDto {
   @IsOptional()
   devicePlatform?: string;
 }
-

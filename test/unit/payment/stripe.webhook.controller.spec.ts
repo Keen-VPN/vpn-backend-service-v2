@@ -98,11 +98,11 @@ describe('StripeWebhookController', () => {
         send: jest.fn(),
       };
 
-      (mockStripeInstance.webhooks.constructEvent as jest.Mock).mockImplementation(
-        () => {
-          throw new Error('Invalid signature');
-        },
-      );
+      (
+        mockStripeInstance.webhooks.constructEvent as jest.Mock
+      ).mockImplementation(() => {
+        throw new Error('Invalid signature');
+      });
 
       await controller.handleWebhook(mockReq as any, mockRes as any);
 
@@ -128,7 +128,10 @@ describe('StripeWebhookController', () => {
 
   describe('POST /payment/stripe/checkout', () => {
     it('should create checkout session', async () => {
-      const session = { url: 'https://checkout.stripe.com/test', id: 'cs_test' };
+      const session = {
+        url: 'https://checkout.stripe.com/test',
+        id: 'cs_test',
+      };
       const mockReq = {
         body: {
           userId: 'user-123',
@@ -167,4 +170,3 @@ describe('StripeWebhookController', () => {
     });
   });
 });
-

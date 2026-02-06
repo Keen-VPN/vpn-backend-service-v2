@@ -28,12 +28,9 @@ const config: Config = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/../src/$1',
   },
-  transformIgnorePatterns: [
-    'node_modules/(?!@faker-js)',
-  ],
+  transformIgnorePatterns: ['node_modules/(?!@faker-js)'],
   setupFilesAfterEnv: ['<rootDir>/setup/jest.setup.ts'],
   moduleDirectories: ['node_modules', '<rootDir>/../src'],
 };
 
 export default config;
-

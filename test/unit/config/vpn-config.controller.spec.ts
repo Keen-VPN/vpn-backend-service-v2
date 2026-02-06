@@ -72,7 +72,10 @@ describe('VPNConfigController', () => {
         undefined,
         undefined,
       );
-      expect(mockResponse.setHeader).toHaveBeenCalledWith('ETag', '"W/"abc123""');
+      expect(mockResponse.setHeader).toHaveBeenCalledWith(
+        'ETag',
+        '"W/"abc123""',
+      );
       expect(mockResponse.json).toHaveBeenCalledWith(mockConfig);
     });
 
@@ -90,7 +93,11 @@ describe('VPNConfigController', () => {
         etag: 'W/"abc123"',
       });
 
-      await controller.getVPNConfig(`"${etag}"`, undefined, mockResponse as any);
+      await controller.getVPNConfig(
+        `"${etag}"`,
+        undefined,
+        mockResponse as any,
+      );
 
       expect(vpnConfigService.getVPNConfig).toHaveBeenCalledWith(
         etag,
@@ -122,4 +129,3 @@ describe('VPNConfigController', () => {
     });
   });
 });
-

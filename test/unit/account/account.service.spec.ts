@@ -2,10 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { AccountService } from '../../../src/account/account.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
-import {
-  createMockPrismaClient,
-  MockPrismaClient,
-} from '../../setup/mocks';
+import { createMockPrismaClient, MockPrismaClient } from '../../setup/mocks';
 import {
   createMockUser,
   createMockSubscription,
@@ -171,4 +168,3 @@ describe('AccountService', () => {
     });
   });
 });
-

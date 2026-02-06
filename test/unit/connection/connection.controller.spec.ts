@@ -113,11 +113,7 @@ describe('ConnectionController', () => {
 
       expect(result.success).toBe(true);
       expect(result.data).toBeDefined();
-      expect(connectionService.getSessions).toHaveBeenCalledWith(
-        email,
-        50,
-        0,
-      );
+      expect(connectionService.getSessions).toHaveBeenCalledWith(email, 50, 0);
     });
 
     it('should throw UnauthorizedException if email does not match', async () => {
@@ -168,4 +164,3 @@ describe('ConnectionController', () => {
     });
   });
 });
-

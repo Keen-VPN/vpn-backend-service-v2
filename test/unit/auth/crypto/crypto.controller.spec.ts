@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException, BadRequestException } from '@nestjs/common';
-import { CryptoController } from '../../../src/crypto/crypto.controller';
-import { CryptoService } from '../../../src/crypto/crypto.service';
-import { FirebaseAuthGuard } from '../../../src/auth/guards/firebase-auth.guard';
-import { createMockBlindedToken } from '../../setup/test-helpers';
+import { CryptoController } from '../../../../src/auth/crypto/crypto.controller';
+import { CryptoService } from '../../../../src/auth/crypto/crypto.service';
+import { FirebaseAuthGuard } from '../../../../src/auth/guards/firebase-auth.guard';
+import { createMockBlindedToken } from '../../../setup/test-helpers';
+import { SessionAuthGuard } from '../../../../src/auth/guards/session-auth.guard';
 
 describe('CryptoController', () => {
   let controller: CryptoController;
@@ -22,8 +23,14 @@ describe('CryptoController', () => {
           provide: CryptoService,
           useValue: mockCryptoService,
         },
+        {
+          provide: SessionAuthGuard,
+          useValue: { canActivate: jest.fn(() => true) },
+        },
       ],
     })
+      .overrideGuard(SessionAuthGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
       .overrideGuard(FirebaseAuthGuard)
       .useValue({
         canActivate: jest.fn().mockReturnValue(true),
@@ -70,7 +77,8 @@ describe('CryptoController', () => {
 
   describe('GET /auth/vpn-token/public-key', () => {
     it('should return public key', async () => {
-      const publicKey = '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----';
+      const publicKey =
+        '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----';
 
       cryptoService.getPublicKey.mockReturnValue(publicKey);
 
@@ -81,4 +89,3 @@ describe('CryptoController', () => {
     });
   });
 });
-

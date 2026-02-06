@@ -131,7 +131,10 @@ export class AppleIAPController {
 
       return result;
     } catch (error) {
-      SafeLogger.error('Error linking Apple IAP purchases with transaction IDs', error);
+      SafeLogger.error(
+        'Error linking Apple IAP purchases with transaction IDs',
+        error,
+      );
       return {
         success: false,
         error: error.message || 'Failed to link purchases',
@@ -139,4 +142,3 @@ export class AppleIAPController {
     }
   }
 }
-

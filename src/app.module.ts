@@ -6,12 +6,14 @@ import { AppService } from './app.service';
 import { ConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
-import { CryptoModule } from './crypto/crypto.module';
+import { CryptoModule } from './auth/crypto/crypto.module';
 import { AccountModule } from './account/account.module';
 import { PaymentModule } from './payment/payment.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { ConnectionModule } from './connection/connection.module';
 import { VPNConfigModule } from './config/vpn-config.module';
+import { RedemptionModule } from './redemption/redemption.module';
+import { RedisModule } from './redis/redis.module';
 import { SecurityMiddleware } from './common/middleware/security.middleware';
 
 @Module({
@@ -32,6 +34,8 @@ import { SecurityMiddleware } from './common/middleware/security.middleware';
     SubscriptionModule,
     ConnectionModule,
     VPNConfigModule,
+    RedemptionModule,
+    RedisModule,
   ],
   controllers: [AppController],
   providers: [

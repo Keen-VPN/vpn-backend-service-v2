@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
-import { SafeLogger } from '../common/utils/logger.util';
+import { SafeLogger } from '../../common/utils/logger.util';
 
 @Injectable()
 export class CryptoService {

@@ -10,17 +10,27 @@ export class SafeLogger {
    */
   static info(message: string, data?: Record<string, any>) {
     const sanitized = this.sanitizeData(data);
-    console.log(`[INFO] ${message}`, sanitized ? JSON.stringify(sanitized) : '');
+    console.log(
+      `[INFO] ${message}`,
+      sanitized ? JSON.stringify(sanitized) : '',
+    );
   }
 
-  static error(message: string, error?: Error | any, data?: Record<string, any>) {
+  static error(
+    message: string,
+    error?: Error | any,
+    data?: Record<string, any>,
+  ) {
     const sanitized = this.sanitizeData(data);
-    const errorDetails = error instanceof Error ? {
-      name: error.name,
-      message: error.message,
-      // Never log stack traces with PII
-    } : error;
-    
+    const errorDetails =
+      error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+            // Never log stack traces with PII
+          }
+        : error;
+
     console.error(`[ERROR] ${message}`, {
       ...sanitized,
       error: errorDetails,
@@ -29,13 +39,18 @@ export class SafeLogger {
 
   static warn(message: string, data?: Record<string, any>) {
     const sanitized = this.sanitizeData(data);
-    console.warn(`[WARN] ${message}`, sanitized ? JSON.stringify(sanitized) : '');
+    console.warn(
+      `[WARN] ${message}`,
+      sanitized ? JSON.stringify(sanitized) : '',
+    );
   }
 
   /**
    * Sanitize data by redacting PII fields
    */
-  private static sanitizeData(data?: Record<string, any>): Record<string, any> | undefined {
+  private static sanitizeData(
+    data?: Record<string, any>,
+  ): Record<string, any> | undefined {
     if (!data) return undefined;
 
     const piiFields = [
@@ -52,7 +67,7 @@ export class SafeLogger {
     ];
 
     const sanitized = { ...data };
-    
+
     for (const field of piiFields) {
       if (sanitized[field]) {
         sanitized[field] = '[REDACTED]';
@@ -69,4 +84,3 @@ export class SafeLogger {
     return sanitized;
   }
 }
-

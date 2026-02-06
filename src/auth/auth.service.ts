@@ -128,7 +128,9 @@ export class AuthService {
   }
 
   private generateSessionToken(userId: string, email: string): string {
-    const secret = this.configService.get<string>('JWT_SECRET') || 'default-secret-change-in-production';
+    const secret =
+      this.configService.get<string>('JWT_SECRET') ||
+      'default-secret-change-in-production';
     return jwt.sign(
       { userId, email, type: 'session' },
       secret,
@@ -136,7 +138,11 @@ export class AuthService {
     );
   }
 
-  async googleSignIn(idToken: string, deviceFingerprint?: string, devicePlatform?: string) {
+  async googleSignIn(
+    idToken: string,
+    deviceFingerprint?: string,
+    devicePlatform?: string,
+  ) {
     try {
       // Verify Firebase ID token
       const decodedToken = await this.firebaseConfig
@@ -222,7 +228,11 @@ export class AuthService {
     userIdentifier: string,
     email: string,
     fullName: string,
-    transactionIds?: Array<{ transactionId: string; originalTransactionId: string; productId: string }>,
+    transactionIds?: Array<{
+      transactionId: string;
+      originalTransactionId: string;
+      productId: string;
+    }>,
     deviceFingerprint?: string,
     devicePlatform?: string,
   ) {
@@ -237,20 +247,27 @@ export class AuthService {
 
       try {
         // First attempt: Verify with Apple's public keys
-        decodedToken = await this.appleTokenVerifier.verifyIdentityToken(identityToken);
+        decodedToken =
+          await this.appleTokenVerifier.verifyIdentityToken(identityToken);
         appleUserId = decodedToken.sub || userIdentifier;
         emailFromToken = decodedToken.email || email;
         emailVerified = decodedToken.email_verified ?? true;
-        
+
         SafeLogger.info('Apple token verified with signature', {
           appleUserId: appleUserId.substring(0, 8) + '...',
         });
       } catch (verifyError) {
         // Fallback: Decode without signature verification (for native apps)
         // This matches the behavior of vpn-backend-service
-        SafeLogger.warn('Apple token signature verification failed, decoding without verification', {
-          error: verifyError instanceof Error ? verifyError.message : String(verifyError),
-        });
+        SafeLogger.warn(
+          'Apple token signature verification failed, decoding without verification',
+          {
+            error:
+              verifyError instanceof Error
+                ? verifyError.message
+                : String(verifyError),
+          },
+        );
 
         try {
           const tokenParts = identityToken.split('.');
@@ -263,24 +280,37 @@ export class AuthService {
             throw new UnauthorizedException('Invalid JWT: missing payload');
           }
 
-          decodedToken = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
-          
+          decodedToken = JSON.parse(
+            Buffer.from(payloadBase64, 'base64').toString(),
+          );
+
           appleUserId = decodedToken.sub || userIdentifier;
           emailFromToken = decodedToken.email || email;
-          emailVerified = decodedToken.email_verified === 'true' || decodedToken.email_verified === true || true;
+          emailVerified =
+            decodedToken.email_verified === 'true' ||
+            decodedToken.email_verified === true ||
+            true;
 
-          SafeLogger.info('Apple token decoded without signature verification', {
-            appleUserId: appleUserId.substring(0, 8) + '...',
-            hasEmail: !!decodedToken.email,
-          });
+          SafeLogger.info(
+            'Apple token decoded without signature verification',
+            {
+              appleUserId: appleUserId.substring(0, 8) + '...',
+              hasEmail: !!decodedToken.email,
+            },
+          );
         } catch (decodeError) {
-          SafeLogger.error('Failed to decode Apple identity token', decodeError);
+          SafeLogger.error(
+            'Failed to decode Apple identity token',
+            decodeError,
+          );
           throw new UnauthorizedException('Invalid Apple identity token');
         }
       }
 
       if (!userIdentifier && !appleUserId) {
-        throw new UnauthorizedException('userIdentifier required for Apple sign-in');
+        throw new UnauthorizedException(
+          'userIdentifier required for Apple sign-in',
+        );
       }
 
       // Find or create user by Apple user ID (not Firebase UID for Apple Sign-In)
@@ -336,7 +366,9 @@ export class AuthService {
       SafeLogger.info('Apple sign in successful', {
         userId: user.id,
         email: '[REDACTED]',
-        deviceFingerprint: deviceFingerprint ? deviceFingerprint.substring(0, 16) + '...' : 'N/A',
+        deviceFingerprint: deviceFingerprint
+          ? deviceFingerprint.substring(0, 16) + '...'
+          : 'N/A',
         devicePlatform,
       });
 
@@ -356,10 +388,20 @@ export class AuthService {
     }
   }
 
-  async verifySession(sessionToken: string, deviceFingerprint?: string, devicePlatform?: string) {
+  async verifySession(
+    sessionToken: string,
+    deviceFingerprint?: string,
+    devicePlatform?: string,
+  ) {
     try {
-      const secret = this.configService.get<string>('JWT_SECRET') || 'default-secret-change-in-production';
-      const decoded = jwt.verify(sessionToken, secret) as { userId: string; email: string; type: string };
+      const secret =
+        this.configService.get<string>('JWT_SECRET') ||
+        'default-secret-change-in-production';
+      const decoded = jwt.verify(sessionToken, secret) as {
+        userId: string;
+        email: string;
+        type: string;
+      };
 
       if (decoded.type !== 'session') {
         throw new UnauthorizedException('Invalid token type');
@@ -410,7 +452,13 @@ export class AuthService {
             startsAt: trialStartsAt?.toISOString() || null,
             endsAt: trialEndsAt?.toISOString() || null,
             daysRemaining: trialEndsAt
-              ? Math.max(0, Math.ceil((trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+              ? Math.max(
+                  0,
+                  Math.ceil(
+                    (trialEndsAt.getTime() - now.getTime()) /
+                      (1000 * 60 * 60 * 24),
+                  ),
+                )
               : null,
           };
         } else {
@@ -457,4 +505,3 @@ export class AuthService {
     }
   }
 }
-

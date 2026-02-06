@@ -8,7 +8,12 @@ import {
   createMockConfigService,
   MockPrismaClient,
 } from '../setup/mocks';
-import { createMockBlindedToken, createMockDecodedFirebaseToken } from '../setup/test-helpers';
+import {
+  createMockBlindedToken,
+  createMockDecodedFirebaseToken,
+  createMockUser,
+} from '../setup/test-helpers';
+import * as jwt from 'jsonwebtoken';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { FirebaseConfig } from '../../src/config/firebase.config';
 import { ConfigService } from '@nestjs/config';
@@ -51,13 +56,19 @@ describe('Crypto (e2e)', () => {
   describe('POST /auth/vpn-token', () => {
     it('should sign blinded token successfully', async () => {
       const blindedToken = createMockBlindedToken();
-      const decodedToken = createMockDecodedFirebaseToken();
+      const user = createMockUser();
+      const secret =
+        process.env.JWT_SECRET || 'default-secret-change-in-production';
+      const token = jwt.sign(
+        { userId: user.id, email: user.email, type: 'session' },
+        secret,
+      );
 
-      mockFirebaseAuth.verifyIdToken.mockResolvedValue(decodedToken);
+      mockPrisma.user.findUnique.mockResolvedValue(user);
 
       const response = await request(app.getHttpServer())
         .post('/auth/vpn-token')
-        .set('Authorization', `Bearer valid-token`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ blindedToken })
         .expect(200);
 
@@ -74,12 +85,25 @@ describe('Crypto (e2e)', () => {
     });
 
     it('should return 400 for invalid token format', async () => {
-      const decodedToken = createMockDecodedFirebaseToken();
-      mockFirebaseAuth.verifyIdToken.mockResolvedValue(decodedToken);
+      // Valid token structure but failing verification or types
+      // Actually, SessionAuthGuard verifies JWT signature.
+      // We can send a malformed token or just verify it handles bad format.
+      // But let's stick to what the test name implies: invalid format in the *body*?
+      // No, "should return 400 for invalid token format" likely refers to 'blindedToken' in body.
+      // We still need a valid session to get past the guard.
+
+      const user = createMockUser();
+      const secret =
+        process.env.JWT_SECRET || 'default-secret-change-in-production';
+      const token = jwt.sign(
+        { userId: user.id, email: user.email, type: 'session' },
+        secret,
+      );
+      mockPrisma.user.findUnique.mockResolvedValue(user);
 
       await request(app.getHttpServer())
         .post('/auth/vpn-token')
-        .set('Authorization', `Bearer valid-token`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ blindedToken: 'invalid-base64!!!' })
         .expect(400);
     });
@@ -96,4 +120,3 @@ describe('Crypto (e2e)', () => {
     });
   });
 });
-

@@ -4,11 +4,17 @@ import type { ConfigService } from '@nestjs/config';
 import type * as firebaseAdmin from 'firebase-admin';
 import type Stripe from 'stripe';
 import * as crypto from 'crypto';
+import { TrialService } from '../../src/subscription/trial.service';
 
 export type MockPrismaClient = DeepMockProxy<PrismaClient>;
 export type MockConfigService = DeepMockProxy<ConfigService>;
 export type MockFirebaseAuth = DeepMockProxy<firebaseAdmin.auth.Auth>;
 export type MockStripe = DeepMockProxy<Stripe>;
+export type MockTrialService = DeepMockProxy<TrialService>;
+
+export function createMockTrialService(): MockTrialService {
+  return mockDeep<TrialService>();
+}
 
 export function createMockPrismaClient(): MockPrismaClient {
   return mockDeep<PrismaClient>();
@@ -22,7 +28,7 @@ export function createMockConfigService(): MockConfigService {
     if (process.env[key]) {
       return process.env[key];
     }
-    
+
     const defaults: Record<string, any> = {
       NODE_ENV: 'test',
       PORT: 3000,
@@ -31,7 +37,9 @@ export function createMockConfigService(): MockConfigService {
       FIREBASE_PROJECT_ID: 'test-project',
       FIREBASE_PRIVATE_KEY_ID: 'test-private-key-id',
       // Use a valid RSA private key format for Firebase (same as blind signing key)
-      FIREBASE_PRIVATE_KEY: process.env.BLIND_SIGNING_PRIVATE_KEY || '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj\nMzEfYyjiWA4R4/M2bN1K3ytty6ZqdyJ3x3pO1YI8P3J2N2Y5N2Y5N2Y5N2Y5N2Y5\nN2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5\nN2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5\nN2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5\nAgMBAAECggEBAK8k8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X\n8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X\n8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X\n8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X\n8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X\nQKBgQDyVqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX\n8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8X\nqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX\n8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8X\nqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX\nQKBgQDyVqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX\n8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8X\nqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX\n8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8X\nqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX\n-----END PRIVATE KEY-----',
+      FIREBASE_PRIVATE_KEY:
+        process.env.BLIND_SIGNING_PRIVATE_KEY ||
+        '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj\nMzEfYyjiWA4R4/M2bN1K3ytty6ZqdyJ3x3pO1YI8P3J2N2Y5N2Y5N2Y5N2Y5N2Y5\nN2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5\nN2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5\nN2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5N2Y5\nAgMBAAECggEBAK8k8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X\n8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X\n8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X\n8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X\n8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X\nQKBgQDyVqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX\n8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8X\nqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX\n8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8X\nqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX\nQKBgQDyVqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX\n8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8X\nqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX\n8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8X\nqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX8XqX\n-----END PRIVATE KEY-----',
       FIREBASE_CLIENT_EMAIL: 'test@test.iam.gserviceaccount.com',
       FIREBASE_CLIENT_ID: 'test-client-id',
       FIREBASE_AUTH_URI: 'https://accounts.google.com/o/oauth2/auth',
@@ -41,7 +49,9 @@ export function createMockConfigService(): MockConfigService {
       STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID: 'price_test_annual',
       STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID: 'price_test_monthly',
       // Use env var if available, otherwise fallback
-      BLIND_SIGNING_PRIVATE_KEY: process.env.BLIND_SIGNING_PRIVATE_KEY || '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----',
+      BLIND_SIGNING_PRIVATE_KEY:
+        process.env.BLIND_SIGNING_PRIVATE_KEY ||
+        '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----',
     };
     return defaults[key] || defaultValue;
   });
@@ -72,10 +82,18 @@ export function createMockStripe(): MockStripe {
 
 export function createMockCrypto(): typeof crypto {
   const mockPrivateKey = {
-    export: jest.fn().mockReturnValue('-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----'),
+    export: jest
+      .fn()
+      .mockReturnValue(
+        '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----',
+      ),
   };
   const mockPublicKey = {
-    export: jest.fn().mockReturnValue('-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----'),
+    export: jest
+      .fn()
+      .mockReturnValue(
+        '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----',
+      ),
   };
 
   return {
@@ -83,6 +101,10 @@ export function createMockCrypto(): typeof crypto {
     createPrivateKey: jest.fn().mockReturnValue(mockPrivateKey),
     createPublicKey: jest.fn().mockReturnValue(mockPublicKey),
     sign: jest.fn().mockReturnValue(Buffer.from('mock-signature')),
+    privateEncrypt: jest.fn().mockReturnValue(Buffer.from('mock-signature')),
+    publicDecrypt: jest
+      .fn()
+      .mockReturnValue(Buffer.from('mock-decrypted-token')),
   } as any;
 }
 
@@ -92,4 +114,3 @@ export function createMockFetch(): jest.Mock {
     json: jest.fn().mockResolvedValue({ status: 0 }),
   });
 }
-

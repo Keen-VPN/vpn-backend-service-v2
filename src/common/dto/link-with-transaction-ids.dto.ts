@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 class TransactionIdDto {
@@ -33,4 +39,3 @@ export class LinkWithTransactionIdsDto {
   @IsOptional()
   devicePlatform?: string;
 }
-

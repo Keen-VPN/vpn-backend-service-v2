@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
 import { AnonymousSessionDto } from '../common/dto/anonymous-session.dto';
-import { CryptoService } from '../crypto/crypto.service';
+import { CryptoService } from '../auth/crypto/crypto.service';
 
 @Injectable()
 export class ConnectionService {

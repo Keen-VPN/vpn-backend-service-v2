@@ -34,7 +34,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       statusCode: status,
       timestamp: new Date().toISOString(),
       path: request.url,
-      message: typeof message === 'string' ? message : (message as any).message || 'An error occurred',
+      message:
+        typeof message === 'string'
+          ? message
+          : (message as any).message || 'An error occurred',
     };
 
     // Only include stack trace in development
@@ -56,4 +59,3 @@ export class HttpExceptionFilter implements ExceptionFilter {
     response.status(status).json(errorResponse);
   }
 }
-

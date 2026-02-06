@@ -99,4 +99,3 @@ export class AccountPaymentsController {
     res.send(pdfBuffer);
   }
 }
-

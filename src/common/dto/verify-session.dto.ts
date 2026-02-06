@@ -13,4 +13,3 @@ export class VerifySessionDto {
   @IsOptional()
   devicePlatform?: string;
 }
-

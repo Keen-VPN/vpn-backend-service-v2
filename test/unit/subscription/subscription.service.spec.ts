@@ -13,15 +13,19 @@ import {
   createMockSubscription,
 } from '../../setup/test-helpers';
 import * as jwt from 'jsonwebtoken';
+import { TrialService } from '../../../src/subscription/trial.service';
+import { createMockTrialService } from '../../setup/mocks';
 
 describe('SubscriptionService', () => {
   let service: SubscriptionService;
   let mockPrisma: MockPrismaClient;
   let mockConfigService: ReturnType<typeof createMockConfigService>;
+  let mockTrialService: ReturnType<typeof createMockTrialService>;
 
   beforeEach(async () => {
     mockPrisma = createMockPrismaClient();
     mockConfigService = createMockConfigService();
+    mockTrialService = createMockTrialService();
     mockConfigService.get.mockImplementation((key: string) => {
       if (key === 'JWT_SECRET') {
         return 'test-secret';
@@ -39,6 +43,10 @@ describe('SubscriptionService', () => {
         {
           provide: ConfigService,
           useValue: mockConfigService,
+        },
+        {
+          provide: TrialService,
+          useValue: mockTrialService,
         },
       ],
     }).compile();
@@ -64,6 +72,14 @@ describe('SubscriptionService', () => {
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
       mockPrisma.subscription.findFirst.mockResolvedValue(subscription);
+      // Mock trial service response
+      (mockTrialService.status as jest.Mock).mockResolvedValue({
+        trialActive: false,
+        trialEndsAt: null,
+        daysRemaining: 0,
+        isPaid: true,
+        tier: null,
+      });
 
       const result = await service.getStatusWithSession(sessionToken);
 
@@ -82,20 +98,35 @@ describe('SubscriptionService', () => {
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
       mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      // Mock trial service response
+      (mockTrialService.status as jest.Mock).mockResolvedValue({
+        trialActive: false,
+        trialEndsAt: null,
+        daysRemaining: 0,
+        isPaid: false,
+        tier: null,
+      });
 
       const result = await service.getStatusWithSession(sessionToken);
 
       expect(result.success).toBe(true);
       expect(result.hasActiveSubscription).toBe(false);
-      expect(result.subscription).toBeNull();
+      expect(result.subscription).toEqual({
+        status: 'inactive',
+        plan: '',
+        endDate: '',
+        customerId: '',
+        cancelAtPeriodEnd: false,
+        subscriptionType: 'stripe',
+      });
     });
 
     it('should throw UnauthorizedException for invalid token', async () => {
       const invalidToken = 'invalid_token';
 
-      await expect(
-        service.getStatusWithSession(invalidToken),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.getStatusWithSession(invalidToken)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw UnauthorizedException if user not found', async () => {
@@ -106,9 +137,9 @@ describe('SubscriptionService', () => {
 
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.getStatusWithSession(sessionToken),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.getStatusWithSession(sessionToken)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 
@@ -158,4 +189,3 @@ describe('SubscriptionService', () => {
     });
   });
 });
-

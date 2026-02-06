@@ -5,9 +5,7 @@ node_modules
 dist
 
 # Environment variables
-.env
-.env.local
-.env.*.local
+# Covered by strict rules at bottom
 
 # Logs
 *.log
@@ -28,4 +26,25 @@ coverage
 # OS
 .DS_Store
 Thumbs.db
+
+# Secrets & Keys
 blind_signing_key.pem
+secrets/
+*.pem
+*.key
+*.cert
+
+# Temporary Files
+test_output.txt
+*.tmp
+*.temp
+
+# Docker Volumes
+postgres_data/
+redis_data/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+!.env.*.example

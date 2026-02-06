@@ -5,35 +5,36 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: production
+      target: ${DOCKER_TARGET:-production}
     ports:
-      - '3000:3000'
+      - '${PORT:-3000}:3000'
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - DATABASE_URL=postgresql://keen_user:keen_password@postgres:5432/keen_db
-      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${PORT:-3000}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://keen_user:keen_password@postgres:5432/keen_db}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
+      - postgres
+      - redis
+    restart: ${RESTART_POLICY:-unless-stopped}
     networks:
       - keen-network
+    volumes:
+      - ./src:/app/src
+      - ./node_modules:/app/node_modules
 
   postgres:
     image: postgres:16-alpine
     ports:
       - '5432:5432'
     environment:
-      - POSTGRES_USER=keen_user
-      - POSTGRES_PASSWORD=keen_password
-      - POSTGRES_DB=keen_db
+      - POSTGRES_USER=${POSTGRES_USER:-keen_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-keen_password}
+      - POSTGRES_DB=${POSTGRES_DB:-keen_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U keen_user -d keen_db']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-keen_user} -d ${POSTGRES_DB:-keen_db}']
       interval: 5s
       timeout: 5s
       retries: 5

@@ -1,15 +1,29 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectionService } from '../../../src/connection/connection.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
-import {
-  createMockPrismaClient,
-  MockPrismaClient,
-} from '../../setup/mocks';
+import { CryptoService } from '../../../src/auth/crypto/crypto.service';
 import { createMockUser } from '../../setup/test-helpers';
+
+const createMockPrismaClient = () => ({
+  connectionSession: {
+    create: jest.fn(),
+    findMany: jest.fn(),
+  },
+  sessionAggregate: {
+    findUnique: jest.fn(),
+  },
+  user: {
+    findUnique: jest.fn(),
+  },
+});
+
+const createMockCryptoService = () => ({
+  // Add necessary methods here if needed, or just an empty mock if not used in current tests
+});
 
 describe('ConnectionService', () => {
   let service: ConnectionService;
-  let mockPrisma: MockPrismaClient;
+  let mockPrisma: ReturnType<typeof createMockPrismaClient>;
 
   beforeEach(async () => {
     mockPrisma = createMockPrismaClient();
@@ -20,6 +34,10 @@ describe('ConnectionService', () => {
         {
           provide: PrismaService,
           useValue: mockPrisma,
+        },
+        {
+          provide: CryptoService,
+          useValue: createMockCryptoService(),
         },
       ],
     }).compile();
@@ -177,4 +195,3 @@ describe('ConnectionService', () => {
     });
   });
 });
-

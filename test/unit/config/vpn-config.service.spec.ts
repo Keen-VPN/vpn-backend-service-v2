@@ -5,14 +5,21 @@ import { PrismaService } from '../../../src/prisma/prisma.service';
 import {
   createMockConfigService,
   createMockPrismaClient,
+  createMockCryptoService,
   MockPrismaClient,
 } from '../../setup/mocks';
+import { CryptoService } from '../../../src/auth/crypto/crypto.service';
 import * as fs from 'fs';
 import * as path from 'path';
 
 // Mock fs module
 jest.mock('fs');
 jest.mock('path');
+
+// Added mock function for CryptoService
+const createMockCryptoService = () => ({
+  verifyBlindSignedToken: jest.fn(),
+});
 
 describe('VPNConfigService', () => {
   let service: VPNConfigService;
@@ -33,6 +40,11 @@ describe('VPNConfigService', () => {
         {
           provide: PrismaService,
           useValue: mockPrisma,
+        },
+        {
+          // Added CryptoService provider
+          provide: CryptoService,
+          useValue: createMockCryptoService(),
         },
       ],
     }).compile();
@@ -154,4 +166,3 @@ describe('VPNConfigService', () => {
     });
   });
 });
-

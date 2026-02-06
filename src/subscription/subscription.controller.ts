@@ -31,4 +31,3 @@ export class SubscriptionController {
     return this.subscriptionService.cancel(userId);
   }
 }
-

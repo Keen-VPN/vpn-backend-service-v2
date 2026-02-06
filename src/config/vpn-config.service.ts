@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { generateWeakEtag } from '../utils/etag';
-import { CryptoService } from '../crypto/crypto.service';
+import { CryptoService } from '../auth/crypto/crypto.service';
 import * as fs from 'fs';
 import * as path from 'path';
 

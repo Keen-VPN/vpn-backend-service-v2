@@ -13,4 +13,3 @@ export class GoogleSignInDto {
   @IsOptional()
   devicePlatform?: string;
 }
-

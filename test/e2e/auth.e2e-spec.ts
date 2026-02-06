@@ -80,7 +80,7 @@ describe('Auth (e2e)', () => {
       mockFirebaseAuth.verifyIdToken.mockRejectedValue(
         new Error('Invalid token format'),
       );
-      
+
       await request(app.getHttpServer())
         .post('/auth/login')
         .send({ idToken: invalidToken })
@@ -101,10 +101,7 @@ describe('Auth (e2e)', () => {
 
   describe('POST /auth/logout', () => {
     it('should require authentication', async () => {
-      await request(app.getHttpServer())
-        .post('/auth/logout')
-        .expect(401);
+      await request(app.getHttpServer()).post('/auth/logout').expect(401);
     });
   });
 });
-

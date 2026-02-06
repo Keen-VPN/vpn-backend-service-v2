@@ -37,4 +37,3 @@ export class CapturePurchaseDto {
   @IsOptional()
   devicePlatform?: string;
 }
-

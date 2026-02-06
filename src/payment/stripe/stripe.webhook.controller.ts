@@ -22,16 +22,15 @@ export class StripeWebhookController {
     private configService: ConfigService,
   ) {
     const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
-    this.webhookSecret = this.configService.get<string>(
-      'STRIPE_WEBHOOK_SECRET',
-    ) || '';
+    this.webhookSecret =
+      this.configService.get<string>('STRIPE_WEBHOOK_SECRET') || '';
 
     if (!secretKey) {
       throw new Error('STRIPE_SECRET_KEY is required');
     }
 
     this.stripe = new Stripe(secretKey, {
-      apiVersion: '2025-12-15.clover',
+      apiVersion: '2026-01-28.clover',
     });
   }
 
@@ -50,7 +49,7 @@ export class StripeWebhookController {
     try {
       // Get raw body from request (set by NestJS rawBody option)
       const rawBody = (req as any).rawBody || req.body;
-      
+
       // Verify webhook signature using raw body
       event = this.stripe.webhooks.constructEvent(
         rawBody,
@@ -105,4 +104,3 @@ export class StripeWebhookController {
     return { url: session.url };
   }
 }
-

@@ -19,10 +19,9 @@ async function bootstrap() {
   app.use(helmet());
 
   // CORS configuration
-  const allowedOrigins = configService.get<string>('CORS_ORIGINS')?.split(',') || [
-    'http://localhost:3000',
-    'http://localhost:5173',
-  ];
+  const allowedOrigins = configService
+    .get<string>('CORS_ORIGINS')
+    ?.split(',') || ['http://localhost:3000', 'http://localhost:5173'];
 
   app.enableCors({
     origin: (origin, callback) => {

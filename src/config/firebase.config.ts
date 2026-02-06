@@ -50,4 +50,3 @@ export class FirebaseConfig implements OnModuleInit {
     return admin.auth();
   }
 }
-

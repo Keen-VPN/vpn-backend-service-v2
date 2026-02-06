@@ -8,8 +8,8 @@ import {
   Get,
 } from '@nestjs/common';
 import { CryptoService } from './crypto.service';
-import { VpnTokenDto } from '../common/dto/vpn-token.dto';
-import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
+import { VpnTokenDto } from '../../common/dto/vpn-token.dto';
+import { SessionAuthGuard } from '../guards/session-auth.guard';
 import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')

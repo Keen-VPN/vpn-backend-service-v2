@@ -1,136 +1,226 @@
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+  <h1 align="center">KeenVPN Backend Service V2</h1>
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## 📋 Overview
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+The **KeenVPN Backend Service V2** is a privacy-first, scalable backend architecture designed to power the next generation of VPN applications. It implements the "Church & State" separation model using RSA Blind Signatures to ensure that user identity (payment/subscription) is cryptographically decoupled from VPN usage logs.
 
-## Description
+### Key Features
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- **Privacy-First Architecture**: Zero-knowledge separation between identity and activity.
+- **Blind Signatures**: RSA-FDH (Full Domain Hash) blind signatures for anonymous credential issuance.
+- **Church & State Model**: Strict separation of concerns between Auth Service and VPN Config Service.
+- **Scalable**: Built on NestJS, Redis, and PostgreSQL for high performance.
 
-## Project setup
+---
+
+## 🛠 Tech Stack
+
+- **Framework**: [NestJS](https://nestjs.com/) (v11) - Progressive Node.js framework.
+- **Language**: TypeScript - Strongly typed for reliability.
+- **Database**: PostgreSQL (via [Prisma ORM](https://www.prisma.io/)).
+- **Caching & Queues**: Redis (via `ioredis`).
+- **Authentication**: Firebase Admin SDK (Identity) + JWT.
+- **Payments**: Stripe Integration.
+- **Documentation**: Swagger / OpenAPI.
+- **Testing**: Jest (Unit & E2E).
+
+---
+
+## 🏗 Architecture & Design
+
+### The "Church & State" Model
+
+We separate the system into two distinct logical domains:
+
+1. **"Church" (Identity & Payment)**: Knows *who* the user is, their email, and their subscription status.
+2. **"State" (VPN Usage)**: Knows *that* a user connected, but not *who* they are.
+
+### How It Works (Blind Signatures)
+
+1. **Token Generation**: The client generates a random, cryptographically secure token.
+2. **Blinding**: The client "blinds" this token and sends it to the **Auth Service** (Church).
+3. **Signing**: The Auth Service verifies the user has an active subscription. If valid, it signs the *blinded* token using a private RSA key and returns the signature. The Auth Service *cannot* see the actual token.
+4. **Unblinding**: The client "unblinds" the signature to get a valid signature for the original token.
+5. **Redemption**: The client sends the *original* token + the *unblinded* signature to the **VPN Config Service** (State).
+6. **Verification**: The VPN Config Service verifies the signature against the public key. If valid, it issues ephemeral VPN credentials (username/password) derived from the token.
+7. **Result**: The VPN Config Service grants access without ever knowing who the user is.
+
+---
+
+## 📂 Folder Structure
+
+The project follows a modular NestJS structure in `src/`:
+
+- **`/auth`**: User authentication, Apple/Google sign-in, and **Blind Signature** signing logic.
+- **`/config`**: Configuration management and VPN Credential issuance (the "State" side).
+- **`/connection`**: Session management, anonymous session tracking, and connection stats.
+- **`/payment`**: Stripe payment processing and webhook handling.
+- **`/subscription`**: Subscription lifecycle management (upgrades, cancellations, trial status).
+- **`/redemption`**: Service for redeeming blind-signed tokens for VPN credentials.
+- **`/common`**: Shared utilities (Logger, Guards, Interceptors, DTOs).
+- **`/prisma`**: Database models and schema.
+- **`/redis`**: Redis client module for rate limiting and temporary state.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js (v18+)
+- Docker & Docker Compose
+- Yarn or NPM
+
+### 1. Installation
 
 ```bash
-$ yarn install
+yarn install
 ```
 
-## Environment Configuration
+### 2. Environment Setup
 
-1. **Copy the example environment file**:
+Copy the example environment file and fill in the required values:
+
 ```bash
 cp .env.example .env
 ```
 
-2. **Fill in your environment variables** in `.env`:
+*See [Environment Variables](#-environment-variables) below for details.*
 
-### Required Variables
+### 3. Run Locally (Docker)
 
-- **Database**: `DATABASE_URL` - PostgreSQL connection string
-- **Firebase**: 
-  - `FIREBASE_PROJECT_ID`
-  - `FIREBASE_PRIVATE_KEY_ID`
-  - `FIREBASE_PRIVATE_KEY` (PEM format with newlines as `\n`)
-  - `FIREBASE_CLIENT_EMAIL`
-  - `FIREBASE_CLIENT_ID`
-- **Stripe**: 
-  - `STRIPE_SECRET_KEY`
-  - `STRIPE_WEBHOOK_SECRET`
-- **Blind Signing**: 
-  - `BLIND_SIGNING_PRIVATE_KEY` (RSA private key in PEM format)
-
-### Optional Variables
-
-- `STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID` - Stripe price ID for annual plan
-- `STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID` - Stripe price ID for monthly plan
-- `APPLE_SHARED_SECRET` - Apple IAP shared secret
-- `APPLE_KEY_ID` - Apple App Store Server API key ID
-- `APPLE_ISSUER_ID` - Apple App Store Server API issuer ID
-- `APPLE_BUNDLE_ID` - Your app bundle ID
-- `JWT_SECRET` - JWT secret for additional operations
-- `REDIS_URL` - Redis connection URL (defaults to `redis://localhost:6379`)
-
-See `.env.example` for the complete list with descriptions.
-
-## Compile and run the project
+Start the database and Redis services using Docker:
 
 ```bash
-# development
-$ yarn run start
+npm run docker:up
+```
 
-# watch mode
+This spins up:
+
+- Postgres (Port 5432)
+- Redis (Port 6379)
+
+Then start the application logic:
+
+```bash
+# Watch mode (Development)
 $ yarn run start:dev
-
-# production mode
-$ yarn run start:prod
 ```
 
-## Run tests
+The server will start at `http://localhost:3000`.
+
+### 4. Database Setup
+
+Run migrations to set up the schema:
 
 ```bash
-# unit tests
-$ yarn run test
-
-# e2e tests
-$ yarn run test:e2e
-
-# test coverage
-$ yarn run test:cov
+npx prisma migrate dev
+npm run seed:vpn-config  # Optional: Seeds initial VPN servers
 ```
 
-## Deployment
+---
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## 📚 API Documentation (Swagger)
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Once the application is running, full interactive API documentation is available at:
+
+👉 **<http://localhost:3000/api/docs>**
+
+This includes schemas for all DTOs, auth requirements, and example responses.
+
+---
+
+## 🧪 Testing
+
+We use **Jest** for testing.
+
+### Unit Tests
+
+Run isolated unit tests for services and controllers:
 
 ```bash
-$ yarn install -g @nestjs/mau
-$ mau deploy
+yarn run test:unit
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### End-to-End (E2E) Tests
 
-## Resources
+Run integration tests connecting to a test database/container:
 
-Check out a few resources that may come in handy when working with NestJS:
+```bash
+yarn run test:e2e
+```
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### Test Coverage
 
-## Support
+View detailed coverage reports:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```bash
+yarn run test:cov
+```
 
-## Stay in touch
+---
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## 🌍 Environment Variables
 
-## License
+Key variables in `.env`:
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
-# vpn-backend-service-v2
+| Variable | Description |
+|----------|-------------|
+| `NODE_ENV` | Environment (`development`, `staging`, `production`) |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `REDIS_URL` | Redis connection URL |
+| `BLIND_SIGNING_PRIVATE_KEY` | **Critical**. RSA Private Key (PEM) for signing blind tokens. Must match Public Key in clients. |
+| `STRIPE_SECRET_KEY` | Stripe requirements for payments. |
+| `FIREBASE_*` | Firebase Admin credentials for verifying user Identity Tokens. |
+| `JWT_SECRET` | Secret for internal session tokens. |
+
+*Refer to `.env.example` for the complete list.*
+
+---
+
+## ⚠️ "Gotchas" & Need-to-Know
+
+1. **RSA Key Format**: The `BLIND_SIGNING_PRIVATE_KEY` must be a valid RSA PEM key (2048+ bits). Ensure newline characters (`\n`) are correctly escaped if providing it as a single-line string in CI/CD variables.
+2. **Blind Signature Libs**: Clients must use a compatible implementation of **RSA-FDH** (Full Domain Hash).
+3. **Database Migration**: Always verify migrations in `staging` before `production`. We use Prisma Migrate.
+4. **Church & State**: When debugging, remember that `AuthService` logs will have User IDs, but `VPNConfigService` logs will ONLY have anonymous Token hashes. You cannot correlate them easily—**this is by design**.
+
+---
+
+## 📦 Deployment
+
+The application is containerized using Docker.
+
+### Build
+
+```bash
+npm run docker:build
+```
+
+### Production Run
+
+In production, we typically run:
+
+```bash
+yarn run start:prod
+```
+
+Ensure `NODE_ENV=production` is set to enable optimizations and disable verbose logging.
+
+---
+
+## 🤝 Contributing
+
+1. Create a feature branch (`git checkout -b feature/amazing-feature`).
+2. Commit your changes following [Conventional Commits](https://www.conventionalcommits.org/).
+3. Ensure tests pass (`yarn run test`).
+4. Push to the branch and open a Pull Request.
+
+---
+
+<p align="center">
+  Generated by Antigravity for KeenVPN.
+</p>
