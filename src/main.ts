@@ -17,6 +17,20 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
+  app.enableCors({
+    origin: [
+      'http://localhost:8080',
+      'http://localhost:8081',
+      'https://staging.vpnkeen.com',
+      'https://vpnkeen.netlify.app',
+      'https://keenvpnstaging.netlify.app',
+      'https://vpnkeen.com',
+      'https://www.vpnkeen.com',
+    ],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+
   await app.listen(port);
 }
 void bootstrap();
