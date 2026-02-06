@@ -120,11 +120,21 @@ export class VPNConfigService implements OnModuleInit {
       this.cachedEtag = generateWeakEtag(this.cachedConfig);
     }
 
-    // Return current config
+    // Return config (caller may strip credentials for unauthenticated/unsubscribed users)
     return {
       status: 'ok',
       config: this.cachedConfig,
       etag: this.cachedEtag!,
+    };
+  }
+
+  /** Returns a copy of the config with credentials stripped (for public/unsubscribed responses) */
+  stripCredentials(config: VPNConfig): Omit<VPNConfig, 'credentials'> & {
+    credentials: never[];
+  } {
+    return {
+      ...config,
+      credentials: [],
     };
   }
 

@@ -7,51 +7,80 @@ import {
   HttpCode,
   HttpStatus,
   Res,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { VPNConfigService } from './vpn-config.service';
 import { VpnCredentialDto } from '../common/dto/vpn-credential.dto';
 import { Throttle } from '@nestjs/throttler';
 import { SafeLogger } from '../common/utils/logger.util';
+import { OptionalSessionGuard } from '../auth/guards/optional-session.guard';
+import { SubscriptionService } from '../subscription/subscription.service';
 
 @Controller('config')
 export class VPNConfigController {
-  constructor(private readonly vpnConfigService: VPNConfigService) {}
+  constructor(
+    private readonly vpnConfigService: VPNConfigService,
+    private readonly subscriptionService: SubscriptionService,
+  ) {}
 
   @Get('vpn')
+  @UseGuards(OptionalSessionGuard)
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 100, ttl: 60000 } })
   async getVPNConfig(
-    @Headers('if-none-match') ifNoneMatch: string | undefined,
+    @Req() req: Request & { user?: { uid: string } },
     @Headers('x-config-client') clientToken: string | undefined,
     @Res() res: Response,
   ) {
-    const etag = ifNoneMatch?.replace(/^"|"$/g, ''); // Remove quotes if present
+    const user = req.user;
+    const sessionToken = req.headers.authorization?.replace(/^Bearer\s+/i, '');
 
-    const result = await this.vpnConfigService.getVPNConfig(etag, clientToken);
-
-    if (result.status === 'not-modified') {
-      return res.status(304).end();
+    // Determine if we would include credentials (auth + subscription)
+    let wouldIncludeCredentials = false;
+    if (user && sessionToken) {
+      try {
+        const status =
+          await this.subscriptionService.getStatusWithSession(sessionToken);
+        wouldIncludeCredentials =
+          status?.hasActiveSubscription ||
+          (status?.trial?.trialActive ?? false);
+      } catch {
+        wouldIncludeCredentials = false;
+      }
     }
 
-    // Set ETag header
-    if (result.etag) {
-      res.setHeader('ETag', `"${result.etag}"`);
-    }
+    // Never use 304 - response body varies by auth (credentials included or stripped).
+    // Client cannot safely reuse a cached copy across auth state changes.
+    const result = await this.vpnConfigService.getVPNConfig(
+      undefined, // skip ETag check - always return full config
+      clientToken,
+    );
 
-    // Ensure config structure is valid before sending
     if (!result.config) {
       return res.status(500).json({ error: 'VPN config not available' });
     }
 
-    // Log config structure for debugging
+    const configToSend = wouldIncludeCredentials
+      ? result.config
+      : this.vpnConfigService.stripCredentials(result.config);
+
     SafeLogger.info('Sending VPN config', {
-      version: result.config.version,
-      serversCount: result.config.servers?.length || 0,
-      credentialsCount: result.config.credentials?.length || 0,
+      version: configToSend.version,
+      serversCount: configToSend.servers?.length || 0,
+      credentialsIncluded: (configToSend as { credentials?: unknown[] })
+        .credentials?.length
+        ? true
+        : false,
     });
 
-    return res.json(result.config);
+    // Avoid Express automatic ETag + 304 behavior for this endpoint.
+    // Response body varies by auth (credentials included or stripped), so conditional GET is unsafe.
+    res.status(200);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return res.end(JSON.stringify(configToSend));
   }
 
   @Post('vpn/credentials')
