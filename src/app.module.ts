@@ -12,6 +12,7 @@ import { PaymentModule } from './payment/payment.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { ConnectionModule } from './connection/connection.module';
 import { VPNConfigModule } from './config/vpn-config.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { SecurityMiddleware } from './common/middleware/security.middleware';
 
 @Module({
@@ -32,6 +33,7 @@ import { SecurityMiddleware } from './common/middleware/security.middleware';
     SubscriptionModule,
     ConnectionModule,
     VPNConfigModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

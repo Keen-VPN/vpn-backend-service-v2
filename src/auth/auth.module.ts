@@ -6,12 +6,24 @@ import { AppleTokenVerifierService } from './apple-token-verifier.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AccountModule } from '../account/account.module';
 import { SessionAuthGuard } from './guards/session-auth.guard';
+import { OptionalSessionGuard } from './guards/optional-session.guard';
 
 @Module({
   imports: [PrismaModule, forwardRef(() => AccountModule)],
   controllers: [AuthController],
-  providers: [AuthService, FirebaseConfig, AppleTokenVerifierService, SessionAuthGuard],
-  exports: [AuthService, FirebaseConfig, AppleTokenVerifierService, SessionAuthGuard],
+  providers: [
+    AuthService,
+    FirebaseConfig,
+    AppleTokenVerifierService,
+    SessionAuthGuard,
+    OptionalSessionGuard,
+  ],
+  exports: [
+    AuthService,
+    FirebaseConfig,
+    AppleTokenVerifierService,
+    SessionAuthGuard,
+    OptionalSessionGuard,
+  ],
 })
 export class AuthModule {}
-
