@@ -13,7 +13,7 @@ export class SessionAuthGuard implements CanActivate {
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
-  ) {}
+  ) { }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -36,7 +36,6 @@ export class SessionAuthGuard implements CanActivate {
         'default-secret-change-in-production';
       const decoded = jwt.verify(sessionToken, secret) as {
         userId: string;
-        email: string;
         type: string;
       };
 

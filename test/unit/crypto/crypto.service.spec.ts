@@ -11,6 +11,10 @@ jest.mock('crypto', () => ({
   createPrivateKey: jest.fn(),
   createPublicKey: jest.fn(),
   sign: jest.fn(),
+  privateEncrypt: jest.fn(),
+  constants: {
+    RSA_NO_PADDING: 4,
+  },
 }));
 
 describe('CryptoService', () => {
@@ -61,7 +65,7 @@ describe('CryptoService', () => {
 
       expect(signature).toBeDefined();
       expect(typeof signature).toBe('string');
-      expect(crypto.sign).toHaveBeenCalled();
+      expect(crypto.privateEncrypt).toHaveBeenCalled();
     });
 
     it('should throw BadRequestException for invalid base64 format', async () => {

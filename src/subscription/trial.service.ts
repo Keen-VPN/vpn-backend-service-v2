@@ -31,7 +31,7 @@ export class TrialService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   /**
    * Grants a trial to a user if they are eligible
@@ -45,18 +45,20 @@ export class TrialService {
     user: { id: string; email: string; provider: string | null },
     deviceHash: string | null,
   ): Promise<GrantResult> {
-    SafeLogger.info('TrialService.grantIfEligible called', {
-      userId: user.id,
-      email: user.email,
-      deviceHash: deviceHash || 'null',
-      FF_TRIALS_ENABLED: this.configService.get<string>('FF_TRIALS_ENABLED'),
-    });
+    SafeLogger.debug(
+      'TrialService.grantIfEligible called',
+      { service: 'TrialService', userId: user.id },
+      {
+        deviceHash: deviceHash || 'null',
+        FF_TRIALS_ENABLED: this.configService.get<string>('FF_TRIALS_ENABLED'),
+      },
+    );
 
     // Check feature flag
     const trialsEnabled =
       this.configService.get<string>('FF_TRIALS_ENABLED') === 'true';
     if (!trialsEnabled) {
-      SafeLogger.info('Trial feature flag is disabled');
+      SafeLogger.debug('Trial feature flag is disabled', { service: 'TrialService' });
       return { granted: false, reason: 'feature_disabled', userId: user.id };
     }
 
@@ -70,9 +72,10 @@ export class TrialService {
       });
 
       if (existingGrant) {
-        SafeLogger.info('Trial blocked: User already has a trial grant', {
-          userId: user.id,
-        });
+        SafeLogger.debug(
+          'Trial blocked: User already has a trial grant',
+          { service: 'TrialService', userId: user.id },
+        );
         return { granted: false, reason: 'existing_grant', userId: user.id };
       }
 
@@ -96,15 +99,20 @@ export class TrialService {
       const hasSubscription = activeSubscription !== null;
       const subscriptionStatus = activeSubscription?.status;
 
-      SafeLogger.info('Checking for subscription', {
-        hasSubscription,
-        subscriptionStatus,
-        subscriptionId: activeSubscription?.id,
-      });
+      SafeLogger.debug(
+        'Checking for subscription',
+        { service: 'TrialService' },
+        {
+          hasSubscription,
+          subscriptionStatus,
+          subscriptionId: activeSubscription?.id,
+        },
+      );
 
       if (!hasSubscription) {
-        SafeLogger.info(
+        SafeLogger.warn(
           'Trial blocked: User does not have a subscription (trials only granted when subscribing)',
+          { service: 'TrialService' },
         );
         return {
           granted: false,
@@ -120,12 +128,10 @@ export class TrialService {
         });
 
         if (existingFingerprint && existingFingerprint.userId !== user.id) {
-          SafeLogger.info(
+          SafeLogger.warn(
             'Trial blocked: Device hash already used by another user',
-            {
-              userId: user.id,
-              existingUserId: existingFingerprint.userId,
-            },
+            { service: 'TrialService', userId: user.id },
+            { existingUserId: existingFingerprint.userId },
           );
           return {
             granted: false,
@@ -170,11 +176,11 @@ export class TrialService {
         },
       });
 
-      SafeLogger.info('Trial granted', {
-        userId: user.id,
-        grantId: trial.id,
-        expiresAt: expiresAt.toISOString(),
-      });
+      SafeLogger.info(
+        'Trial granted successfully',
+        { service: 'TrialService', userId: user.id },
+        { grantId: trial.id, expiresAt: expiresAt.toISOString() },
+      );
 
       return { granted: true, userId: user.id, trialEndsAt: expiresAt };
     });
@@ -279,10 +285,11 @@ export class TrialService {
           },
         });
 
-        SafeLogger.info('Trial expired', {
-          userId,
-          expiredAt: now.toISOString(),
-        });
+        SafeLogger.info(
+          'Trial expired',
+          { service: 'TrialService', userId },
+          { expiredAt: now.toISOString() },
+        );
       }
     });
   }

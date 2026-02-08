@@ -12,7 +12,7 @@ export class SubscriptionService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private trialService: TrialService,
-  ) {}
+  ) { }
 
   async getStatusWithSession(sessionToken: string) {
     try {
@@ -66,39 +66,46 @@ export class SubscriptionService {
       // Serialize trial status for API response
       const trial = serializeTrialStatus(trialStatus);
 
-      SafeLogger.info('Subscription status checked', {
-        userId: user.id,
-        email: '[REDACTED]',
-        hasActiveSubscription: !!activeSubscription,
-      });
+      SafeLogger.info(
+        'Subscription status checked',
+        { service: 'SubscriptionService', userId: user.id },
+        {
+          hasActiveSubscription: !!activeSubscription,
+          status: activeSubscription?.status || 'none',
+        },
+      );
 
       return {
         success: true,
         hasActiveSubscription,
         subscription: activeSubscription
           ? {
-              status: activeSubscription.status,
-              plan: activeSubscription.planName || '',
-              endDate: activeSubscription.currentPeriodEnd?.toISOString() || '',
-              customerId:
-                activeSubscription.stripeCustomerId ||
-                activeSubscription.appleTransactionId ||
-                '',
-              cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd || false,
-              subscriptionType: activeSubscription.subscriptionType,
-            }
+            status: activeSubscription.status,
+            plan: activeSubscription.planName || '',
+            endDate: activeSubscription.currentPeriodEnd?.toISOString() || '',
+            customerId:
+              activeSubscription.stripeCustomerId ||
+              activeSubscription.appleTransactionId ||
+              '',
+            cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd || false,
+            subscriptionType: activeSubscription.subscriptionType,
+          }
           : {
-              status: 'inactive',
-              plan: '',
-              endDate: '',
-              customerId: '',
-              cancelAtPeriodEnd: false,
-              subscriptionType: 'stripe',
-            },
+            status: 'inactive',
+            plan: '',
+            endDate: '',
+            customerId: '',
+            cancelAtPeriodEnd: false,
+            subscriptionType: 'stripe',
+          },
         trial,
       };
     } catch (error) {
-      SafeLogger.error('Subscription status check failed', error);
+      SafeLogger.error(
+        'Subscription status check failed',
+        error instanceof Error ? error : new Error(String(error)),
+        { service: 'SubscriptionService' },
+      );
       throw new UnauthorizedException('Invalid session token');
     }
   }
@@ -143,10 +150,11 @@ export class SubscriptionService {
       },
     });
 
-    SafeLogger.info('Subscription cancellation requested', {
-      userId,
-      subscriptionId: activeSubscription.id,
-    });
+    SafeLogger.info(
+      'Subscription cancellation requested',
+      { service: 'SubscriptionService', userId },
+      { subscriptionId: activeSubscription.id },
+    );
 
     return {
       success: true,

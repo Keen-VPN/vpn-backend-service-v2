@@ -10,24 +10,47 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiHeader,
+  ApiBody,
+} from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { VPNConfigService } from './vpn-config.service';
 import { VpnCredentialDto } from '../common/dto/vpn-credential.dto';
+import { VPNConfigResponseDto, VPNCredentialsResponseDto } from '../common/dto/response/config.response.dto';
 import { Throttle } from '@nestjs/throttler';
 import { SafeLogger } from '../common/utils/logger.util';
 import { OptionalSessionGuard } from '../auth/guards/optional-session.guard';
 import { SubscriptionService } from '../subscription/subscription.service';
 
+@ApiTags('Config')
 @Controller('config')
 export class VPNConfigController {
   constructor(
     private readonly vpnConfigService: VPNConfigService,
     private readonly subscriptionService: SubscriptionService,
-  ) {}
+  ) { }
 
   @Get('vpn')
   @UseGuards(OptionalSessionGuard)
   @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiHeader({
+    name: 'x-config-client',
+    description: 'Client token for configuration',
+    required: false,
+  })
+  @ApiOperation({ summary: 'Get VPN configuration' })
+  @ApiResponse({
+    status: 200,
+    description: 'VPN configuration returned',
+    type: VPNConfigResponseDto
+  })
+  @ApiResponse({ status: 500, description: 'VPN config not available' })
   @Throttle({ default: { limit: 100, ttl: 60000 } })
   async getVPNConfig(
     @Req() req: Request & { user?: { uid: string } },
@@ -85,6 +108,14 @@ export class VPNConfigController {
 
   @Post('vpn/credentials')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Generate VPN credentials' })
+  @ApiResponse({
+    status: 200,
+    description: 'VPN credentials generated',
+    type: VPNCredentialsResponseDto
+  })
+  @ApiResponse({ status: 400, description: 'Bad Request' })
+  @ApiBody({ type: VpnCredentialDto })
   @Throttle({ default: { limit: 50, ttl: 60000 } }) // 50 requests per minute
   async getVPNCredentials(@Body() credentialDto: VpnCredentialDto) {
     const credentials =

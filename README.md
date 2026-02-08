@@ -2,9 +2,6 @@
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
   <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
     <p align="center">
 <a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
@@ -18,8 +15,6 @@
     <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
   <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
 </p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
 ## Description
 
@@ -28,31 +23,32 @@
 ## Project setup
 
 ```bash
-$ yarn install
+yarn install
 ```
 
 ## Environment Configuration
 
 1. **Copy the example environment file**:
+
 ```bash
 cp .env.example .env
 ```
 
-2. **Fill in your environment variables** in `.env`:
+1. **Fill in your environment variables** in `.env`:
 
 ### Required Variables
 
 - **Database**: `DATABASE_URL` - PostgreSQL connection string
-- **Firebase**: 
+- **Firebase**:
   - `FIREBASE_PROJECT_ID`
   - `FIREBASE_PRIVATE_KEY_ID`
   - `FIREBASE_PRIVATE_KEY` (PEM format with newlines as `\n`)
   - `FIREBASE_CLIENT_EMAIL`
   - `FIREBASE_CLIENT_ID`
-- **Stripe**: 
+- **Stripe**:
   - `STRIPE_SECRET_KEY`
   - `STRIPE_WEBHOOK_SECRET`
-- **Blind Signing**: 
+- **Blind Signing**:
   - `BLIND_SIGNING_PRIVATE_KEY` (RSA private key in PEM format)
 
 ### Optional Variables
@@ -94,18 +90,126 @@ $ yarn run test:e2e
 $ yarn run test:cov
 ```
 
+---
+
+# Architecture & Security
+
+## Blind Signature Implementation
+
+The backend implements a **production-ready** blind signature system using RSA-FDH (Full Domain Hash).
+
+### Components
+
+1. **CryptoService** (`src/crypto/crypto.service.ts`)
+    - Loads RSA private key from `BLIND_SIGNING_PRIVATE_KEY`
+    - Signs blinded tokens using RSA-FDH
+    - Exports public key in PEM format (SPKI)
+    - Validates input token length (32-4096 bytes)
+
+2. **CryptoController** (`src/crypto/crypto.controller.ts`)
+    - `GET /api/auth/vpn-token/public-key`: Public endpoint to fetch the RSA public key.
+    - `POST /api/auth/vpn-token`: Requires Firebase auth. Signs a blinded token. Throttled at 5 req/min.
+
+### Security Features
+
+- **Authentication**: Signing requires a valid Firebase token.
+
+- **Rate Limiting**: Strict limits (5 req/min) to prevent abuse.
+- **Safe Logging**: No sensitive data is logged.
+- **Validation**: Strict input validation on token formats.
+
+## Church & State Model - VPN Credentials
+
+The "Church & State" model ensures that **no user ID is sent to VPN nodes**. VPN credentials are strictly token-based.
+
+### Flow
+
+1. **Client**: Generates random token.
+2. **Client**: Blinds token and gets signature from `/api/auth/vpn-token`.
+3. **Client**: Unblinds signature.
+4. **Client**: Requests credentials via `POST /api/config/vpn/credentials` with `{ token, signature, serverId }`.
+5. **Backend**: Verifies signature. Generates deterministic credentials:
+    - **Username**: Derived from token prefix (e.g., `token_abc123...`).
+    - **Password**: `SHA-256(token + signature)`.
+6. **VPN Node**: Authenticates using these credentials. No user metadata is involved.
+
+This ensures **Privacy** (backend cannot correlate payment/identity with VPN usage) and **Security** (credentials are ephemeral and token-derived).
+
+---
+
+# API Documentation
+
+## Anonymous Session Endpoint
+
+### `POST /api/connection/session/anonymous`
+
+Allows clients to submit connection sessions using blind-signed tokens, decoupling the session from the user identity.
+
+**Request Body:**
+
+```json
+{
+  "token": "base64-encoded-original-token",
+  "signature": "base64-encoded-blind-signed-signature",
+  "session_start": "2024-01-01T00:00:00Z",
+  "duration_seconds": 3600,
+  "platform": "ios",
+  "server_location": "United States"
+}
+```
+
+**Behavior:**
+
+- Verifies the blind-signed token.
+- Records session with `isAnonymized: true`.
+- Assigns to a system anonymous user ID (`00000000-0000-0000-0000-000000000000`).
+- **Rate Limit**: 100 req/min.
+
+---
+
+# Client Integration Guide
+
+## VPN Credentials Update (Required)
+
+Clients **MUST** use the blind signature flow to fetch VPN credentials.
+
+**Old Flow (Deprecated):**
+
+- Fetch from `/config/vpn`.
+- Uses static/shared credentials.
+
+**New Flow (Required):**
+
+1. Generate random token.
+2. Blind & Sign via `/api/auth/vpn-token`.
+3. Unblind signature.
+4. Fetch credentials via `/api/config/vpn/credentials`.
+
+## Connection Sessions (Privacy Enhanced)
+
+Clients should prefer `recordAnonymousSession()` using the same blind-signed token to ensure full privacy.
+
+---
+
+# Roadmap & Status
+
+## Missing Endpoints Analysis
+
+| Endpoint | Status | Notes |
+| :--- | :--- | :--- |
+| `DELETE /auth/delete-account` | **Implemented** | Available at `/auth/delete-account`. |
+| `POST /subscription/status-session` | **Implemented** | Available at `/subscription/status-session`. |
+| `POST /subscription/cancel` | **Implemented** | Available at `/subscription/cancel`. |
+| `POST /connection/session` | **Update** | Should support anonymous flow (see above). |
+| `GET /connection/sessions/{email}` | **Missing** | User history. Low priority. |
+| `GET /connection/stats/{email}` | **Missing** | User stats. Low priority. |
+| `GET /config/vpn` | **Implemented** | Basic config implemented. Credential part superseded by `vpn/credentials`. |
+
+---
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ yarn install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
 
 ## Resources
 
@@ -133,4 +237,3 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
-# vpn-backend-service-v2

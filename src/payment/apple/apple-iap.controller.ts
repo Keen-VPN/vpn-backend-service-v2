@@ -6,6 +6,12 @@ import {
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { AppleService } from './apple.service';
 import { CapturePurchaseDto } from '../../common/dto/capture-purchase.dto';
 import { LinkPurchaseDto } from '../../common/dto/link-purchase.dto';
@@ -13,13 +19,24 @@ import { LinkWithTransactionIdsDto } from '../../common/dto/link-with-transactio
 import { SessionAuthGuard } from '../../auth/guards/session-auth.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { SafeLogger } from '../../common/utils/logger.util';
+import { AppleLinkPurchaseResponseDto, AppleBulkLinkResponseDto } from '../../common/dto/response/apple.response.dto';
+import { SuccessResponseDto } from '../../common/dto/response/success.response.dto';
 
+@ApiTags('Apple IAP')
 @Controller('apple-iap')
 export class AppleIAPController {
-  constructor(private appleService: AppleService) {}
+  constructor(private appleService: AppleService) { }
 
   @Post('capture-purchase')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Capture Apple IAP purchase' })
+  @ApiResponse({
+    status: 200,
+    description: 'Purchase captured successfully',
+    type: SuccessResponseDto
+  })
+  @ApiResponse({ status: 400, description: 'Bad Request' })
+  @ApiResponse({ status: 500, description: 'Internal Server Error' })
   async capturePurchase(@Body() captureDto: CapturePurchaseDto) {
     try {
       // Verify device fingerprint if provided
@@ -57,6 +74,16 @@ export class AppleIAPController {
   @Post('link-purchase')
   @UseGuards(SessionAuthGuard)
   @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Link Apple IAP purchase to user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Purchase linked successfully',
+    type: AppleLinkPurchaseResponseDto
+  })
+  @ApiResponse({ status: 400, description: 'Bad Request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 500, description: 'Internal Server Error' })
   async linkPurchase(
     @Body() linkDto: LinkPurchaseDto,
     @CurrentUser() user: any,
@@ -94,6 +121,16 @@ export class AppleIAPController {
   @Post('link-with-transaction-ids')
   @UseGuards(SessionAuthGuard)
   @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Link multiple Apple IAP transactions to user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Transactions linked successfully',
+    type: AppleBulkLinkResponseDto
+  })
+  @ApiResponse({ status: 400, description: 'Bad Request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 500, description: 'Internal Server Error' })
   async linkWithTransactionIds(
     @Body() linkDto: LinkWithTransactionIdsDto,
     @CurrentUser() user: any,

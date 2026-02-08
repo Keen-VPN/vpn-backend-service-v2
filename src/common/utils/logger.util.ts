@@ -1,35 +1,108 @@
 /**
- * Safe logging utilities that redact PII
+ * Safe logging utilities that redact PII and provide structured logging
  */
+
+export interface LogContext {
+  service?: string;
+  requestId?: string;
+  userId?: string;
+  [key: string]: any;
+}
 
 export class SafeLogger {
   /**
-   * Log without exposing PII
+   * Debug level - only logs in non-production environments
    * @param message Log message
-   * @param data Data to log (PII will be redacted)
+   * @param context Optional context (service name, requestId, etc.)
+   * @param data Additional data to log (PII will be redacted)
    */
-  static info(message: string, data?: Record<string, any>) {
-    const sanitized = this.sanitizeData(data);
-    console.log(`[INFO] ${message}`, sanitized ? JSON.stringify(sanitized) : '');
+  static debug(message: string, context?: LogContext, data?: Record<string, any>) {
+    if (process.env.NODE_ENV === 'production') {
+      return; // Don't log debug in production
+    }
+
+    this.log('DEBUG', message, context, data);
   }
 
-  static error(message: string, error?: Error | any, data?: Record<string, any>) {
-    const sanitized = this.sanitizeData(data);
-    const errorDetails = error instanceof Error ? {
-      name: error.name,
-      message: error.message,
-      // Never log stack traces with PII
-    } : error;
-    
-    console.error(`[ERROR] ${message}`, {
-      ...sanitized,
-      error: errorDetails,
-    });
+  /**
+   * Info level - standard operational messages
+   * @param message Log message
+   * @param context Optional context (service name, requestId, etc.)
+   * @param data Additional data to log (PII will be redacted)
+   */
+  static info(message: string, context?: LogContext, data?: Record<string, any>) {
+    this.log('INFO', message, context, data);
   }
 
-  static warn(message: string, data?: Record<string, any>) {
-    const sanitized = this.sanitizeData(data);
-    console.warn(`[WARN] ${message}`, sanitized ? JSON.stringify(sanitized) : '');
+  /**
+   * Warning level - unexpected but recoverable conditions
+   * @param message Log message
+   * @param context Optional context (service name, requestId, etc.)
+   * @param data Additional data to log (PII will be redacted)
+   */
+  static warn(message: string, context?: LogContext, data?: Record<string, any>) {
+    this.log('WARN', message, context, data);
+  }
+
+  /**
+   * Error level - failures and exceptions
+   * @param message Log message
+   * @param error Error object or error message
+   * @param context Optional context (service name, requestId, etc.)
+   * @param data Additional data to log (PII will be redacted)
+   */
+  static error(
+    message: string,
+    error?: Error | any,
+    context?: LogContext,
+    data?: Record<string, any>,
+  ) {
+    const errorDetails = error instanceof Error
+      ? {
+        name: error.name,
+        message: error.message,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined,
+      }
+      : error;
+
+    this.log('ERROR', message, context, { ...data, error: errorDetails });
+  }
+
+  /**
+   * Core logging function with structured output
+   */
+  private static log(
+    level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR',
+    message: string,
+    context?: LogContext,
+    data?: Record<string, any>,
+  ) {
+    const timestamp = new Date().toISOString();
+    const sanitizedContext = this.sanitizeData(context || {});
+    const sanitizedData = this.sanitizeData(data || {});
+
+    const logEntry = {
+      timestamp,
+      level,
+      message,
+      ...(sanitizedContext && Object.keys(sanitizedContext).length > 0 && { context: sanitizedContext }),
+      ...(sanitizedData && Object.keys(sanitizedData).length > 0 && { data: sanitizedData }),
+    };
+
+    const logString = JSON.stringify(logEntry);
+
+    switch (level) {
+      case 'DEBUG':
+      case 'INFO':
+        console.log(logString);
+        break;
+      case 'WARN':
+        console.warn(logString);
+        break;
+      case 'ERROR':
+        console.error(logString);
+        break;
+    }
   }
 
   /**
@@ -42,6 +115,7 @@ export class SafeLogger {
       'email',
       'idToken',
       'token',
+      'sessionToken',
       'blindedToken',
       'privateKey',
       'password',
@@ -49,10 +123,16 @@ export class SafeLogger {
       'firebaseUid',
       'appleUserId',
       'googleUserId',
+      'ip',
+      'ipAddress',
+      'userAgent',
+      'deviceFingerprint',
+      'identityToken',
+      'authorizationCode',
     ];
 
     const sanitized = { ...data };
-    
+
     for (const field of piiFields) {
       if (sanitized[field]) {
         sanitized[field] = '[REDACTED]';
@@ -61,7 +141,7 @@ export class SafeLogger {
 
     // Recursively sanitize nested objects
     for (const key in sanitized) {
-      if (typeof sanitized[key] === 'object' && sanitized[key] !== null) {
+      if (typeof sanitized[key] === 'object' && sanitized[key] !== null && !Array.isArray(sanitized[key])) {
         sanitized[key] = this.sanitizeData(sanitized[key]);
       }
     }
@@ -69,4 +149,3 @@ export class SafeLogger {
     return sanitized;
   }
 }
-

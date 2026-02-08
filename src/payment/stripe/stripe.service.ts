@@ -24,6 +24,14 @@ export class StripeService {
     });
   }
 
+  async getCustomerIdByUserId(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { stripeCustomerId: true },
+    });
+    return user?.stripeCustomerId || null;
+  }
+
   async createCheckoutSession(
     userId: string,
     planId: string,
@@ -269,7 +277,7 @@ export class StripeService {
         typeof subscriptionRef === 'string'
           ? subscriptionRef
           : // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            (subscriptionRef.id as string);
+          (subscriptionRef.id as string);
 
       const subscription =
         await this.stripe.subscriptions.retrieve(subscriptionId);

@@ -62,7 +62,7 @@ export class VPNConfigService implements OnModuleInit {
     private configService: ConfigService,
     private prisma: PrismaService,
     private cryptoService: CryptoService,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     // Load config from database on startup
@@ -205,7 +205,7 @@ export class VPNConfigService implements OnModuleInit {
         this.cachedEtag = dbConfig.etag || generateWeakEtag(normalizedConfig);
         SafeLogger.info('Loaded VPN config from database', {
           version: dbConfig.version,
-          etag: this.cachedEtag.substring(0, 16) + '...',
+          etag: (this.cachedEtag || '').substring(0, 16) + '...',
           serversCount: normalizedConfig.servers.length,
           credentialsCount: normalizedConfig.credentials.length,
         });

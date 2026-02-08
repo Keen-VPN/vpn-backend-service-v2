@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { SubscriptionService } from '../../../src/subscription/subscription.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { TrialService } from '../../../src/subscription/trial.service';
 import { ConfigService } from '@nestjs/config';
 import {
   createMockPrismaClient,
@@ -39,6 +40,13 @@ describe('SubscriptionService', () => {
         {
           provide: ConfigService,
           useValue: mockConfigService,
+        },
+        {
+          provide: TrialService,
+          useValue: {
+            checkTrialStatus: jest.fn(),
+            activateTrial: jest.fn(),
+          },
         },
       ],
     }).compile();

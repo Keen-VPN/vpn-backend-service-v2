@@ -5,17 +5,24 @@ import {
   Res,
   HttpCode,
   HttpStatus,
+  Body,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AppleService } from './apple.service';
 import { SafeLogger } from '../../common/utils/logger.util';
 
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+
+@ApiTags('Apple Webhook')
 @Controller('payment/apple')
 export class AppleWebhookController {
-  constructor(private appleService: AppleService) {}
+  constructor(private appleService: AppleService) { }
 
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Handle Apple server-to-server notifications' })
+  @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
+  @ApiResponse({ status: 500, description: 'Webhook handler failed' })
   async handleWebhook(@Req() req: Request, @Res() res: Response) {
     try {
       const event = req.body;
@@ -34,6 +41,9 @@ export class AppleWebhookController {
 
   @Post('receipt')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify Apple receipt' })
+  @ApiResponse({ status: 200, description: 'Receipt verification result' })
+  @ApiBody({ schema: { type: 'object', properties: { receiptData: { type: 'string' } } } })
   async verifyReceipt(@Req() req: Request) {
     const { receiptData } = req.body;
 

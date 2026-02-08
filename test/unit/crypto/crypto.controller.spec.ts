@@ -5,14 +5,22 @@ import { CryptoService } from '../../../src/crypto/crypto.service';
 import { FirebaseAuthGuard } from '../../../src/auth/guards/firebase-auth.guard';
 import { createMockBlindedToken } from '../../setup/test-helpers';
 
+import { SubscriptionService } from '../../../src/subscription/subscription.service';
+import { SessionAuthGuard } from '../../../src/auth/guards/session-auth.guard';
+
 describe('CryptoController', () => {
   let controller: CryptoController;
   let cryptoService: jest.Mocked<CryptoService>;
+  let subscriptionService: jest.Mocked<SubscriptionService>;
 
   beforeEach(async () => {
     const mockCryptoService = {
       signBlindedToken: jest.fn(),
       getPublicKey: jest.fn(),
+    };
+
+    const mockSubscriptionService = {
+      getStatusWithSession: jest.fn().mockResolvedValue({ hasActiveSubscription: true }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -22,9 +30,17 @@ describe('CryptoController', () => {
           provide: CryptoService,
           useValue: mockCryptoService,
         },
+        {
+          provide: SubscriptionService,
+          useValue: mockSubscriptionService,
+        },
       ],
     })
       .overrideGuard(FirebaseAuthGuard)
+      .useValue({
+        canActivate: jest.fn().mockReturnValue(true),
+      })
+      .overrideGuard(SessionAuthGuard)
       .useValue({
         canActivate: jest.fn().mockReturnValue(true),
       })
@@ -32,6 +48,7 @@ describe('CryptoController', () => {
 
     controller = module.get<CryptoController>(CryptoController);
     cryptoService = module.get(CryptoService);
+    subscriptionService = module.get(SubscriptionService);
   });
 
   afterEach(() => {
@@ -46,9 +63,16 @@ describe('CryptoController', () => {
 
       cryptoService.signBlindedToken.mockResolvedValue(signature);
 
+      const mockReq = {
+        headers: { authorization: 'Bearer valid-token' },
+        body: {},
+      } as any;
+
+      cryptoService.signBlindedToken.mockResolvedValue(signature);
+
       const result = await controller.signBlindedToken(
+        mockReq,
         { blindedToken },
-        user as any,
       );
 
       expect(result.signature).toBe(signature);
@@ -58,12 +82,17 @@ describe('CryptoController', () => {
     it('should throw BadRequestException for invalid token format', async () => {
       const invalidToken = 'not-base64';
 
+      const mockReq = {
+        headers: { authorization: 'Bearer valid-token' },
+        body: {},
+      } as any;
+
       cryptoService.signBlindedToken.mockRejectedValue(
         new BadRequestException('Invalid blinded token length'),
       );
 
       await expect(
-        controller.signBlindedToken({ blindedToken: invalidToken }, {} as any),
+        controller.signBlindedToken(mockReq, { blindedToken: invalidToken }),
       ).rejects.toThrow(BadRequestException);
     });
   });

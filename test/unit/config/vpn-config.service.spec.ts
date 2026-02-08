@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { VPNConfigService } from '../../../src/config/vpn-config.service';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { CryptoService } from '../../../src/crypto/crypto.service';
 import {
   createMockConfigService,
   createMockPrismaClient,
@@ -33,6 +34,12 @@ describe('VPNConfigService', () => {
         {
           provide: PrismaService,
           useValue: mockPrisma,
+        },
+        {
+          provide: CryptoService,
+          useValue: {
+            verifyBlindSignedToken: jest.fn(),
+          },
         },
       ],
     }).compile();

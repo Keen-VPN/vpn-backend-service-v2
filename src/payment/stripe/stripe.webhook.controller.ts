@@ -5,13 +5,21 @@ import {
   Res,
   HttpCode,
   HttpStatus,
+  Body,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { StripeService } from './stripe.service';
 import Stripe from 'stripe';
 import { SafeLogger } from '../../common/utils/logger.util';
+import { FirebaseAuthGuard } from '../../auth/guards/firebase-auth.guard';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { StripeCheckoutResponseDto, StripePortalResponseDto } from '../../common/dto/response/stripe.response.dto';
 
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
+
+@ApiTags('Stripe')
 @Controller('payment/stripe')
 export class StripeWebhookController {
   private stripe: Stripe;
@@ -37,6 +45,10 @@ export class StripeWebhookController {
 
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Handle Stripe webhook events' })
+  @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
+  @ApiResponse({ status: 400, description: 'Missing signature or secret' })
+  @ApiResponse({ status: 500, description: 'Webhook handler failed' })
   async handleWebhook(@Req() req: Request, @Res() res: Response) {
     const sig = req.headers['stripe-signature'];
 
@@ -50,7 +62,7 @@ export class StripeWebhookController {
     try {
       // Get raw body from request (set by NestJS rawBody option)
       const rawBody = (req as any).rawBody || req.body;
-      
+
       // Verify webhook signature using raw body
       event = this.stripe.webhooks.constructEvent(
         rawBody,
@@ -72,11 +84,23 @@ export class StripeWebhookController {
   }
 
   @Post('checkout')
-  async createCheckout(@Req() req: Request) {
-    const { userId, planId, successUrl, cancelUrl } = req.body;
+  @UseGuards(FirebaseAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create Stripe checkout session' })
+  @ApiResponse({
+    status: 201,
+    description: 'Checkout session created',
+    type: StripeCheckoutResponseDto
+  })
+  @ApiResponse({ status: 400, description: 'Missing required fields' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiBody({ schema: { type: 'object', properties: { planId: { type: 'string' }, successUrl: { type: 'string' }, cancelUrl: { type: 'string' } } } })
+  async createCheckout(@Req() req: Request, @CurrentUser() user: any) {
+    const { planId, successUrl, cancelUrl } = req.body;
+    const userId = user.uid;
 
-    if (!userId || !planId) {
-      return { error: 'userId and planId are required' };
+    if (!planId) {
+      return { error: 'planId is required' };
     }
 
     const session = await this.stripeService.createCheckoutSession(
@@ -90,11 +114,40 @@ export class StripeWebhookController {
   }
 
   @Post('portal')
-  async createPortal(@Req() req: Request) {
-    const { customerId, returnUrl } = req.body;
+  @UseGuards(FirebaseAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create Stripe customer portal session' })
+  @ApiResponse({
+    status: 201,
+    description: 'Portal session created',
+    type: StripePortalResponseDto
+  })
+  @ApiResponse({ status: 400, description: 'Missing required fields' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiBody({ schema: { type: 'object', properties: { returnUrl: { type: 'string' } } } })
+  async createPortal(@Req() req: Request, @CurrentUser() user: any) {
+    const { returnUrl } = req.body;
 
-    if (!customerId || !returnUrl) {
-      return { error: 'customerId and returnUrl are required' };
+    // We need to fetch the customer ID from the user's subscription or account
+    // For now, assuming the service can handle looking up by userId (firebase uid)
+    // or we fetch the user's profile to get stripeCustomerId
+    // THIS PART NEEDS ADJUSTMENT based on how StripeService works. 
+    // Let's assume createCustomerPortalSession can take userId or we need to lookup customerId.
+
+    // Looking at the original code, it took customerId. 
+    // Now we must derive customerId from the authenticated user.
+    // I will modify the service call to fetch customerID if possible, or fetch it here.
+
+    // Checking service signature...
+    if (!returnUrl) {
+      return { error: 'returnUrl is required' };
+    }
+
+    // Resolving customerId from user (placeholder until I see service)
+    const customerId = await this.stripeService.getCustomerIdByUserId(user.uid);
+
+    if (!customerId) {
+      return { error: 'Stripe customer not found' };
     }
 
     const session = await this.stripeService.createCustomerPortalSession(
