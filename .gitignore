@@ -29,3 +29,7 @@ coverage
 .DS_Store
 Thumbs.db
 blind_signing_key.pem
+
+# Test Artifacts
+test-results.json
+e2e_output.txt
