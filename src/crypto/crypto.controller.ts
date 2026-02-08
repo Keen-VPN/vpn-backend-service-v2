@@ -31,7 +31,7 @@ export class CryptoController {
   constructor(
     private readonly cryptoService: CryptoService,
     private readonly subscriptionService: SubscriptionService,
-  ) { }
+  ) {}
 
   @Post('vpn-token')
   @UseGuards(SessionAuthGuard)
@@ -45,7 +45,10 @@ export class CryptoController {
   })
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Subscription required' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Subscription required',
+  })
   @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 requests per minute
   async signBlindedToken(
     @Req() req: Request,

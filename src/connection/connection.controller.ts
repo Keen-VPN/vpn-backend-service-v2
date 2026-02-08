@@ -26,7 +26,7 @@ import { Throttle } from '@nestjs/throttler';
 @ApiTags('Connection')
 @Controller('connection')
 export class ConnectionController {
-  constructor(private readonly connectionService: ConnectionService) { }
+  constructor(private readonly connectionService: ConnectionService) {}
 
   @Post('session')
   @HttpCode(HttpStatus.OK)
@@ -34,11 +34,13 @@ export class ConnectionController {
   @ApiResponse({
     status: 200,
     description: 'Session recorded successfully',
-    type: SuccessResponseDto
+    type: SuccessResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @Throttle({ default: { limit: 100, ttl: 60000 } })
-  async recordSession(@Body() sessionDto: ConnectionSessionDto): Promise<SuccessResponseDto> {
+  async recordSession(
+    @Body() sessionDto: ConnectionSessionDto,
+  ): Promise<SuccessResponseDto> {
     return this.connectionService.recordSession(sessionDto);
   }
 }

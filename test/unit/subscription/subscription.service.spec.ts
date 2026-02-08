@@ -15,6 +15,8 @@ import {
 } from '../../setup/test-helpers';
 import * as jwt from 'jsonwebtoken';
 
+jest.mock('jsonwebtoken');
+
 describe('SubscriptionService', () => {
   let service: SubscriptionService;
   let mockPrisma: MockPrismaClient;
@@ -46,6 +48,8 @@ describe('SubscriptionService', () => {
           useValue: {
             checkTrialStatus: jest.fn(),
             activateTrial: jest.fn(),
+            expireIfNeeded: jest.fn(),
+            status: jest.fn().mockResolvedValue({ status: 'ACTIVE' }),
           },
         },
       ],
@@ -65,10 +69,13 @@ describe('SubscriptionService', () => {
         userId: user.id,
         status: 'active',
       });
-      const sessionToken = jwt.sign(
-        { userId: user.id, email: user.email, type: 'session' },
-        'test-secret',
-      );
+      const sessionToken = 'valid_token';
+
+      (jwt.verify as jest.Mock).mockReturnValue({
+        userId: user.id,
+        email: user.email,
+        type: 'session',
+      });
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
       mockPrisma.subscription.findFirst.mockResolvedValue(subscription);
@@ -83,10 +90,13 @@ describe('SubscriptionService', () => {
 
     it('should return subscription status without active subscription', async () => {
       const user = createMockUser();
-      const sessionToken = jwt.sign(
-        { userId: user.id, email: user.email, type: 'session' },
-        'test-secret',
-      );
+      const sessionToken = 'valid_token';
+
+      (jwt.verify as jest.Mock).mockReturnValue({
+        userId: user.id,
+        email: user.email,
+        type: 'session',
+      });
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
       mockPrisma.subscription.findFirst.mockResolvedValue(null);
@@ -95,28 +105,39 @@ describe('SubscriptionService', () => {
 
       expect(result.success).toBe(true);
       expect(result.hasActiveSubscription).toBe(false);
-      expect(result.subscription).toBeNull();
+      expect(result.subscription).toEqual(
+        expect.objectContaining({
+          status: 'inactive',
+        }),
+      );
     });
 
     it('should throw UnauthorizedException for invalid token', async () => {
       const invalidToken = 'invalid_token';
 
-      await expect(
-        service.getStatusWithSession(invalidToken),
-      ).rejects.toThrow(UnauthorizedException);
+      (jwt.verify as jest.Mock).mockImplementation(() => {
+        throw new Error('Invalid token');
+      });
+
+      await expect(service.getStatusWithSession(invalidToken)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw UnauthorizedException if user not found', async () => {
-      const sessionToken = jwt.sign(
-        { userId: 'non_existent', email: 'test@example.com', type: 'session' },
-        'test-secret',
-      );
+      const sessionToken = 'valid_token';
+
+      (jwt.verify as jest.Mock).mockReturnValue({
+        userId: 'non_existent',
+        email: 'test@example.com',
+        type: 'session',
+      });
 
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.getStatusWithSession(sessionToken),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.getStatusWithSession(sessionToken)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 
@@ -166,4 +187,3 @@ describe('SubscriptionService', () => {
     });
   });
 });
-

@@ -1,19 +1,34 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 class TransactionIdDto {
-  @ApiProperty({ description: 'The transaction identifier', example: '1000000...' })
+  @ApiProperty({
+    description: 'The transaction identifier',
+    example: '1000000...',
+  })
   @IsString()
   @IsNotEmpty()
   transactionId: string;
 
-  @ApiProperty({ description: 'The original transaction identifier', example: '1000000...' })
+  @ApiProperty({
+    description: 'The original transaction identifier',
+    example: '1000000...',
+  })
   @IsString()
   @IsNotEmpty()
   originalTransactionId: string;
 
-  @ApiProperty({ description: 'The product identifier', example: 'com.keen.vpn.monthly' })
+  @ApiProperty({
+    description: 'The product identifier',
+    example: 'com.keen.vpn.monthly',
+  })
   @IsString()
   @IsNotEmpty()
   productId: string;
@@ -53,4 +68,3 @@ export class LinkWithTransactionIdsDto {
   @IsOptional()
   devicePlatform?: string;
 }
-

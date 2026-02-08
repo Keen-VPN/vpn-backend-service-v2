@@ -23,7 +23,7 @@ import { Throttle } from '@nestjs/throttler';
 @Controller('notifications')
 @ApiBearerAuth()
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) { }
+  constructor(private readonly notificationsService: NotificationsService) {}
 
   @Post('register')
   @UseGuards(SessionAuthGuard)
@@ -32,7 +32,7 @@ export class NotificationsController {
   @ApiResponse({
     status: 200,
     description: 'Token registered successfully',
-    type: SuccessResponseDto
+    type: SuccessResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @Throttle({ default: { limit: 10, ttl: 60000 } })

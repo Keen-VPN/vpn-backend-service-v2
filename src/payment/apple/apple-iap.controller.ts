@@ -6,6 +6,7 @@ import {
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiOperation,
@@ -19,21 +20,25 @@ import { LinkWithTransactionIdsDto } from '../../common/dto/link-with-transactio
 import { SessionAuthGuard } from '../../auth/guards/session-auth.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { SafeLogger } from '../../common/utils/logger.util';
-import { AppleLinkPurchaseResponseDto, AppleBulkLinkResponseDto } from '../../common/dto/response/apple.response.dto';
+import {
+  AppleLinkPurchaseResponseDto,
+  AppleBulkLinkResponseDto,
+} from '../../common/dto/response/apple.response.dto';
 import { SuccessResponseDto } from '../../common/dto/response/success.response.dto';
 
 @ApiTags('Apple IAP')
 @Controller('apple-iap')
 export class AppleIAPController {
-  constructor(private appleService: AppleService) { }
+  constructor(private appleService: AppleService) {}
 
   @Post('capture-purchase')
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Capture Apple IAP purchase' })
   @ApiResponse({
     status: 200,
     description: 'Purchase captured successfully',
-    type: SuccessResponseDto
+    type: SuccessResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiResponse({ status: 500, description: 'Internal Server Error' })
@@ -72,6 +77,7 @@ export class AppleIAPController {
   }
 
   @Post('link-purchase')
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 requests per minute
   @UseGuards(SessionAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
@@ -79,7 +85,7 @@ export class AppleIAPController {
   @ApiResponse({
     status: 200,
     description: 'Purchase linked successfully',
-    type: AppleLinkPurchaseResponseDto
+    type: AppleLinkPurchaseResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -119,6 +125,7 @@ export class AppleIAPController {
   }
 
   @Post('link-with-transaction-ids')
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 requests per minute
   @UseGuards(SessionAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
@@ -126,7 +133,7 @@ export class AppleIAPController {
   @ApiResponse({
     status: 200,
     description: 'Transactions linked successfully',
-    type: AppleBulkLinkResponseDto
+    type: AppleBulkLinkResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -168,7 +175,10 @@ export class AppleIAPController {
 
       return result;
     } catch (error) {
-      SafeLogger.error('Error linking Apple IAP purchases with transaction IDs', error);
+      SafeLogger.error(
+        'Error linking Apple IAP purchases with transaction IDs',
+        error,
+      );
       return {
         success: false,
         error: error.message || 'Failed to link purchases',
@@ -176,4 +186,3 @@ export class AppleIAPController {
     }
   }
 }
-

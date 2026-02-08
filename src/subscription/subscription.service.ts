@@ -12,7 +12,7 @@ export class SubscriptionService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private trialService: TrialService,
-  ) { }
+  ) {}
 
   async getStatusWithSession(sessionToken: string) {
     try {
@@ -80,24 +80,24 @@ export class SubscriptionService {
         hasActiveSubscription,
         subscription: activeSubscription
           ? {
-            status: activeSubscription.status,
-            plan: activeSubscription.planName || '',
-            endDate: activeSubscription.currentPeriodEnd?.toISOString() || '',
-            customerId:
-              activeSubscription.stripeCustomerId ||
-              activeSubscription.appleTransactionId ||
-              '',
-            cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd || false,
-            subscriptionType: activeSubscription.subscriptionType,
-          }
+              status: activeSubscription.status,
+              plan: activeSubscription.planName || '',
+              endDate: activeSubscription.currentPeriodEnd?.toISOString() || '',
+              customerId:
+                activeSubscription.stripeCustomerId ||
+                activeSubscription.appleTransactionId ||
+                '',
+              cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd || false,
+              subscriptionType: activeSubscription.subscriptionType,
+            }
           : {
-            status: 'inactive',
-            plan: '',
-            endDate: '',
-            customerId: '',
-            cancelAtPeriodEnd: false,
-            subscriptionType: 'stripe',
-          },
+              status: 'inactive',
+              plan: '',
+              endDate: '',
+              customerId: '',
+              cancelAtPeriodEnd: false,
+              subscriptionType: 'stripe',
+            },
         trial,
       };
     } catch (error) {

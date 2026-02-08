@@ -12,7 +12,8 @@ export class VpnCredentialDto {
   token: string; // The original token (before blinding)
 
   @ApiProperty({
-    description: 'The blind-signed signature (after unblinding), base64 encoded',
+    description:
+      'The blind-signed signature (after unblinding), base64 encoded',
     example: 'MEUCIQD...',
   })
   @IsString()

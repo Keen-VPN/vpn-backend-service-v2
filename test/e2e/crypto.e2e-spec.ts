@@ -8,7 +8,10 @@ import {
   createMockConfigService,
   MockPrismaClient,
 } from '../setup/mocks';
-import { createMockBlindedToken, createMockDecodedFirebaseToken } from '../setup/test-helpers';
+import {
+  createMockBlindedToken,
+  createMockDecodedFirebaseToken,
+} from '../setup/test-helpers';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { FirebaseConfig } from '../../src/config/firebase.config';
 import { ConfigService } from '@nestjs/config';
@@ -49,17 +52,40 @@ describe('Crypto (e2e)', () => {
   });
 
   describe('POST /auth/vpn-token', () => {
+    const jwt = require('jsonwebtoken');
+
     it('should sign blinded token successfully', async () => {
       const blindedToken = createMockBlindedToken();
-      const decodedToken = createMockDecodedFirebaseToken();
 
-      mockFirebaseAuth.verifyIdToken.mockResolvedValue(decodedToken);
+      // Create a valid session token signed with the test secret
+      // ConfigService mock uses 'test-secret' by default
+      const user = { id: 'user-123', email: 'test@example.com' };
+      const sessionToken = jwt.sign(
+        { userId: user.id, email: user.email, type: 'session' },
+        'test-secret',
+      );
+
+      // Mock Prisma responses for SubscriptionService
+      mockPrisma.user.findUnique.mockResolvedValue(user as any);
+      mockPrisma.subscription.findFirst.mockResolvedValue({
+        status: 'active',
+        trialActive: false,
+      } as any);
 
       const response = await request(app.getHttpServer())
         .post('/auth/vpn-token')
-        .set('Authorization', `Bearer valid-token`)
+        .set('Authorization', `Bearer ${sessionToken}`)
         .send({ blindedToken })
-        .expect(200);
+        .expect(200)
+        .catch((err) => {
+          if (err.response) {
+            console.log(
+              'Error response body:',
+              JSON.stringify(err.response.body, null, 2),
+            );
+          }
+          throw err;
+        });
 
       expect(response.body.signature).toBeDefined();
     });
@@ -74,12 +100,22 @@ describe('Crypto (e2e)', () => {
     });
 
     it('should return 400 for invalid token format', async () => {
-      const decodedToken = createMockDecodedFirebaseToken();
-      mockFirebaseAuth.verifyIdToken.mockResolvedValue(decodedToken);
+      // Create valid token for auth, but send invalid body
+      const user = { id: 'user-123', email: 'test@example.com' };
+      const sessionToken = jwt.sign(
+        { userId: user.id, email: user.email, type: 'session' },
+        'test-secret',
+      );
+
+      // Mock auth success, but payload validation should fail
+      mockPrisma.user.findUnique.mockResolvedValue(user as any);
+      mockPrisma.subscription.findFirst.mockResolvedValue({
+        status: 'active',
+      } as any);
 
       await request(app.getHttpServer())
         .post('/auth/vpn-token')
-        .set('Authorization', `Bearer valid-token`)
+        .set('Authorization', `Bearer ${sessionToken}`)
         .send({ blindedToken: 'invalid-base64!!!' })
         .expect(400);
     });
@@ -96,4 +132,3 @@ describe('Crypto (e2e)', () => {
     });
   });
 });
-

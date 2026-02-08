@@ -20,7 +20,8 @@ export class AnonymousSessionDto {
   token: string; // The original token (before blinding)
 
   @ApiProperty({
-    description: 'The blind-signed signature (base64 encoded) received from the server',
+    description:
+      'The blind-signed signature (base64 encoded) received from the server',
     example: 'MEUCIQD...',
   })
   @IsString()

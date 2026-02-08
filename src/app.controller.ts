@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { AppService } from './app.service';
+import { AppService, HealthCheckResponse } from './app.service';
 
 @ApiTags('health')
 @Controller()
@@ -8,19 +8,42 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get('/')
-  @ApiOperation({ summary: 'Health check endpoint' })
+  @ApiOperation({
+    summary: 'Health check endpoint',
+    description:
+      'Returns comprehensive health status including database connectivity',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Returns health status',
+    description: 'Health status with infrastructure checks',
     schema: {
       type: 'object',
       properties: {
-        status: { type: 'string', example: 'ok' },
+        status: {
+          type: 'string',
+          enum: ['healthy', 'degraded', 'unhealthy'],
+          example: 'healthy',
+        },
         timestamp: { type: 'string', example: '2024-01-01T00:00:00.000Z' },
+        service: {
+          type: 'object',
+          properties: {
+            uptime: { type: 'number', example: 3600 },
+            version: { type: 'string', example: '1.0.0' },
+          },
+        },
+        database: {
+          type: 'object',
+          properties: {
+            status: { type: 'string', enum: ['connected', 'disconnected'] },
+            responseTime: { type: 'number', example: 5 },
+          },
+        },
+        errors: { type: 'array', items: { type: 'string' } },
       },
     },
   })
-  getHealth(): { status: string; timestamp: string } {
+  async getHealth(): Promise<HealthCheckResponse> {
     return this.appService.getHealth();
   }
 }

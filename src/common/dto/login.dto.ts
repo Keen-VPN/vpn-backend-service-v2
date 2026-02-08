@@ -12,4 +12,3 @@ export class LoginDto {
   @Length(100, 2000) // Firebase tokens are ~1000+ chars
   idToken: string;
 }
-

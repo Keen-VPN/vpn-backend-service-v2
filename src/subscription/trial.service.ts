@@ -31,7 +31,7 @@ export class TrialService {
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
-  ) { }
+  ) {}
 
   /**
    * Grants a trial to a user if they are eligible
@@ -58,7 +58,9 @@ export class TrialService {
     const trialsEnabled =
       this.configService.get<string>('FF_TRIALS_ENABLED') === 'true';
     if (!trialsEnabled) {
-      SafeLogger.debug('Trial feature flag is disabled', { service: 'TrialService' });
+      SafeLogger.debug('Trial feature flag is disabled', {
+        service: 'TrialService',
+      });
       return { granted: false, reason: 'feature_disabled', userId: user.id };
     }
 
@@ -72,10 +74,10 @@ export class TrialService {
       });
 
       if (existingGrant) {
-        SafeLogger.debug(
-          'Trial blocked: User already has a trial grant',
-          { service: 'TrialService', userId: user.id },
-        );
+        SafeLogger.debug('Trial blocked: User already has a trial grant', {
+          service: 'TrialService',
+          userId: user.id,
+        });
         return { granted: false, reason: 'existing_grant', userId: user.id };
       }
 

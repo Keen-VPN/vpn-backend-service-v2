@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException } from '@nestjs/common';
-import { AccountController, AccountPaymentsController } from '../../../src/account/account.controller';
+import {
+  AccountController,
+  AccountPaymentsController,
+} from '../../../src/account/account.controller';
 import { AccountService } from '../../../src/account/account.service';
 import { FirebaseAuthGuard } from '../../../src/auth/guards/firebase-auth.guard';
 import {
@@ -178,9 +181,12 @@ describe('AccountPaymentsController', () => {
       const firebaseUser = { uid: 'firebase-uid' };
 
       await expect(
-        controller.getInvoicePdf('invalid-uuid', firebaseUser as any, {} as any),
+        controller.getInvoicePdf(
+          'invalid-uuid',
+          firebaseUser as any,
+          {} as any,
+        ),
       ).rejects.toThrow(ForbiddenException);
     });
   });
 });
-

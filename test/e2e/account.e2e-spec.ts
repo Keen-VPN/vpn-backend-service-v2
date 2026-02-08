@@ -77,9 +77,7 @@ describe('Account (e2e)', () => {
     });
 
     it('should require authentication', async () => {
-      await request(app.getHttpServer())
-        .get('/user/profile')
-        .expect(401);
+      await request(app.getHttpServer()).get('/user/profile').expect(401);
     });
   });
 
@@ -103,9 +101,7 @@ describe('Account (e2e)', () => {
     });
 
     it('should require authentication', async () => {
-      await request(app.getHttpServer())
-        .delete('/user/account')
-        .expect(401);
+      await request(app.getHttpServer()).delete('/user/account').expect(401);
     });
   });
 
@@ -160,4 +156,3 @@ describe('Account (e2e)', () => {
     });
   });
 });
-

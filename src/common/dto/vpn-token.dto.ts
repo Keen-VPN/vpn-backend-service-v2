@@ -14,4 +14,3 @@ export class VpnTokenDto {
   @Length(100, 5000) // Base64 encoded blinded token
   blindedToken: string;
 }
-

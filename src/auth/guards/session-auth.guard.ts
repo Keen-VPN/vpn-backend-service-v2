@@ -13,7 +13,7 @@ export class SessionAuthGuard implements CanActivate {
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
-  ) { }
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -59,4 +59,3 @@ export class SessionAuthGuard implements CanActivate {
     }
   }
 }
-

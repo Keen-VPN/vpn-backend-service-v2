@@ -217,6 +217,27 @@ export class AppleService {
           trialError,
         );
       }
+    } else {
+      // Update existing subscription
+      if (
+        existing.status !==
+          (expiresDate && expiresDate > new Date() ? 'active' : 'inactive') ||
+        (expiresDate &&
+          existing.currentPeriodEnd?.getTime() !== expiresDate.getTime())
+      ) {
+        await this.prisma.subscription.update({
+          where: { id: existing.id },
+          data: {
+            status:
+              expiresDate && expiresDate > new Date() ? 'active' : 'inactive',
+            currentPeriodEnd: expiresDate || undefined,
+          },
+        });
+        SafeLogger.info('Subscription updated from Apple receipt', {
+          subscriptionId: existing.id,
+          appleTransactionId: transactionId,
+        });
+      }
     }
   }
 
@@ -262,6 +283,18 @@ export class AppleService {
             existingDevice: existing.linkedEmail ? '[REDACTED]' : 'unknown',
             newDevice: deviceFingerprint.substring(0, 16) + '...',
           });
+        }
+      }
+
+      // Verify receipt if provided
+      if (receiptData) {
+        const receiptResponse = await this.verifyReceipt(receiptData);
+        if (receiptResponse.status !== 0) {
+          SafeLogger.warn('Invalid receipt data provided to capturePurchase', {
+            status: receiptResponse.status,
+            transactionId,
+          });
+          throw new Error('Invalid receipt data');
         }
       }
 
@@ -428,6 +461,24 @@ export class AppleService {
             'Failed to grant trial on subscription (non-fatal)',
             trialError,
           );
+        }
+      } else {
+        // Update existing subscription if status changed
+        if (
+          existingSubscription.status !== (isActive ? 'active' : 'inactive')
+        ) {
+          await this.prisma.subscription.update({
+            where: { id: existingSubscription.id },
+            data: {
+              status: isActive ? 'active' : 'inactive',
+              currentPeriodEnd: expiresDate || undefined,
+            },
+          });
+          SafeLogger.info('Subscription status updated for linked purchase', {
+            subscriptionId: existingSubscription.id,
+            transactionId,
+            newStatus: isActive ? 'active' : 'inactive',
+          });
         }
       }
 

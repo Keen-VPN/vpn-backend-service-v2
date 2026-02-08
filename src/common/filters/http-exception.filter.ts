@@ -13,7 +13,7 @@ import { SafeLogger } from '../utils/logger.util';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-  constructor(private configService: ConfigService) { }
+  constructor(private configService: ConfigService) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -38,7 +38,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     if (typeof exceptionResponse === 'string') {
       message = exceptionResponse;
-    } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+    } else if (
+      typeof exceptionResponse === 'object' &&
+      exceptionResponse !== null
+    ) {
       const resp = exceptionResponse as any;
       message = resp.message || message;
       code = resp.error || code; // Use NestJS default error code name if available
@@ -83,11 +86,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
         { method: request.method, path: request.url, statusCode: status },
       );
     } else if (status >= 400) {
-      SafeLogger.warn(
-        'Client error occurred',
-        logContext,
-        { method: request.method, path: request.url, statusCode: status, errorCode: code },
-      );
+      SafeLogger.warn('Client error occurred', logContext, {
+        method: request.method,
+        path: request.url,
+        statusCode: status,
+        errorCode: code,
+      });
     }
 
     response.status(status).json(errorResponse);

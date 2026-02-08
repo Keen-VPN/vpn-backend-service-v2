@@ -25,4 +25,3 @@ export class SecurityMiddleware implements NestMiddleware {
     next();
   }
 }
-

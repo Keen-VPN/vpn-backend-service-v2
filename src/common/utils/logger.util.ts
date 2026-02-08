@@ -16,7 +16,11 @@ export class SafeLogger {
    * @param context Optional context (service name, requestId, etc.)
    * @param data Additional data to log (PII will be redacted)
    */
-  static debug(message: string, context?: LogContext, data?: Record<string, any>) {
+  static debug(
+    message: string,
+    context?: LogContext,
+    data?: Record<string, any>,
+  ) {
     if (process.env.NODE_ENV === 'production') {
       return; // Don't log debug in production
     }
@@ -30,7 +34,11 @@ export class SafeLogger {
    * @param context Optional context (service name, requestId, etc.)
    * @param data Additional data to log (PII will be redacted)
    */
-  static info(message: string, context?: LogContext, data?: Record<string, any>) {
+  static info(
+    message: string,
+    context?: LogContext,
+    data?: Record<string, any>,
+  ) {
     this.log('INFO', message, context, data);
   }
 
@@ -40,7 +48,11 @@ export class SafeLogger {
    * @param context Optional context (service name, requestId, etc.)
    * @param data Additional data to log (PII will be redacted)
    */
-  static warn(message: string, context?: LogContext, data?: Record<string, any>) {
+  static warn(
+    message: string,
+    context?: LogContext,
+    data?: Record<string, any>,
+  ) {
     this.log('WARN', message, context, data);
   }
 
@@ -57,13 +69,15 @@ export class SafeLogger {
     context?: LogContext,
     data?: Record<string, any>,
   ) {
-    const errorDetails = error instanceof Error
-      ? {
-        name: error.name,
-        message: error.message,
-        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined,
-      }
-      : error;
+    const errorDetails =
+      error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+            stack:
+              process.env.NODE_ENV !== 'production' ? error.stack : undefined,
+          }
+        : error;
 
     this.log('ERROR', message, context, { ...data, error: errorDetails });
   }
@@ -85,8 +99,12 @@ export class SafeLogger {
       timestamp,
       level,
       message,
-      ...(sanitizedContext && Object.keys(sanitizedContext).length > 0 && { context: sanitizedContext }),
-      ...(sanitizedData && Object.keys(sanitizedData).length > 0 && { data: sanitizedData }),
+      ...(sanitizedContext &&
+        Object.keys(sanitizedContext).length > 0 && {
+          context: sanitizedContext,
+        }),
+      ...(sanitizedData &&
+        Object.keys(sanitizedData).length > 0 && { data: sanitizedData }),
     };
 
     const logString = JSON.stringify(logEntry);
@@ -108,7 +126,9 @@ export class SafeLogger {
   /**
    * Sanitize data by redacting PII fields
    */
-  private static sanitizeData(data?: Record<string, any>): Record<string, any> | undefined {
+  private static sanitizeData(
+    data?: Record<string, any>,
+  ): Record<string, any> | undefined {
     if (!data) return undefined;
 
     const piiFields = [
@@ -141,7 +161,11 @@ export class SafeLogger {
 
     // Recursively sanitize nested objects
     for (const key in sanitized) {
-      if (typeof sanitized[key] === 'object' && sanitized[key] !== null && !Array.isArray(sanitized[key])) {
+      if (
+        typeof sanitized[key] === 'object' &&
+        sanitized[key] !== null &&
+        !Array.isArray(sanitized[key])
+      ) {
         sanitized[key] = this.sanitizeData(sanitized[key]);
       }
     }

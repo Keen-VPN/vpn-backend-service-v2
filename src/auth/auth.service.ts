@@ -13,7 +13,7 @@ export class AuthService {
     private prisma: PrismaService,
     private configService: ConfigService,
     private appleTokenVerifier: AppleTokenVerifierService,
-  ) { }
+  ) {}
 
   async login(idToken: string) {
     try {
@@ -107,13 +107,13 @@ export class AuthService {
         sessionToken,
         subscription: activeSubscription
           ? {
-            id: activeSubscription.id,
-            status: activeSubscription.status,
-            planName: activeSubscription.planName,
-            currentPeriodEnd: activeSubscription.currentPeriodEnd,
-            cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
-            subscriptionType: activeSubscription.subscriptionType,
-          }
+              id: activeSubscription.id,
+              status: activeSubscription.status,
+              planName: activeSubscription.planName,
+              currentPeriodEnd: activeSubscription.currentPeriodEnd,
+              cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
+              subscriptionType: activeSubscription.subscriptionType,
+            }
           : null,
       };
     } catch (error) {
@@ -130,7 +130,9 @@ export class AuthService {
   }
 
   private generateSessionToken(userId: string): string {
-    const secret = this.configService.get<string>('JWT_SECRET') || 'default-secret-change-in-production';
+    const secret =
+      this.configService.get<string>('JWT_SECRET') ||
+      'default-secret-change-in-production';
     return jwt.sign(
       { userId, type: 'session' },
       secret,
@@ -138,7 +140,11 @@ export class AuthService {
     );
   }
 
-  async googleSignIn(idToken: string, deviceFingerprint?: string, devicePlatform?: string) {
+  async googleSignIn(
+    idToken: string,
+    deviceFingerprint?: string,
+    devicePlatform?: string,
+  ) {
     try {
       // Verify Firebase ID token
       const decodedToken = await this.firebaseConfig
@@ -198,10 +204,10 @@ export class AuthService {
 
       const sessionToken = this.generateSessionToken(user.id);
 
-      SafeLogger.info(
-        'Google sign-in completed successfully',
-        { service: 'AuthService', userId: user.id },
-      );
+      SafeLogger.info('Google sign-in completed successfully', {
+        service: 'AuthService',
+        userId: user.id,
+      });
 
       return {
         success: true,
@@ -214,7 +220,9 @@ export class AuthService {
         authMethod: 'google',
       };
     } catch (error) {
-      SafeLogger.error('Google sign-in failed', error, { service: 'AuthService' });
+      SafeLogger.error('Google sign-in failed', error, {
+        service: 'AuthService',
+      });
       throw new UnauthorizedException('Authentication failed');
     }
   }
@@ -224,7 +232,11 @@ export class AuthService {
     userIdentifier: string,
     email: string,
     fullName: string,
-    transactionIds?: Array<{ transactionId: string; originalTransactionId: string; productId: string }>,
+    transactionIds?: Array<{
+      transactionId: string;
+      originalTransactionId: string;
+      productId: string;
+    }>,
     deviceFingerprint?: string,
     devicePlatform?: string,
   ) {
@@ -239,7 +251,8 @@ export class AuthService {
 
       try {
         // First attempt: Verify with Apple's public keys
-        decodedToken = await this.appleTokenVerifier.verifyIdentityToken(identityToken);
+        decodedToken =
+          await this.appleTokenVerifier.verifyIdentityToken(identityToken);
         appleUserId = decodedToken.sub || userIdentifier;
         emailFromToken = decodedToken.email || email;
         emailVerified = decodedToken.email_verified ?? true;
@@ -256,10 +269,14 @@ export class AuthService {
         if (isProduction) {
           SafeLogger.error(
             'Apple token signature verification failed in production',
-            verifyError instanceof Error ? verifyError : new Error(String(verifyError)),
+            verifyError instanceof Error
+              ? verifyError
+              : new Error(String(verifyError)),
             { service: 'AuthService' },
           );
-          throw new UnauthorizedException('Invalid Apple identity token signature');
+          throw new UnauthorizedException(
+            'Invalid Apple identity token signature',
+          );
         }
 
         // Fallback (Dev/Test only): Decode without signature verification
@@ -281,21 +298,31 @@ export class AuthService {
             throw new UnauthorizedException('Invalid JWT: missing payload');
           }
 
-          decodedToken = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
+          decodedToken = JSON.parse(
+            Buffer.from(payloadBase64, 'base64').toString(),
+          );
 
           appleUserId = decodedToken.sub || userIdentifier;
           emailFromToken = decodedToken.email || email;
-          emailVerified = decodedToken.email_verified === 'true' || decodedToken.email_verified === true || true;
+          emailVerified =
+            decodedToken.email_verified === 'true' ||
+            decodedToken.email_verified === true ||
+            true;
 
           SafeLogger.debug(
             'Apple token decoded without signature verification (Non-Production)',
             { service: 'AuthService' },
-            { appleUserIdPrefix: appleUserId.substring(0, 8), hasEmail: !!decodedToken.email },
+            {
+              appleUserIdPrefix: appleUserId.substring(0, 8),
+              hasEmail: !!decodedToken.email,
+            },
           );
         } catch (decodeError) {
           SafeLogger.error(
             'Failed to decode Apple identity token',
-            decodeError instanceof Error ? decodeError : new Error(String(decodeError)),
+            decodeError instanceof Error
+              ? decodeError
+              : new Error(String(decodeError)),
             { service: 'AuthService' },
           );
           throw new UnauthorizedException('Invalid Apple identity token');
@@ -303,7 +330,9 @@ export class AuthService {
       }
 
       if (!userIdentifier && !appleUserId) {
-        throw new UnauthorizedException('userIdentifier required for Apple sign-in');
+        throw new UnauthorizedException(
+          'userIdentifier required for Apple sign-in',
+        );
       }
 
       // Find or create user by Apple user ID (not Firebase UID for Apple Sign-In)
@@ -373,15 +402,26 @@ export class AuthService {
         authMethod: 'apple',
       };
     } catch (error) {
-      SafeLogger.error('Apple sign-in failed', error, { service: 'AuthService' });
+      SafeLogger.error('Apple sign-in failed', error, {
+        service: 'AuthService',
+      });
       throw new UnauthorizedException('Authentication failed');
     }
   }
 
-  async verifySession(sessionToken: string, deviceFingerprint?: string, devicePlatform?: string) {
+  async verifySession(
+    sessionToken: string,
+    deviceFingerprint?: string,
+    devicePlatform?: string,
+  ) {
     try {
-      const secret = this.configService.get<string>('JWT_SECRET') || 'default-secret-change-in-production';
-      const decoded = jwt.verify(sessionToken, secret) as { userId: string; type: string };
+      const secret =
+        this.configService.get<string>('JWT_SECRET') ||
+        'default-secret-change-in-production';
+      const decoded = jwt.verify(sessionToken, secret) as {
+        userId: string;
+        type: string;
+      };
 
       if (decoded.type !== 'session') {
         throw new UnauthorizedException('Invalid token type');
@@ -432,7 +472,13 @@ export class AuthService {
             startsAt: trialStartsAt?.toISOString() || null,
             endsAt: trialEndsAt?.toISOString() || null,
             daysRemaining: trialEndsAt
-              ? Math.max(0, Math.ceil((trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+              ? Math.max(
+                  0,
+                  Math.ceil(
+                    (trialEndsAt.getTime() - now.getTime()) /
+                      (1000 * 60 * 60 * 24),
+                  ),
+                )
               : null,
           };
         } else {
@@ -462,20 +508,21 @@ export class AuthService {
         },
         subscription: activeSubscription
           ? {
-            id: activeSubscription.id,
-            status: activeSubscription.status,
-            planName: activeSubscription.planName,
-            currentPeriodEnd: activeSubscription.currentPeriodEnd,
-            cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
-            subscriptionType: activeSubscription.subscriptionType,
-          }
+              id: activeSubscription.id,
+              status: activeSubscription.status,
+              planName: activeSubscription.planName,
+              currentPeriodEnd: activeSubscription.currentPeriodEnd,
+              cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
+              subscriptionType: activeSubscription.subscriptionType,
+            }
           : null,
         trial,
       };
     } catch (error) {
-      SafeLogger.error('Session verification failed', error, { service: 'AuthService' });
+      SafeLogger.error('Session verification failed', error, {
+        service: 'AuthService',
+      });
       throw new UnauthorizedException('Invalid session token');
     }
   }
 }
-

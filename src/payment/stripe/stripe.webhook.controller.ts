@@ -8,6 +8,7 @@ import {
   Body,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { StripeService } from './stripe.service';
@@ -15,9 +16,18 @@ import Stripe from 'stripe';
 import { SafeLogger } from '../../common/utils/logger.util';
 import { FirebaseAuthGuard } from '../../auth/guards/firebase-auth.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
-import { StripeCheckoutResponseDto, StripePortalResponseDto } from '../../common/dto/response/stripe.response.dto';
+import {
+  StripeCheckoutResponseDto,
+  StripePortalResponseDto,
+} from '../../common/dto/response/stripe.response.dto';
 
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 
 @ApiTags('Stripe')
 @Controller('payment/stripe')
@@ -30,9 +40,8 @@ export class StripeWebhookController {
     private configService: ConfigService,
   ) {
     const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
-    this.webhookSecret = this.configService.get<string>(
-      'STRIPE_WEBHOOK_SECRET',
-    ) || '';
+    this.webhookSecret =
+      this.configService.get<string>('STRIPE_WEBHOOK_SECRET') || '';
 
     if (!secretKey) {
       throw new Error('STRIPE_SECRET_KEY is required');
@@ -84,17 +93,27 @@ export class StripeWebhookController {
   }
 
   @Post('checkout')
+  @Throttle({ default: { limit: 20, ttl: 60000 } }) // 20 requests per minute
   @UseGuards(FirebaseAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create Stripe checkout session' })
   @ApiResponse({
     status: 201,
     description: 'Checkout session created',
-    type: StripeCheckoutResponseDto
+    type: StripeCheckoutResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Missing required fields' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiBody({ schema: { type: 'object', properties: { planId: { type: 'string' }, successUrl: { type: 'string' }, cancelUrl: { type: 'string' } } } })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        planId: { type: 'string' },
+        successUrl: { type: 'string' },
+        cancelUrl: { type: 'string' },
+      },
+    },
+  })
   async createCheckout(@Req() req: Request, @CurrentUser() user: any) {
     const { planId, successUrl, cancelUrl } = req.body;
     const userId = user.uid;
@@ -114,27 +133,30 @@ export class StripeWebhookController {
   }
 
   @Post('portal')
+  @Throttle({ default: { limit: 20, ttl: 60000 } }) // 20 requests per minute
   @UseGuards(FirebaseAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create Stripe customer portal session' })
   @ApiResponse({
     status: 201,
     description: 'Portal session created',
-    type: StripePortalResponseDto
+    type: StripePortalResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Missing required fields' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiBody({ schema: { type: 'object', properties: { returnUrl: { type: 'string' } } } })
+  @ApiBody({
+    schema: { type: 'object', properties: { returnUrl: { type: 'string' } } },
+  })
   async createPortal(@Req() req: Request, @CurrentUser() user: any) {
     const { returnUrl } = req.body;
 
     // We need to fetch the customer ID from the user's subscription or account
     // For now, assuming the service can handle looking up by userId (firebase uid)
     // or we fetch the user's profile to get stripeCustomerId
-    // THIS PART NEEDS ADJUSTMENT based on how StripeService works. 
+    // THIS PART NEEDS ADJUSTMENT based on how StripeService works.
     // Let's assume createCustomerPortalSession can take userId or we need to lookup customerId.
 
-    // Looking at the original code, it took customerId. 
+    // Looking at the original code, it took customerId.
     // Now we must derive customerId from the authenticated user.
     // I will modify the service call to fetch customerID if possible, or fetch it here.
 
@@ -158,4 +180,3 @@ export class StripeWebhookController {
     return { url: session.url };
   }
 }
-

@@ -5,7 +5,7 @@ import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
 
 @Injectable()
 export class ConnectionService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async recordSession(sessionDto: ConnectionSessionDto) {
     try {
@@ -46,7 +46,8 @@ export class ConnectionService {
           heartbeatTimestamp: new Date(),
           eventType: eventType,
           sessionEnd: sessionEnd,
-          terminationReason: sessionDto.event_type === 'END' ? 'USER_TERMINATION' : undefined,
+          terminationReason:
+            sessionDto.event_type === 'END' ? 'USER_TERMINATION' : undefined,
           disconnectReason: sessionDto.disconnect_reason,
           networkType: sessionDto.network_type,
           subscriptionTier: sessionDto.subscription_tier,

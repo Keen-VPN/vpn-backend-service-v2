@@ -16,7 +16,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 @ApiTags('Apple Webhook')
 @Controller('payment/apple')
 export class AppleWebhookController {
-  constructor(private appleService: AppleService) { }
+  constructor(private appleService: AppleService) {}
 
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
@@ -43,7 +43,9 @@ export class AppleWebhookController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify Apple receipt' })
   @ApiResponse({ status: 200, description: 'Receipt verification result' })
-  @ApiBody({ schema: { type: 'object', properties: { receiptData: { type: 'string' } } } })
+  @ApiBody({
+    schema: { type: 'object', properties: { receiptData: { type: 'string' } } },
+  })
   async verifyReceipt(@Req() req: Request) {
     const { receiptData } = req.body;
 
@@ -55,4 +57,3 @@ export class AppleWebhookController {
     return result;
   }
 }
-

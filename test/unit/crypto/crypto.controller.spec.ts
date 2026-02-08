@@ -20,7 +20,9 @@ describe('CryptoController', () => {
     };
 
     const mockSubscriptionService = {
-      getStatusWithSession: jest.fn().mockResolvedValue({ hasActiveSubscription: true }),
+      getStatusWithSession: jest
+        .fn()
+        .mockResolvedValue({ hasActiveSubscription: true }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -70,10 +72,9 @@ describe('CryptoController', () => {
 
       cryptoService.signBlindedToken.mockResolvedValue(signature);
 
-      const result = await controller.signBlindedToken(
-        mockReq,
-        { blindedToken },
-      );
+      const result = await controller.signBlindedToken(mockReq, {
+        blindedToken,
+      });
 
       expect(result.signature).toBe(signature);
       expect(cryptoService.signBlindedToken).toHaveBeenCalledWith(blindedToken);
@@ -99,7 +100,8 @@ describe('CryptoController', () => {
 
   describe('GET /auth/vpn-token/public-key', () => {
     it('should return public key', async () => {
-      const publicKey = '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----';
+      const publicKey =
+        '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----';
 
       cryptoService.getPublicKey.mockReturnValue(publicKey);
 
@@ -110,4 +112,3 @@ describe('CryptoController', () => {
     });
   });
 });
-

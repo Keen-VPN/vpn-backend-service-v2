@@ -21,7 +21,10 @@ import {
 import type { Request, Response } from 'express';
 import { VPNConfigService } from './vpn-config.service';
 import { VpnCredentialDto } from '../common/dto/vpn-credential.dto';
-import { VPNConfigResponseDto, VPNCredentialsResponseDto } from '../common/dto/response/config.response.dto';
+import {
+  VPNConfigResponseDto,
+  VPNCredentialsResponseDto,
+} from '../common/dto/response/config.response.dto';
 import { Throttle } from '@nestjs/throttler';
 import { SafeLogger } from '../common/utils/logger.util';
 import { OptionalSessionGuard } from '../auth/guards/optional-session.guard';
@@ -33,7 +36,7 @@ export class VPNConfigController {
   constructor(
     private readonly vpnConfigService: VPNConfigService,
     private readonly subscriptionService: SubscriptionService,
-  ) { }
+  ) {}
 
   @Get('vpn')
   @UseGuards(OptionalSessionGuard)
@@ -48,7 +51,7 @@ export class VPNConfigController {
   @ApiResponse({
     status: 200,
     description: 'VPN configuration returned',
-    type: VPNConfigResponseDto
+    type: VPNConfigResponseDto,
   })
   @ApiResponse({ status: 500, description: 'VPN config not available' })
   @Throttle({ default: { limit: 100, ttl: 60000 } })
@@ -112,7 +115,7 @@ export class VPNConfigController {
   @ApiResponse({
     status: 200,
     description: 'VPN credentials generated',
-    type: VPNCredentialsResponseDto
+    type: VPNCredentialsResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiBody({ type: VpnCredentialDto })

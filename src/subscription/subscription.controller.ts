@@ -25,7 +25,7 @@ import {
 @ApiTags('Subscription')
 @Controller('subscription')
 export class SubscriptionController {
-  constructor(private readonly subscriptionService: SubscriptionService) { }
+  constructor(private readonly subscriptionService: SubscriptionService) {}
 
   @Post('status-session')
   @HttpCode(HttpStatus.OK)
@@ -36,7 +36,12 @@ export class SubscriptionController {
     type: SubscriptionStatusResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiBody({ schema: { type: 'object', properties: { sessionToken: { type: 'string' } } } })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { sessionToken: { type: 'string' } },
+    },
+  })
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   async getStatusWithSession(@Body() body: { sessionToken: string }) {
     return this.subscriptionService.getStatusWithSession(body.sessionToken);
@@ -59,4 +64,3 @@ export class SubscriptionController {
     return this.subscriptionService.cancel(userId);
   }
 }
-

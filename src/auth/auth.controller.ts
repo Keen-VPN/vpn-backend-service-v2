@@ -6,12 +6,11 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
-import { ApiStandardResponse, ApiStandardErrorResponse } from '../common/decorators/api-responses.decorator';
+  ApiStandardResponse,
+  ApiStandardErrorResponse,
+} from '../common/decorators/api-responses.decorator';
 import { AccountDeletionResponseDto } from '../common/dto/response/user.response.dto';
 import { AuthService } from './auth.service';
 import { LoginDto } from '../common/dto/login.dto';
@@ -37,12 +36,16 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly accountService: AccountService,
-  ) { }
+  ) {}
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with firebase ID token' })
-  @ApiStandardResponse({ status: 200, description: 'Login successful', type: AuthResponseDto })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Login successful',
+    type: AuthResponseDto,
+  })
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto.idToken);
@@ -51,7 +54,11 @@ export class AuthController {
   @Post('google/signin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sign in with Google' })
-  @ApiStandardResponse({ status: 200, description: 'Google sign-in successful', type: AuthResponseDto })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Google sign-in successful',
+    type: AuthResponseDto,
+  })
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async googleSignIn(@Body() googleSignInDto: GoogleSignInDto) {
     return this.authService.googleSignIn(
@@ -64,7 +71,11 @@ export class AuthController {
   @Post('apple/signin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sign in with Apple' })
-  @ApiStandardResponse({ status: 200, description: 'Apple sign-in successful', type: AuthResponseDto })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Apple sign-in successful',
+    type: AuthResponseDto,
+  })
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async appleSignIn(@Body() appleSignInDto: AppleSignInDto) {
     return this.authService.appleSignIn(
@@ -81,7 +92,11 @@ export class AuthController {
   @Post('verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify session token' })
-  @ApiStandardResponse({ status: 200, description: 'Session verified', type: VerifySessionResponseDto })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Session verified',
+    type: VerifySessionResponseDto,
+  })
   @Throttle({ default: { limit: 30, ttl: 60000 } }) // 30 requests per minute for verification
   async verifySession(@Body() verifySessionDto: VerifySessionDto) {
     return this.authService.verifySession(
@@ -96,7 +111,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Logout user' })
-  @ApiStandardResponse({ status: 200, description: 'Logout successful', type: LogoutResponseDto })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Logout successful',
+    type: LogoutResponseDto,
+  })
   async logout(@CurrentUser() user: any) {
     const userId = user.uid;
     return this.authService.logout(userId);
@@ -107,7 +126,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete user account' })
-  @ApiStandardResponse({ status: 200, description: 'Account deleted successfully', type: AccountDeletionResponseDto })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Account deleted successfully',
+    type: AccountDeletionResponseDto,
+  })
   @Throttle({ default: { limit: 1, ttl: 3600000 } }) // 1 request per hour
   async deleteAccount(@CurrentUser() user: any) {
     const userId = user.uid; // SessionAuthGuard sets uid
@@ -118,4 +141,3 @@ export class AuthController {
     };
   }
 }
-

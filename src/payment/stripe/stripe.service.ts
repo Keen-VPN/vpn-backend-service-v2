@@ -277,7 +277,7 @@ export class StripeService {
         typeof subscriptionRef === 'string'
           ? subscriptionRef
           : // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-          (subscriptionRef.id as string);
+            (subscriptionRef.id as string);
 
       const subscription =
         await this.stripe.subscriptions.retrieve(subscriptionId);
