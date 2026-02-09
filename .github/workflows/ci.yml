@@ -20,8 +20,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "yarn"
-      - run: npm install
+          cache: "npm"
+      - run: npm ci
       - run: npm audit --audit-level=high
 
   lint:
@@ -32,8 +32,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "yarn"
-      - run: npm install
+          cache: "npm"
+      - run: npm ci
       - run: npm run lint
 
   test:
@@ -44,8 +44,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "yarn"
-      - run: npm install
+          cache: "npm"
+      - run: npm ci
       # Ensure database/env vars are mocked or available for tests if needed
       - name: Run Unit Tests
         run: npm run test:cov
