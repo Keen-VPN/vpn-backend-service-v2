@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return */
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -142,8 +141,6 @@ describe('AuthController', () => {
       expect(result).toEqual(mockResponse);
       expect(authService.googleSignIn).toHaveBeenCalledWith(
         googleSignInDto.idToken,
-        googleSignInDto.deviceFingerprint,
-        googleSignInDto.devicePlatform,
       );
     });
   });
@@ -243,8 +240,6 @@ describe('AuthController', () => {
       expect(result).toEqual(mockResponse);
       expect(authService.verifySession).toHaveBeenCalledWith(
         verifySessionDto.sessionToken,
-        verifySessionDto.deviceFingerprint,
-        verifySessionDto.devicePlatform,
       );
     });
   });

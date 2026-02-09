@@ -24,7 +24,7 @@ export class AuthService {
 
       const firebaseUid = decodedToken.uid;
       const email = decodedToken.email;
-      const displayName = decodedToken.name;
+      const displayName = (decodedToken.name as string) || '';
       const emailVerified = decodedToken.email_verified || false;
       const provider = decodedToken.firebase?.sign_in_provider || 'google';
 
@@ -126,7 +126,7 @@ export class AuthService {
     // Server-side cleanup if needed
     // For Firebase, tokens are stateless, so we just log the logout
     SafeLogger.info('User logged out', { service: 'AuthService', userId });
-    return { success: true };
+    return Promise.resolve({ success: true });
   }
 
   private generateSessionToken(userId: string): string {
@@ -140,11 +140,7 @@ export class AuthService {
     );
   }
 
-  async googleSignIn(
-    idToken: string,
-    deviceFingerprint?: string,
-    devicePlatform?: string,
-  ) {
+  async googleSignIn(idToken: string) {
     try {
       // Verify Firebase ID token
       const decodedToken = await this.firebaseConfig
@@ -153,7 +149,7 @@ export class AuthService {
 
       const firebaseUid = decodedToken.uid;
       const email = decodedToken.email;
-      const displayName = decodedToken.name;
+      const displayName = (decodedToken.name as string) || '';
       const emailVerified = decodedToken.email_verified || false;
       const provider = 'google';
 
@@ -243,7 +239,14 @@ export class AuthService {
     try {
       // Try to verify Apple identity token using Apple's public keys
       // If that fails, fall back to decoding without verification (like vpn-backend-service)
-      let decodedToken: any;
+      interface AppleJwtPayload {
+        sub: string;
+        email?: string;
+        email_verified?: boolean | string;
+        [key: string]: unknown;
+      }
+
+      let decodedToken: AppleJwtPayload;
       let appleUserId: string;
       let emailFromToken: string;
       let emailVerified: boolean;
@@ -251,11 +254,14 @@ export class AuthService {
 
       try {
         // First attempt: Verify with Apple's public keys
-        decodedToken =
+        const verifiedToken =
           await this.appleTokenVerifier.verifyIdentityToken(identityToken);
+        decodedToken = verifiedToken as unknown as AppleJwtPayload;
         appleUserId = decodedToken.sub || userIdentifier;
         emailFromToken = decodedToken.email || email;
-        emailVerified = decodedToken.email_verified ?? true;
+        emailVerified =
+          decodedToken.email_verified === true ||
+          decodedToken.email_verified === 'true';
 
         SafeLogger.debug(
           'Apple token verified with signature',
@@ -298,15 +304,21 @@ export class AuthService {
             throw new UnauthorizedException('Invalid JWT: missing payload');
           }
 
-          decodedToken = JSON.parse(
+          const decoded = JSON.parse(
             Buffer.from(payloadBase64, 'base64').toString(),
-          );
+          ) as AppleJwtPayload;
 
-          appleUserId = decodedToken.sub || userIdentifier;
-          emailFromToken = decodedToken.email || email;
+          // Validate required fields
+          if (typeof decoded.sub !== 'string') {
+            throw new UnauthorizedException('Invalid JWT payload: missing sub');
+          }
+
+          decodedToken = decoded;
+          appleUserId = decoded.sub || userIdentifier;
+          emailFromToken = decoded.email || email;
           emailVerified =
-            decodedToken.email_verified === 'true' ||
-            decodedToken.email_verified === true ||
+            decoded.email_verified === 'true' ||
+            decoded.email_verified === true ||
             true;
 
           SafeLogger.debug(
@@ -409,11 +421,7 @@ export class AuthService {
     }
   }
 
-  async verifySession(
-    sessionToken: string,
-    deviceFingerprint?: string,
-    devicePlatform?: string,
-  ) {
+  async verifySession(sessionToken: string) {
     try {
       const secret =
         this.configService.get<string>('JWT_SECRET') ||

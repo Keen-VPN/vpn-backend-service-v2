@@ -25,7 +25,7 @@ export class AppleWebhookController {
   @ApiResponse({ status: 500, description: 'Webhook handler failed' })
   async handleWebhook(@Req() req: Request, @Res() res: Response) {
     try {
-      const event = req.body;
+      const event = req.body as Record<string, any>;
 
       // Verify JWT signature (Apple Server-to-Server notifications use JWT)
       // In production, verify the JWT signature using Apple's public keys
@@ -47,13 +47,14 @@ export class AppleWebhookController {
     schema: { type: 'object', properties: { receiptData: { type: 'string' } } },
   })
   async verifyReceipt(@Req() req: Request) {
-    const { receiptData } = req.body;
+    const body = req.body as { receiptData: string };
+    const { receiptData } = body;
 
     if (!receiptData) {
       return { error: 'receiptData is required' };
     }
 
-    const result = await this.appleService.verifyReceipt(receiptData);
-    return result;
+    const result: unknown = await this.appleService.verifyReceipt(receiptData);
+    return result as Record<string, unknown>; // Explicit cast or cleaner return
   }
 }

@@ -31,7 +31,9 @@ export class AppService {
       dbResponseTime = Date.now() - dbStart;
       dbStatus = 'connected';
     } catch (error) {
-      errors.push(`Database: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      errors.push(`Database: ${errorMessage}`);
     }
 
     // Determine overall health status

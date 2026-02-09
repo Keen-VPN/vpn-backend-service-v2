@@ -6,7 +6,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import helmet from 'helmet';
-import * as express from 'express';
 import { SafeLogger } from './common/utils/logger.util';
 
 async function bootstrap() {
@@ -36,7 +35,10 @@ async function bootstrap() {
     ?.split(',') || ['http://localhost:3000', 'http://localhost:5173'];
 
   app.enableCors({
-    origin: (origin, callback) => {
+    origin: (
+      origin: string,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {

@@ -67,11 +67,13 @@ export class AppleIAPController {
       );
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       SafeLogger.error('Error capturing Apple IAP purchase', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to capture purchase';
       return {
         success: false,
-        error: error.message || 'Failed to capture purchase',
+        error: errorMessage,
       };
     }
   }
@@ -92,7 +94,7 @@ export class AppleIAPController {
   @ApiResponse({ status: 500, description: 'Internal Server Error' })
   async linkPurchase(
     @Body() linkDto: LinkPurchaseDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: { uid: string },
   ) {
     try {
       // Verify device fingerprint if provided
@@ -115,11 +117,13 @@ export class AppleIAPController {
       );
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       SafeLogger.error('Error linking Apple IAP purchase', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to link purchase';
       return {
         success: false,
-        error: error.message || 'Failed to link purchase',
+        error: errorMessage,
       };
     }
   }
@@ -140,7 +144,7 @@ export class AppleIAPController {
   @ApiResponse({ status: 500, description: 'Internal Server Error' })
   async linkWithTransactionIds(
     @Body() linkDto: LinkWithTransactionIdsDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: { uid: string },
   ) {
     try {
       // Verify device fingerprint if provided
@@ -174,14 +178,16 @@ export class AppleIAPController {
       }
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       SafeLogger.error(
         'Error linking Apple IAP purchases with transaction IDs',
         error,
       );
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to link purchases';
       return {
         success: false,
-        error: error.message || 'Failed to link purchases',
+        error: errorMessage,
       };
     }
   }

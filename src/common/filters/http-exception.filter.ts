@@ -42,25 +42,28 @@ export class HttpExceptionFilter implements ExceptionFilter {
       typeof exceptionResponse === 'object' &&
       exceptionResponse !== null
     ) {
-      const resp = exceptionResponse as any;
-      message = resp.message || message;
-      code = resp.error || code; // Use NestJS default error code name if available
+      const resp = exceptionResponse as Record<string, unknown>;
+      message = (resp.message as string) || message;
+      code = (resp.error as string | number) || code;
 
       // Handle class-validator validation errors
-      if (Array.isArray(resp.message) && status === HttpStatus.BAD_REQUEST) {
+      if (
+        Array.isArray(resp.message) &&
+        (status as HttpStatus) === HttpStatus.BAD_REQUEST
+      ) {
         message = 'Validation failed';
         details = resp.message;
       }
     }
 
-    const requestId = (request as any).id || randomUUID();
+    const requestId = (request as Request & { id?: string }).id || randomUUID();
 
-    const errorResponse: ApiErrorResponse = {
+    const errorResponse: ApiErrorResponse & { stack?: string } = {
       success: false,
       error: {
         code,
         message,
-        details,
+        details: details as unknown,
       },
       timestamp: new Date().toISOString(),
       path: request.url,
@@ -69,7 +72,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     // Include stack trace in development
     if (isDevelopment && exception instanceof Error) {
-      (errorResponse as any).stack = exception.stack;
+      errorResponse.stack = exception.stack;
     }
 
     // Log error with SafeLogger

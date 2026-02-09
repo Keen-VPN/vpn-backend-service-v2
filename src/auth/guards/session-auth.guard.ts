@@ -4,6 +4,7 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as jwt from 'jsonwebtoken';
@@ -16,11 +17,16 @@ export class SessionAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<Request>();
+    const body = request.body as Record<string, unknown>;
+    const headers = request.headers;
+
     // Check both body and Authorization header for session token
-    let sessionToken = request.body?.sessionToken;
+    let sessionToken =
+      typeof body?.sessionToken === 'string' ? body.sessionToken : undefined;
+
     if (!sessionToken) {
-      const authHeader = request.headers.authorization;
+      const authHeader = headers.authorization;
       if (authHeader && authHeader.startsWith('Bearer ')) {
         sessionToken = authHeader.split('Bearer ')[1];
       }
@@ -52,9 +58,13 @@ export class SessionAuthGuard implements CanActivate {
       }
 
       // Attach user to request (using uid for consistency with FirebaseAuthGuard)
-      request.user = { uid: user.id, userId: user.id, email: user.email };
+      (request as unknown as { user: any }).user = {
+        uid: user.id,
+        userId: user.id,
+        email: user.email,
+      };
       return true;
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Invalid session token');
     }
   }

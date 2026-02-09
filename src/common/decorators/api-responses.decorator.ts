@@ -6,8 +6,6 @@ import {
   ApiUnauthorizedResponse,
   ApiForbiddenResponse,
   ApiInternalServerErrorResponse,
-  ApiNotFoundResponse,
-  getSchemaPath,
 } from '@nestjs/swagger';
 import { ApiErrorResponseDto } from '../dto/response/error.response.dto';
 

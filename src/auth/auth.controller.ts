@@ -12,6 +12,10 @@ import {
   ApiStandardErrorResponse,
 } from '../common/decorators/api-responses.decorator';
 import { AccountDeletionResponseDto } from '../common/dto/response/user.response.dto';
+import type {
+  FirebaseUserPayload,
+  SessionUserPayload,
+} from './interfaces/auth-user.interface';
 import { AuthService } from './auth.service';
 import { LoginDto } from '../common/dto/login.dto';
 import { GoogleSignInDto } from '../common/dto/google-signin.dto';
@@ -61,11 +65,7 @@ export class AuthController {
   })
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async googleSignIn(@Body() googleSignInDto: GoogleSignInDto) {
-    return this.authService.googleSignIn(
-      googleSignInDto.idToken,
-      googleSignInDto.deviceFingerprint,
-      googleSignInDto.devicePlatform,
-    );
+    return this.authService.googleSignIn(googleSignInDto.idToken);
   }
 
   @Post('apple/signin')
@@ -99,11 +99,7 @@ export class AuthController {
   })
   @Throttle({ default: { limit: 30, ttl: 60000 } }) // 30 requests per minute for verification
   async verifySession(@Body() verifySessionDto: VerifySessionDto) {
-    return this.authService.verifySession(
-      verifySessionDto.sessionToken,
-      verifySessionDto.deviceFingerprint,
-      verifySessionDto.devicePlatform,
-    );
+    return this.authService.verifySession(verifySessionDto.sessionToken);
   }
 
   @Post('logout')
@@ -116,7 +112,7 @@ export class AuthController {
     description: 'Logout successful',
     type: LogoutResponseDto,
   })
-  async logout(@CurrentUser() user: any) {
+  async logout(@CurrentUser() user: FirebaseUserPayload) {
     const userId = user.uid;
     return this.authService.logout(userId);
   }
@@ -132,8 +128,8 @@ export class AuthController {
     type: AccountDeletionResponseDto,
   })
   @Throttle({ default: { limit: 1, ttl: 3600000 } }) // 1 request per hour
-  async deleteAccount(@CurrentUser() user: any) {
-    const userId = user.uid; // SessionAuthGuard sets uid
+  async deleteAccount(@CurrentUser() user: SessionUserPayload) {
+    const userId = user.uid; // SessionAuthGuard sets uid to database ID
     const result = await this.accountService.deleteAccount(userId);
     return {
       message: 'Account deleted successfully',

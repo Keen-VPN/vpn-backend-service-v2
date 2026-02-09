@@ -59,7 +59,7 @@ export class SubscriptionController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  async cancel(@CurrentUser() user: any) {
+  async cancel(@CurrentUser() user: { uid: string }) {
     const userId = user.uid; // SessionAuthGuard sets uid
     return this.subscriptionService.cancel(userId);
   }

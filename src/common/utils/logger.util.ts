@@ -65,7 +65,7 @@ export class SafeLogger {
    */
   static error(
     message: string,
-    error?: Error | any,
+    error?: unknown,
     context?: LogContext,
     data?: Record<string, any>,
   ) {
@@ -154,7 +154,7 @@ export class SafeLogger {
     const sanitized = { ...data };
 
     for (const field of piiFields) {
-      if (sanitized[field]) {
+      if (field in sanitized) {
         sanitized[field] = '[REDACTED]';
       }
     }
@@ -166,7 +166,9 @@ export class SafeLogger {
         sanitized[key] !== null &&
         !Array.isArray(sanitized[key])
       ) {
-        sanitized[key] = this.sanitizeData(sanitized[key]);
+        sanitized[key] = this.sanitizeData(
+          sanitized[key] as Record<string, any>,
+        );
       }
     }
 

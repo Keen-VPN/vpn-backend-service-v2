@@ -46,7 +46,7 @@ export class AccountController {
     description: 'User profile returned',
     type: UserProfileResponseDto,
   })
-  async getProfile(@CurrentUser() user: any) {
+  async getProfile(@CurrentUser() user: { uid: string }) {
     // Get user from database using Firebase UID
     const dbUser = await this.accountService.getProfileByFirebaseUid(user.uid);
     const activeSubscription = dbUser.subscriptions[0] || null;
@@ -82,7 +82,7 @@ export class AccountController {
     type: AccountDeletionResponseDto,
   })
   @Throttle({ default: { limit: 1, ttl: 3600000 } }) // 1 request per hour
-  async deleteAccount(@CurrentUser() user: any) {
+  async deleteAccount(@CurrentUser() user: { uid: string }) {
     // Get user from database using Firebase UID
     const dbUser = await this.accountService.getProfileByFirebaseUid(user.uid);
     return this.accountService.deleteAccount(dbUser.id);
@@ -104,7 +104,7 @@ export class AccountPaymentsController {
     description: 'Payment history returned',
     type: PaymentHistoryResponseDto,
   })
-  async getPayments(@CurrentUser() user: any) {
+  async getPayments(@CurrentUser() user: { uid: string }) {
     // Get user from database
     const dbUser = await this.accountService.getProfileByFirebaseUid(user.uid);
     return this.accountService.getPayments(dbUser.id);
@@ -131,7 +131,7 @@ export class AccountPaymentsController {
   @ApiResponse({ status: 404, description: 'Invoice not found' })
   async getInvoicePdf(
     @Param('id') invoiceId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: { uid: string },
     @Res() res: Response,
   ) {
     // Validate invoice ID format (UUID)

@@ -70,7 +70,9 @@ export class StripeWebhookController {
 
     try {
       // Get raw body from request (set by NestJS rawBody option)
-      const rawBody = (req as any).rawBody || req.body;
+      // Get raw body from request (set by NestJS rawBody option)
+      const reqWithRawBody = req as Request & { rawBody?: Buffer };
+      const rawBody = reqWithRawBody.rawBody || (req.body as Buffer);
 
       // Verify webhook signature using raw body
       event = this.stripe.webhooks.constructEvent(
@@ -80,7 +82,8 @@ export class StripeWebhookController {
       );
     } catch (err) {
       SafeLogger.error('Stripe webhook signature verification failed', err);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      return res.status(400).send(`Webhook Error: ${errorMessage}`);
     }
 
     try {
@@ -114,8 +117,15 @@ export class StripeWebhookController {
       },
     },
   })
-  async createCheckout(@Req() req: Request, @CurrentUser() user: any) {
-    const { planId, successUrl, cancelUrl } = req.body;
+  async createCheckout(
+    @Req() req: Request,
+    @CurrentUser() user: { uid: string },
+  ) {
+    const { planId, successUrl, cancelUrl } = req.body as {
+      planId: string;
+      successUrl?: string;
+      cancelUrl?: string;
+    };
     const userId = user.uid;
 
     if (!planId) {
@@ -147,8 +157,11 @@ export class StripeWebhookController {
   @ApiBody({
     schema: { type: 'object', properties: { returnUrl: { type: 'string' } } },
   })
-  async createPortal(@Req() req: Request, @CurrentUser() user: any) {
-    const { returnUrl } = req.body;
+  async createPortal(
+    @Req() req: Request,
+    @CurrentUser() user: { uid: string },
+  ) {
+    const { returnUrl } = req.body as { returnUrl: string };
 
     // We need to fetch the customer ID from the user's subscription or account
     // For now, assuming the service can handle looking up by userId (firebase uid)
