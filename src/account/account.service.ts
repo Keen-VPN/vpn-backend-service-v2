@@ -1,6 +1,11 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
+import PDFDocument from 'pdfkit';
 
 @Injectable()
 export class AccountService {
@@ -173,7 +178,6 @@ export class AccountService {
 
     // Generate PDF invoice
     // This is a simplified version - in production, use pdfkit or puppeteer
-    const PDFDocument = require('pdfkit');
     const doc = new PDFDocument();
     const chunks: Buffer[] = [];
 
@@ -184,7 +188,7 @@ export class AccountService {
     doc.fontSize(12).text(`Invoice ID: ${invoiceId}`, 100, 130);
     doc.text(`Plan: ${subscription.planName || 'N/A'}`, 100, 150);
     doc.text(
-      `Amount: ${subscription.priceAmount || '0'} ${subscription.priceCurrency || 'USD'}`,
+      `Amount: ${subscription.priceAmount?.toString() || '0'} ${subscription.priceCurrency || 'USD'}`,
       100,
       170,
     );
@@ -204,4 +208,3 @@ export class AccountService {
     });
   }
 }
-

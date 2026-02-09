@@ -7,6 +7,9 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { ApiErrorResponse } from '../interfaces/api-error.interface';
+import { randomUUID } from 'crypto';
+import { SafeLogger } from '../utils/logger.util';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -24,36 +27,76 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    const message =
+    const exceptionResponse =
       exception instanceof HttpException
         ? exception.getResponse()
-        : 'Internal server error';
+        : { message: 'Internal server error' };
 
-    // Sanitize error response - no stack traces or internal details in production
-    const errorResponse: any = {
-      statusCode: status,
+    let code: string | number = status;
+    let message = 'An error occurred';
+    let details: any = null;
+
+    if (typeof exceptionResponse === 'string') {
+      message = exceptionResponse;
+    } else if (
+      typeof exceptionResponse === 'object' &&
+      exceptionResponse !== null
+    ) {
+      const resp = exceptionResponse as Record<string, unknown>;
+      message = (resp.message as string) || message;
+      code = (resp.error as string | number) || code;
+
+      // Handle class-validator validation errors
+      if (
+        Array.isArray(resp.message) &&
+        (status as HttpStatus) === HttpStatus.BAD_REQUEST
+      ) {
+        message = 'Validation failed';
+        details = resp.message;
+      }
+    }
+
+    const requestId = (request as Request & { id?: string }).id || randomUUID();
+
+    const errorResponse: ApiErrorResponse & { stack?: string } = {
+      success: false,
+      error: {
+        code,
+        message,
+        details: details as unknown,
+      },
       timestamp: new Date().toISOString(),
       path: request.url,
-      message: typeof message === 'string' ? message : (message as any).message || 'An error occurred',
+      requestId,
     };
 
-    // Only include stack trace in development
+    // Include stack trace in development
     if (isDevelopment && exception instanceof Error) {
       errorResponse.stack = exception.stack;
     }
 
-    // Log full error details server-side (not sent to client)
-    if (!isDevelopment || status >= 500) {
-      console.error('Error details:', {
-        status,
-        message,
-        stack: exception instanceof Error ? exception.stack : undefined,
-        path: request.url,
+    // Log error with SafeLogger
+    const logContext = {
+      service: 'HttpExceptionFilter',
+      requestId,
+    };
+
+    if (status >= 500) {
+      SafeLogger.error(
+        'Internal server error occurred',
+        exception instanceof Error ? exception : new Error(String(exception)),
+        logContext,
+        { method: request.method, path: request.url, statusCode: status },
+      );
+    } else if (status >= 400) {
+      SafeLogger.warn('Client error occurred', logContext, {
         method: request.method,
+        path: request.url,
+        statusCode: status,
+        errorCode: code,
       });
     }
 
     response.status(status).json(errorResponse);
   }
 }
-

@@ -66,11 +66,14 @@ export class SubscriptionService {
       // Serialize trial status for API response
       const trial = serializeTrialStatus(trialStatus);
 
-      SafeLogger.info('Subscription status checked', {
-        userId: user.id,
-        email: '[REDACTED]',
-        hasActiveSubscription: !!activeSubscription,
-      });
+      SafeLogger.info(
+        'Subscription status checked',
+        { service: 'SubscriptionService', userId: user.id },
+        {
+          hasActiveSubscription: !!activeSubscription,
+          status: activeSubscription?.status || 'none',
+        },
+      );
 
       return {
         success: true,
@@ -98,7 +101,11 @@ export class SubscriptionService {
         trial,
       };
     } catch (error) {
-      SafeLogger.error('Subscription status check failed', error);
+      SafeLogger.error(
+        'Subscription status check failed',
+        error instanceof Error ? error : new Error(String(error)),
+        { service: 'SubscriptionService' },
+      );
       throw new UnauthorizedException('Invalid session token');
     }
   }
@@ -143,10 +150,11 @@ export class SubscriptionService {
       },
     });
 
-    SafeLogger.info('Subscription cancellation requested', {
-      userId,
-      subscriptionId: activeSubscription.id,
-    });
+    SafeLogger.info(
+      'Subscription cancellation requested',
+      { service: 'SubscriptionService', userId },
+      { subscriptionId: activeSubscription.id },
+    );
 
     return {
       success: true,

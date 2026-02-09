@@ -98,22 +98,21 @@ export class VPNConfigService implements OnModuleInit {
     }
 
     // Ensure config is valid before returning
-    if (!this.cachedConfig) {
-      SafeLogger.error('VPN config is null, using fallback');
-      this.cachedConfig = this.getDefaultConfig();
-      this.cachedEtag = generateWeakEtag(this.cachedConfig);
-    }
+    // this.cachedConfig is guaranteed to be set by loadConfigFromDatabase
 
     // Validate servers and credentials arrays are not empty
-    if (!this.cachedConfig.servers || this.cachedConfig.servers.length === 0) {
+    if (
+      !this.cachedConfig!.servers ||
+      this.cachedConfig!.servers.length === 0
+    ) {
       SafeLogger.error('VPN config has no servers, using fallback');
       this.cachedConfig = this.getDefaultConfig();
       this.cachedEtag = generateWeakEtag(this.cachedConfig);
     }
 
     if (
-      !this.cachedConfig.credentials ||
-      this.cachedConfig.credentials.length === 0
+      !this.cachedConfig!.credentials ||
+      this.cachedConfig!.credentials.length === 0
     ) {
       SafeLogger.error('VPN config has no credentials, using fallback');
       this.cachedConfig = this.getDefaultConfig();
@@ -123,7 +122,7 @@ export class VPNConfigService implements OnModuleInit {
     // Return config (caller may strip credentials for unauthenticated/unsubscribed users)
     return {
       status: 'ok',
-      config: this.cachedConfig,
+      config: this.cachedConfig!,
       etag: this.cachedEtag!,
     };
   }
@@ -205,7 +204,7 @@ export class VPNConfigService implements OnModuleInit {
         this.cachedEtag = dbConfig.etag || generateWeakEtag(normalizedConfig);
         SafeLogger.info('Loaded VPN config from database', {
           version: dbConfig.version,
-          etag: this.cachedEtag.substring(0, 16) + '...',
+          etag: (this.cachedEtag || '').substring(0, 16) + '...',
           serversCount: normalizedConfig.servers.length,
           credentialsCount: normalizedConfig.credentials.length,
         });
@@ -289,18 +288,16 @@ export class VPNConfigService implements OnModuleInit {
     // Reload config to ensure we have the latest
     await this.loadConfigFromDatabase();
 
-    if (!this.cachedConfig) {
-      throw new BadRequestException('VPN config not available');
-    }
+    // this.cachedConfig is guaranteed to be set by loadConfigFromDatabase
 
     // Find the server
-    const server = this.cachedConfig.servers.find((s) => s.id === serverId);
+    const server = this.cachedConfig!.servers.find((s) => s.id === serverId);
     if (!server) {
       throw new BadRequestException(`VPN server not found: ${serverId}`);
     }
 
     // Find the credential template (we'll use the credentialId from server)
-    const credentialTemplate = this.cachedConfig.credentials.find(
+    const credentialTemplate = this.cachedConfig!.credentials.find(
       (c) => c.id === server.credentialId,
     );
 

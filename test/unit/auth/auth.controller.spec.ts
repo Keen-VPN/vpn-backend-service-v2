@@ -96,6 +96,7 @@ describe('AuthController', () => {
           cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
           subscriptionType: subscription.subscriptionType,
         },
+        sessionToken: 'valid-session-token',
       });
 
       const result = await controller.login(loginDto);
@@ -117,6 +118,132 @@ describe('AuthController', () => {
     });
   });
 
+  describe('POST /auth/google/signin', () => {
+    it('should successfully sign in with Google', async () => {
+      const googleSignInDto = {
+        idToken: 'google-token',
+        deviceFingerprint: 'fingerprint',
+        devicePlatform: 'ios',
+      };
+
+      const mockResponse = {
+        user: createMockUser(),
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        sessionToken: 'session-token',
+        subscription: null,
+      };
+
+      authService.googleSignIn.mockResolvedValue(mockResponse as any);
+
+      const result = await controller.googleSignIn(googleSignInDto);
+
+      expect(result).toEqual(mockResponse);
+      expect(authService.googleSignIn).toHaveBeenCalledWith(
+        googleSignInDto.idToken,
+      );
+    });
+  });
+
+  describe('POST /auth/apple/signin', () => {
+    it('should successfully sign in with Apple', async () => {
+      const appleSignInDto = {
+        identityToken: 'apple-token',
+        userIdentifier: 'apple-user-id',
+        email: 'test@example.com',
+        fullName: 'Test User',
+        transactionIds: [
+          {
+            transactionId: 'trans-1',
+            originalTransactionId: 'orig-1',
+            productId: 'prod-1',
+          },
+        ],
+        deviceFingerprint: 'fingerprint',
+        devicePlatform: 'ios',
+      };
+
+      const mockResponse = {
+        user: createMockUser(),
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        sessionToken: 'session-token',
+        subscription: null,
+      };
+
+      authService.appleSignIn.mockResolvedValue(mockResponse as any);
+
+      const result = await controller.appleSignIn(appleSignInDto);
+
+      expect(result).toEqual(mockResponse);
+      expect(authService.appleSignIn).toHaveBeenCalledWith(
+        appleSignInDto.identityToken,
+        appleSignInDto.userIdentifier,
+        appleSignInDto.email,
+        appleSignInDto.fullName,
+        expect.any(Array), // Just check it's an array to avoid strict reference checks if objects are recreated
+        appleSignInDto.deviceFingerprint,
+        appleSignInDto.devicePlatform,
+      );
+    });
+
+    it('should handle optional email and fullName being undefined', async () => {
+      const appleSignInDto = {
+        identityToken: 'apple-token',
+        userIdentifier: 'apple-user-id',
+        transactionIds: [],
+      };
+
+      const mockResponse = {
+        user: createMockUser(),
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        sessionToken: 'session-token',
+        subscription: null,
+      };
+
+      authService.appleSignIn.mockResolvedValue(mockResponse as any);
+
+      const result = await controller.appleSignIn(appleSignInDto as any);
+
+      expect(result).toEqual(mockResponse);
+      expect(authService.appleSignIn).toHaveBeenCalledWith(
+        appleSignInDto.identityToken,
+        appleSignInDto.userIdentifier,
+        '', // Default empty string
+        '', // Default empty string
+        appleSignInDto.transactionIds,
+        undefined,
+        undefined,
+      );
+    });
+  });
+
+  describe('POST /auth/verify', () => {
+    it('should successfully verify session', async () => {
+      const verifySessionDto = {
+        sessionToken: 'session-token',
+        deviceFingerprint: 'fingerprint',
+        devicePlatform: 'ios',
+      };
+
+      const mockResponse = {
+        valid: true,
+        user: createMockUser(),
+        subscription: null,
+      };
+
+      authService.verifySession.mockResolvedValue(mockResponse as any);
+
+      const result = await controller.verifySession(verifySessionDto);
+
+      expect(result).toEqual(mockResponse);
+      expect(authService.verifySession).toHaveBeenCalledWith(
+        verifySessionDto.sessionToken,
+      );
+    });
+  });
+
   describe('POST /auth/logout', () => {
     it('should successfully logout', async () => {
       const user = { uid: 'firebase-uid-123' };
@@ -129,5 +256,24 @@ describe('AuthController', () => {
       expect(authService.logout).toHaveBeenCalledWith(user.uid);
     });
   });
-});
 
+  describe('DELETE /auth/delete-account', () => {
+    it('should successfully delete account', async () => {
+      const user = { uid: 'firebase-uid-123' };
+      const mockResult = {
+        id: 'uuid-1234',
+        email: 'deleted@example.com',
+      };
+
+      accountService.deleteAccount.mockResolvedValue(mockResult as any);
+
+      const result = await controller.deleteAccount(user as any);
+
+      expect(result).toEqual({
+        message: 'Account deleted successfully',
+        ...mockResult,
+      });
+      expect(accountService.deleteAccount).toHaveBeenCalledWith(user.uid);
+    });
+  });
+});

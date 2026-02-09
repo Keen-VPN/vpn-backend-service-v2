@@ -91,7 +91,8 @@ describe('SubscriptionController', () => {
 
       subscriptionService.cancel.mockResolvedValue({
         success: true,
-        message: 'Subscription will be cancelled at the end of the current period',
+        message:
+          'Subscription will be cancelled at the end of the current period',
         error: null,
       });
 
@@ -117,4 +118,3 @@ describe('SubscriptionController', () => {
     });
   });
 });
-

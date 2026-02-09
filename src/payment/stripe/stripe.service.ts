@@ -24,6 +24,14 @@ export class StripeService {
     });
   }
 
+  async getCustomerIdByUserId(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { stripeCustomerId: true },
+    });
+    return user?.stripeCustomerId || null;
+  }
+
   async createCheckoutSession(
     userId: string,
     planId: string,
@@ -229,14 +237,16 @@ export class StripeService {
           SafeLogger.info('Trial granted on subscription', {
             userId: trialResult.userId,
             trialEndsAt: trialResult.trialEndsAt?.toISOString(),
-          } as Record<string, any>);
+          } as Record<string, unknown>);
         }
       } catch (trialError) {
         // Don't fail subscription creation if trial grant fails
-        SafeLogger.warn(
-          'Failed to grant trial on subscription (non-fatal)',
-          trialError,
-        );
+        SafeLogger.warn('Failed to grant trial on subscription (non-fatal)', {
+          error:
+            trialError instanceof Error
+              ? trialError.message
+              : String(trialError),
+        });
       }
     }
   }

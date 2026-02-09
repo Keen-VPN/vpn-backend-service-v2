@@ -51,7 +51,7 @@
     {
       "id": "client",
       "username": "client",
-      "password": "KeenVPNClient2024Secure",
+      "password": "REPLACE_WITH_SECURE_GENERATED_PASSWORD",
       "sharedSecret": null,
       "certificate": null,
       "certificatePassword": null,
@@ -61,8 +61,7 @@
   "featureFlags": null,
   "rollout": null,
   "metadata": {
-    "wireguardClientPrivateKey": "oAwPH9c+XUG4iIePmmjNlxf1JuuzUPl5KIcW/SZdxkU=",
-    "wireguardClientPublicKey": "EY9aZx/obn9StGPqj5VPP9ONznjXOQ53pGDtFCjEVAc="
+    "wireguardClientPrivateKey": "REPLACE_WITH_GENERATED_WIREGUARD_PRIVATE_KEY",
+    "wireguardClientPublicKey": "REPLACE_WITH_GENERATED_WIREGUARD_PUBLIC_KEY"
   }
 }
-

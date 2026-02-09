@@ -63,7 +63,10 @@ describe('Payment (e2e)', () => {
     it('should process webhook with valid signature', async () => {
       const subscription = createMockStripeSubscription();
       const customer = createMockStripeCustomer();
-      const event = createMockStripeEvent('customer.subscription.created', subscription);
+      const event = createMockStripeEvent(
+        'customer.subscription.created',
+        subscription,
+      );
       const signature = 'valid-signature';
 
       (mockStripeInstance.webhooks.constructEvent as jest.Mock).mockReturnValue(
@@ -88,11 +91,11 @@ describe('Payment (e2e)', () => {
     });
 
     it('should return 400 for invalid signature', async () => {
-      (mockStripeInstance.webhooks.constructEvent as jest.Mock).mockImplementation(
-        () => {
-          throw new Error('Invalid signature');
-        },
-      );
+      (
+        mockStripeInstance.webhooks.constructEvent as jest.Mock
+      ).mockImplementation(() => {
+        throw new Error('Invalid signature');
+      });
 
       await request(app.getHttpServer())
         .post('/payment/stripe/webhook')
@@ -148,4 +151,3 @@ describe('Payment (e2e)', () => {
     });
   });
 });
-

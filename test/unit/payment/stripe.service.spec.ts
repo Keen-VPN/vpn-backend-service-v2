@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { StripeService } from '../../../src/payment/stripe/stripe.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { TrialService } from '../../../src/subscription/trial.service';
 import {
   createMockPrismaClient,
   createMockConfigService,
@@ -43,6 +44,13 @@ describe('StripeService', () => {
           provide: ConfigService,
           useValue: mockConfigService,
         },
+        {
+          provide: TrialService,
+          useValue: {
+            checkTrialStatus: jest.fn(),
+            activateTrial: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -66,9 +74,9 @@ describe('StripeService', () => {
       (mockStripeInstance.customers.create as jest.Mock).mockResolvedValue(
         customer,
       );
-      (mockStripeInstance.checkout.sessions.create as jest.Mock).mockResolvedValue(
-        session,
-      );
+      (
+        mockStripeInstance.checkout.sessions.create as jest.Mock
+      ).mockResolvedValue(session);
 
       const result = await service.createCheckoutSession(
         user.id,
@@ -84,15 +92,18 @@ describe('StripeService', () => {
     it('should create Stripe customer if missing', async () => {
       const user = createMockUser({ stripeCustomerId: null });
       const customer = createMockStripeCustomer();
-      const session = { id: 'cs_test_123', url: 'https://checkout.stripe.com/test' };
+      const session = {
+        id: 'cs_test_123',
+        url: 'https://checkout.stripe.com/test',
+      };
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
       (mockStripeInstance.customers.create as jest.Mock).mockResolvedValue(
         customer,
       );
-      (mockStripeInstance.checkout.sessions.create as jest.Mock).mockResolvedValue(
-        session,
-      );
+      (
+        mockStripeInstance.checkout.sessions.create as jest.Mock
+      ).mockResolvedValue(session);
       mockPrisma.user.update.mockResolvedValue({
         ...user,
         stripeCustomerId: customer.id,
@@ -118,11 +129,14 @@ describe('StripeService', () => {
         id: 'cs_test_123',
         subscription: subscription.id,
       };
-      const event = createMockStripeEvent('checkout.session.completed', session);
-
-      (mockStripeInstance.subscriptions.retrieve as jest.Mock).mockResolvedValue(
-        subscription,
+      const event = createMockStripeEvent(
+        'checkout.session.completed',
+        session,
       );
+
+      (
+        mockStripeInstance.subscriptions.retrieve as jest.Mock
+      ).mockResolvedValue(subscription);
       (mockStripeInstance.customers.retrieve as jest.Mock).mockResolvedValue(
         customer,
       );
@@ -132,7 +146,7 @@ describe('StripeService', () => {
         createMockSubscription(),
       );
 
-      await service.handleWebhookEvent(event as any);
+      await service.handleWebhookEvent(event);
 
       expect(mockStripeInstance.subscriptions.retrieve).toHaveBeenCalled();
       expect(mockStripeInstance.customers.retrieve).toHaveBeenCalled();
@@ -154,7 +168,7 @@ describe('StripeService', () => {
         createMockSubscription(),
       );
 
-      await service.handleWebhookEvent(event as any);
+      await service.handleWebhookEvent(event);
 
       expect(mockPrisma.subscription.create).toHaveBeenCalled();
     });
@@ -170,7 +184,7 @@ describe('StripeService', () => {
       mockPrisma.subscription.findFirst.mockResolvedValue(existingSubscription);
       mockPrisma.subscription.update.mockResolvedValue(existingSubscription);
 
-      await service.handleWebhookEvent(event as any);
+      await service.handleWebhookEvent(event);
 
       expect(mockPrisma.subscription.update).toHaveBeenCalledWith({
         where: { id: existingSubscription.id },
@@ -188,9 +202,9 @@ describe('StripeService', () => {
       };
       const event = createMockStripeEvent('invoice.payment_succeeded', invoice);
 
-      (mockStripeInstance.subscriptions.retrieve as jest.Mock).mockResolvedValue(
-        subscription,
-      );
+      (
+        mockStripeInstance.subscriptions.retrieve as jest.Mock
+      ).mockResolvedValue(subscription);
       (mockStripeInstance.customers.retrieve as jest.Mock).mockResolvedValue(
         createMockStripeCustomer(),
       );
@@ -200,10 +214,9 @@ describe('StripeService', () => {
         createMockSubscription(),
       );
 
-      await service.handleWebhookEvent(event as any);
+      await service.handleWebhookEvent(event);
 
       expect(mockStripeInstance.subscriptions.retrieve).toHaveBeenCalled();
     });
   });
 });
-

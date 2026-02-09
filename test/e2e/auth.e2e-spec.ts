@@ -80,7 +80,7 @@ describe('Auth (e2e)', () => {
       mockFirebaseAuth.verifyIdToken.mockRejectedValue(
         new Error('Invalid token format'),
       );
-      
+
       await request(app.getHttpServer())
         .post('/auth/login')
         .send({ idToken: invalidToken })
@@ -97,14 +97,24 @@ describe('Auth (e2e)', () => {
         .send({ idToken: 'invalid-token' })
         .expect(401);
     });
+
+    it('should not include stack trace in error response', async () => {
+      mockFirebaseAuth.verifyIdToken.mockRejectedValue(
+        new Error('Stack trace check'),
+      );
+
+      const response = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ idToken: 'check-stack' })
+        .expect(401);
+
+      expect(response.body.stack).toBeUndefined();
+    });
   });
 
   describe('POST /auth/logout', () => {
     it('should require authentication', async () => {
-      await request(app.getHttpServer())
-        .post('/auth/logout')
-        .expect(401);
+      await request(app.getHttpServer()).post('/auth/logout').expect(401);
     });
   });
 });
-

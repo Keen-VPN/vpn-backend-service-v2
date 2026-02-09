@@ -5,20 +5,27 @@ import {
   Res,
   HttpCode,
   HttpStatus,
+  Body,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AppleService } from './apple.service';
 import { SafeLogger } from '../../common/utils/logger.util';
 
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+
+@ApiTags('Apple Webhook')
 @Controller('payment/apple')
 export class AppleWebhookController {
   constructor(private appleService: AppleService) {}
 
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Handle Apple server-to-server notifications' })
+  @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
+  @ApiResponse({ status: 500, description: 'Webhook handler failed' })
   async handleWebhook(@Req() req: Request, @Res() res: Response) {
     try {
-      const event = req.body;
+      const event = req.body as Record<string, any>;
 
       // Verify JWT signature (Apple Server-to-Server notifications use JWT)
       // In production, verify the JWT signature using Apple's public keys
@@ -34,15 +41,20 @@ export class AppleWebhookController {
 
   @Post('receipt')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify Apple receipt' })
+  @ApiResponse({ status: 200, description: 'Receipt verification result' })
+  @ApiBody({
+    schema: { type: 'object', properties: { receiptData: { type: 'string' } } },
+  })
   async verifyReceipt(@Req() req: Request) {
-    const { receiptData } = req.body;
+    const body = req.body as { receiptData: string };
+    const { receiptData } = body;
 
     if (!receiptData) {
       return { error: 'receiptData is required' };
     }
 
-    const result = await this.appleService.verifyReceipt(receiptData);
-    return result;
+    const result: unknown = await this.appleService.verifyReceipt(receiptData);
+    return result as Record<string, unknown>; // Explicit cast or cleaner return
   }
 }
-

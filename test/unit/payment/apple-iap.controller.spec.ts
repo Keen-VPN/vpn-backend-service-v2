@@ -195,7 +195,10 @@ describe('AppleIAPController', () => {
         errors: undefined,
       });
 
-      const result = await controller.linkWithTransactionIds(linkDto, user as any);
+      const result = await controller.linkWithTransactionIds(
+        linkDto,
+        user as any,
+      );
 
       expect(result.success).toBe(true);
       expect((result as any).linkedCount).toBe(2);
@@ -252,7 +255,10 @@ describe('AppleIAPController', () => {
         ],
       });
 
-      const result = await controller.linkWithTransactionIds(linkDto, user as any);
+      const result = await controller.linkWithTransactionIds(
+        linkDto,
+        user as any,
+      );
 
       expect(result.success).toBe(false);
       expect((result as any).linkedCount).toBe(1);
@@ -261,4 +267,3 @@ describe('AppleIAPController', () => {
     });
   });
 });
-

@@ -1,11 +1,10 @@
-import crypto from "crypto";
+import crypto from 'crypto';
 
 export function generateWeakEtag(payload: unknown): string {
   const hash = crypto
-    .createHash("sha256")
+    .createHash('sha256')
     .update(JSON.stringify(payload))
-    .digest("hex");
+    .digest('hex');
 
   return `W/"${hash}"`;
 }
-

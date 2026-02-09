@@ -2,9 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { StripeWebhookController } from '../../../src/payment/stripe/stripe.webhook.controller';
 import { StripeService } from '../../../src/payment/stripe/stripe.service';
+import { FirebaseConfig } from '../../../src/config/firebase.config';
 import {
   createMockConfigService,
   createMockStripe,
+  createMockFirebaseConfig,
   MockStripe,
 } from '../../setup/mocks';
 import { createMockStripeEvent } from '../../setup/test-helpers';
@@ -28,6 +30,7 @@ describe('StripeWebhookController', () => {
       handleWebhookEvent: jest.fn(),
       createCheckoutSession: jest.fn(),
       createCustomerPortalSession: jest.fn(),
+      getCustomerIdByUserId: jest.fn(),
     };
 
     mockConfigService = createMockConfigService();
@@ -42,6 +45,10 @@ describe('StripeWebhookController', () => {
         {
           provide: ConfigService,
           useValue: mockConfigService,
+        },
+        {
+          provide: FirebaseConfig,
+          useValue: createMockFirebaseConfig(),
         },
       ],
     }).compile();
@@ -98,11 +105,11 @@ describe('StripeWebhookController', () => {
         send: jest.fn(),
       };
 
-      (mockStripeInstance.webhooks.constructEvent as jest.Mock).mockImplementation(
-        () => {
-          throw new Error('Invalid signature');
-        },
-      );
+      (
+        mockStripeInstance.webhooks.constructEvent as jest.Mock
+      ).mockImplementation(() => {
+        throw new Error('Invalid signature');
+      });
 
       await controller.handleWebhook(mockReq as any, mockRes as any);
 
@@ -128,7 +135,10 @@ describe('StripeWebhookController', () => {
 
   describe('POST /payment/stripe/checkout', () => {
     it('should create checkout session', async () => {
-      const session = { url: 'https://checkout.stripe.com/test', id: 'cs_test' };
+      const session = {
+        url: 'https://checkout.stripe.com/test',
+        id: 'cs_test',
+      };
       const mockReq = {
         body: {
           userId: 'user-123',
@@ -140,7 +150,9 @@ describe('StripeWebhookController', () => {
 
       stripeService.createCheckoutSession.mockResolvedValue(session as any);
 
-      const result = await controller.createCheckout(mockReq as any);
+      const result = await controller.createCheckout(mockReq as any, {
+        uid: 'user-123',
+      });
 
       expect(result.url).toBe(session.url);
       expect(stripeService.createCheckoutSession).toHaveBeenCalled();
@@ -157,14 +169,16 @@ describe('StripeWebhookController', () => {
         },
       };
 
+      stripeService.getCustomerIdByUserId.mockResolvedValue('cus_test');
       stripeService.createCustomerPortalSession.mockResolvedValue(
         session as any,
       );
 
-      const result = await controller.createPortal(mockReq as any);
+      const result = await controller.createPortal(mockReq as any, {
+        uid: 'user-123',
+      });
 
       expect(result.url).toBe(session.url);
     });
   });
 });
-

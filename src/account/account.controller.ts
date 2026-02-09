@@ -9,19 +9,44 @@ import {
   Res,
   ForbiddenException,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
+import {
+  ApiStandardResponse,
+  ApiStandardErrorResponse,
+} from '../common/decorators/api-responses.decorator';
 import type { Response } from 'express';
 import { AccountService } from './account.service';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Throttle } from '@nestjs/throttler';
+import {
+  UserProfileResponseDto,
+  AccountDeletionResponseDto,
+  PaymentHistoryResponseDto,
+} from '../common/dto/response/account.response.dto';
 
+@ApiTags('Account')
 @Controller('user')
+@ApiBearerAuth()
+@ApiStandardErrorResponse()
 export class AccountController {
   constructor(private readonly accountService: AccountService) {}
 
   @Get('profile')
   @UseGuards(FirebaseAuthGuard)
-  async getProfile(@CurrentUser() user: any) {
+  @ApiOperation({ summary: 'Get user profile' })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'User profile returned',
+    type: UserProfileResponseDto,
+  })
+  async getProfile(@CurrentUser() user: { uid: string }) {
     // Get user from database using Firebase UID
     const dbUser = await this.accountService.getProfileByFirebaseUid(user.uid);
     const activeSubscription = dbUser.subscriptions[0] || null;
@@ -50,21 +75,36 @@ export class AccountController {
   @Delete('account')
   @UseGuards(FirebaseAuthGuard)
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete user account' })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Account deleted successfully',
+    type: AccountDeletionResponseDto,
+  })
   @Throttle({ default: { limit: 1, ttl: 3600000 } }) // 1 request per hour
-  async deleteAccount(@CurrentUser() user: any) {
+  async deleteAccount(@CurrentUser() user: { uid: string }) {
     // Get user from database using Firebase UID
     const dbUser = await this.accountService.getProfileByFirebaseUid(user.uid);
     return this.accountService.deleteAccount(dbUser.id);
   }
 }
 
+@ApiTags('Account Payments')
 @Controller('account')
+@ApiBearerAuth()
+@ApiStandardErrorResponse()
 export class AccountPaymentsController {
   constructor(private readonly accountService: AccountService) {}
 
   @Get('payments')
   @UseGuards(FirebaseAuthGuard)
-  async getPayments(@CurrentUser() user: any) {
+  @ApiOperation({ summary: 'Get user payment history' })
+  @ApiStandardResponse({
+    status: 200,
+    description: 'Payment history returned',
+    type: PaymentHistoryResponseDto,
+  })
+  async getPayments(@CurrentUser() user: { uid: string }) {
     // Get user from database
     const dbUser = await this.accountService.getProfileByFirebaseUid(user.uid);
     return this.accountService.getPayments(dbUser.id);
@@ -72,9 +112,26 @@ export class AccountPaymentsController {
 
   @Get('invoices/:id/pdf')
   @UseGuards(FirebaseAuthGuard)
+  @ApiOperation({ summary: 'Get invoice PDF' })
+  @ApiParam({ name: 'id', description: 'Invoice ID (UUID)' })
+  @ApiStandardResponse({ status: 200, description: 'Invoice PDF returned' }) // TODO: Handle content type in decorator or leave custom for binary
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice PDF returned',
+    content: {
+      'application/pdf': {
+        schema: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Invalid invoice ID format' })
+  @ApiResponse({ status: 404, description: 'Invoice not found' })
   async getInvoicePdf(
     @Param('id') invoiceId: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: { uid: string },
     @Res() res: Response,
   ) {
     // Validate invoice ID format (UUID)
@@ -99,4 +156,3 @@ export class AccountPaymentsController {
     res.send(pdfBuffer);
   }
 }
-

@@ -156,9 +156,9 @@ describe('AppleTokenVerifierService', () => {
       });
       mockJwtVerify.mockReturnValue(payload);
 
-      await expect(
-        service.verifyIdentityToken(mockToken),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.verifyIdentityToken(mockToken)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 });
