@@ -65,14 +65,30 @@ export class VPNConfigController {
 
     // Determine if we would include credentials (auth + subscription)
     let wouldIncludeCredentials = false;
-    if (user && sessionToken) {
+    if (!sessionToken) {
+      SafeLogger.info(
+        'VPN config: no Authorization header, credentials stripped',
+      );
+    } else if (!user) {
+      SafeLogger.info(
+        'VPN config: token present but user not set (invalid/expired?), credentials stripped',
+      );
+    } else {
       try {
         const status =
           await this.subscriptionService.getStatusWithSession(sessionToken);
         wouldIncludeCredentials =
           status?.hasActiveSubscription ||
           (status?.trial?.trialActive ?? false);
-      } catch {
+        SafeLogger.info('VPN config: subscription check', {
+          hasActiveSubscription: status?.hasActiveSubscription,
+          trialActive: status?.trial?.trialActive,
+          wouldIncludeCredentials,
+        });
+      } catch (err) {
+        SafeLogger.warn('VPN config: subscription check failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
         wouldIncludeCredentials = false;
       }
     }

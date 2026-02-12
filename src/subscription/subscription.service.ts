@@ -53,11 +53,28 @@ export class SubscriptionService {
         orderBy: { createdAt: 'desc' },
       });
 
-      // Check if subscription is active (includes both "active" and "trialing" status)
-      const hasActiveSubscription =
+      // Check if subscription is active (DB subscription or linked Apple IAP)
+      let hasActiveSubscription =
         activeSubscription !== null &&
         (activeSubscription.status === 'active' ||
           activeSubscription.status === 'trialing');
+
+      if (!hasActiveSubscription) {
+        const validIAP = await this.prisma.appleIAPPurchase.findFirst({
+          where: {
+            linkedUserId: user.id,
+            OR: [{ expiresDate: null }, { expiresDate: { gte: new Date() } }],
+          },
+        });
+        if (validIAP) {
+          hasActiveSubscription = true;
+          SafeLogger.info(
+            'Active access from linked Apple IAP',
+            { service: 'SubscriptionService', userId: user.id },
+            { productId: validIAP.productId },
+          );
+        }
+      }
 
       // Get trial status using TrialService (automatically expires if needed)
       await this.trialService.expireIfNeeded(user.id);

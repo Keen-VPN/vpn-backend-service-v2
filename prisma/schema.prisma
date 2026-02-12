@@ -27,7 +27,7 @@ model User {
   appleIAPPurchases       AppleIAPPurchase[]
   trialGrant              TrialGrant?
   deviceTrialFingerprints DeviceTrialFingerprint[]
-  pushTokens              PushToken[]
+  pushTokens                  PushToken[]
 
   @@map("users")
 }
@@ -224,6 +224,16 @@ model PushToken {
 
   @@index([userId], map: "push_tokens_user_id")
   @@map("push_tokens")
+}
+
+model ServerLocationPreference {
+  id        String   @id @default(uuid())
+  region    String
+  reason    String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("server_location_preferences")
 }
 
 enum TerminationReason {
