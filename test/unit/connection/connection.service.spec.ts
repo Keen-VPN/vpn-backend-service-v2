@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectionService } from '../../../src/connection/connection.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { createMockPrismaClient, MockPrismaClient } from '../../setup/mocks';
-import { createMockUser } from '../../setup/test-helpers';
 
 describe('ConnectionService', () => {
   let service: ConnectionService;
@@ -29,10 +28,8 @@ describe('ConnectionService', () => {
   });
 
   describe('recordSession', () => {
-    it('should record session successfully', async () => {
-      const userId = 'user_123';
+    it('should record session successfully by client_session_id', async () => {
       const sessionDto = {
-        email: 'test@example.com',
         client_session_id: 'sess_123',
         event_type: 'START' as const,
         session_start: '2024-01-01T00:00:00Z',
@@ -48,17 +45,15 @@ describe('ConnectionService', () => {
 
       mockPrisma.connectionSession.upsert.mockResolvedValue({
         id: 'session_1',
-        userId,
+        clientSessionId: sessionDto.client_session_id,
         sessionStart: new Date(sessionDto.session_start),
         sessionEnd: new Date(sessionDto.session_end),
         durationSeconds: sessionDto.duration_seconds,
         platform: sessionDto.platform,
         appVersion: sessionDto.app_version,
         serverLocation: sessionDto.server_location,
-        serverAddress: sessionDto.server_address,
         subscriptionTier: sessionDto.subscription_tier,
         bytesTransferred: BigInt(sessionDto.bytes_transferred),
-        isAnonymized: false,
         terminationReason: 'USER_TERMINATION',
         eventType: 'SESSION_START',
         heartbeatTimestamp: null,
@@ -69,13 +64,18 @@ describe('ConnectionService', () => {
       const result = await service.recordSession(sessionDto);
 
       expect(result.success).toBe(true);
-      expect(mockPrisma.connectionSession.upsert).toHaveBeenCalled();
+      expect(mockPrisma.connectionSession.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { clientSessionId: sessionDto.client_session_id },
+          create: expect.objectContaining({
+            clientSessionId: sessionDto.client_session_id,
+          }),
+        }),
+      );
     });
 
     it('should handle errors when recording session', async () => {
-      const userId = 'user_123';
       const sessionDto = {
-        email: 'test@example.com',
         client_session_id: 'sess_123',
         event_type: 'START' as const,
         session_start: '2024-01-01T00:00:00Z',

@@ -12,7 +12,11 @@ export class ConnectionController {
 
   @Post('session')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Record an anonymous VPN session' })
+  @ApiOperation({
+    summary: 'Record a VPN connection session',
+    description:
+      'Records a session identified by client_session_id. User identity is from the Authorization Bearer token when present; no user_id or email in the body.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Session recorded successfully',
