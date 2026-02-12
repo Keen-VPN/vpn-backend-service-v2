@@ -28,7 +28,6 @@ model User {
   trialGrant              TrialGrant?
   deviceTrialFingerprints DeviceTrialFingerprint[]
   pushTokens                  PushToken[]
-  serverLocationPreferences   ServerLocationPreference[]
 
   @@map("users")
 }
@@ -229,15 +228,12 @@ model PushToken {
 
 model ServerLocationPreference {
   id               String   @id @default(uuid())
-  userId           String?  @map("user_id")
   clientSessionId  String?  @map("client_session_id")
   country          String
   reason           String
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
-  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
   @@index([clientSessionId])
   @@map("server_location_preferences")
 }

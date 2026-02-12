@@ -9,7 +9,6 @@ export class PreferencesService {
   async submitServerLocationPreference(body: ServerLocationPreferenceBodyDto) {
     const preference = await this.prisma.serverLocationPreference.create({
       data: {
-        userId: null,
         clientSessionId: body.client_session_id ?? null,
         country: body.country,
         reason: body.reason,
