@@ -2,23 +2,31 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ServerLocationPreferenceBodyDto } from '../common/dto/server-location-preference.dto';
 
+export interface ServerLocationPreferenceResult {
+  id: string;
+  region: string;
+  reason: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 @Injectable()
 export class PreferencesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async submitServerLocationPreference(body: ServerLocationPreferenceBodyDto) {
+  async submitServerLocationPreference(
+    body: ServerLocationPreferenceBodyDto,
+  ): Promise<ServerLocationPreferenceResult> {
     const preference = await this.prisma.serverLocationPreference.create({
       data: {
-        clientSessionId: body.client_session_id ?? null,
-        country: body.country,
+        region: body.region,
         reason: body.reason,
       },
     });
 
     return {
       id: preference.id,
-      client_session_id: preference.clientSessionId ?? '',
-      country: preference.country,
+      region: preference.region,
       reason: preference.reason,
       createdAt: preference.createdAt.toISOString(),
       updatedAt: preference.updatedAt.toISOString(),

@@ -227,14 +227,12 @@ model PushToken {
 }
 
 model ServerLocationPreference {
-  id               String   @id @default(uuid())
-  clientSessionId  String?  @map("client_session_id")
-  country          String
-  reason           String
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  id        String   @id @default(uuid())
+  region    String
+  reason    String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  @@index([clientSessionId])
   @@map("server_location_preferences")
 }
 
