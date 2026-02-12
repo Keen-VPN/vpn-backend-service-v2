@@ -76,14 +76,6 @@ export class ConnectionSessionDto {
   server_location?: string;
 
   @ApiPropertyOptional({
-    description: 'Server address (IP or hostname)',
-    example: '1.2.3.4',
-  })
-  @IsString()
-  @IsOptional()
-  server_address?: string;
-
-  @ApiPropertyOptional({
     description: 'VPN Protocol used',
     example: 'wireguard',
   })
