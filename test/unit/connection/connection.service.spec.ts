@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConnectionService } from '../../../src/connection/connection.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { NodesService } from '../../../src/nodes/nodes.service';
 import { createMockPrismaClient, MockPrismaClient } from '../../setup/mocks';
 
 describe('ConnectionService', () => {
@@ -16,6 +17,12 @@ describe('ConnectionService', () => {
         {
           provide: PrismaService,
           useValue: mockPrisma,
+        },
+        {
+          provide: NodesService,
+          useValue: {
+            getActiveNodesInRegion: jest.fn(),
+          },
         },
       ],
     }).compile();
