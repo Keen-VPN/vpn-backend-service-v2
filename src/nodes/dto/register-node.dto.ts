@@ -8,7 +8,7 @@ export class RegisterNodeDto {
   })
   @IsString()
   @IsNotEmpty()
-  public_key: string;
+  publicKey: string;
 
   @ApiProperty({
     description: 'The geographical region of the node',
@@ -32,5 +32,14 @@ export class RegisterNodeDto {
   })
   @IsString()
   @IsOptional()
-  ip?: string;
+  publicIp?: string;
+
+  @ApiProperty({
+    description: 'The current status of the node',
+    example: 'ONLINE',
+    enum: ['ONLINE', 'OFFLINE', 'DRAINING'],
+  })
+  @IsString()
+  @IsNotEmpty()
+  status: string;
 }

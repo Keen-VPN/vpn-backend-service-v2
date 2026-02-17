@@ -11,20 +11,20 @@ export class NodesService {
   async register(dto: RegisterNodeDto) {
     try {
       const node = await this.prisma.node.upsert({
-        where: { publicKey: dto.public_key },
+        where: { publicKey: dto.publicKey },
         update: {
           region: dto.region,
-          ip: dto.ip,
+          ip: dto.publicIp,
           name: dto.name,
-          status: 'ONLINE',
+          status: dto.status,
           lastHeartbeat: new Date(),
         },
         create: {
-          publicKey: dto.public_key,
+          publicKey: dto.publicKey,
           region: dto.region,
-          ip: dto.ip,
+          ip: dto.publicIp,
           name: dto.name,
-          status: 'ONLINE',
+          status: dto.status,
           lastHeartbeat: new Date(),
         },
       });
@@ -45,12 +45,12 @@ export class NodesService {
   async heartbeat(dto: NodeHeartbeatDto) {
     try {
       const node = await this.prisma.node.findUnique({
-        where: { publicKey: dto.public_key },
+        where: { publicKey: dto.publicKey },
       });
 
       if (!node) {
         throw new NotFoundException(
-          `Node with public key ${dto.public_key} not found`,
+          `Node with public key ${dto.publicKey} not found`,
         );
       }
 
@@ -71,14 +71,16 @@ export class NodesService {
       });
 
       const peers = clients.map((c) => ({
-        public_key: c.user.id, // Placeholder: assuming user ID is related to their WG public key or similar
-        allowed_ips: c.allowedIps,
+        publicKey: c.user.id, // Placeholder: assuming user ID is related to their WG public key or similar
+        allowedIps: c.allowedIps,
       }));
 
       return {
         status: 'ok',
         peers: peers,
-        instructions: {}, // Future: add commands like 'upgrade', 'restart'
+        instructions: {
+          drain: node.status === 'DRAINING',
+        },
       };
     } catch (error) {
       SafeLogger.error('Error processing node heartbeat', error);

@@ -8,7 +8,7 @@ export class NodeHeartbeatDto {
   })
   @IsString()
   @IsNotEmpty()
-  public_key: string;
+  publicKey: string;
 
   @ApiPropertyOptional({
     description: 'System metrics reported by the node',
