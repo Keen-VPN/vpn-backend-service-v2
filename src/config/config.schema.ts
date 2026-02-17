@@ -40,4 +40,7 @@ export const configValidationSchema = Joi.object({
 
   // JWT Configuration
   JWT_SECRET: Joi.string().optional(),
+
+  // Node Daemon Configuration
+  NODE_TOKEN: Joi.string().required(),
 });

@@ -1,10 +1,18 @@
-import { Controller, Post, Body } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { NodesService } from './nodes.service';
 import { RegisterNodeDto } from './dto/register-node.dto';
 import { NodeHeartbeatDto } from './dto/node-heartbeat.dto';
+import { NodeAuthGuard } from '../auth/guards/node-auth.guard';
 
 @ApiTags('Nodes')
+@ApiBearerAuth()
+@UseGuards(NodeAuthGuard)
 @Controller('nodes')
 export class NodesController {
   constructor(private readonly nodesService: NodesService) {}
