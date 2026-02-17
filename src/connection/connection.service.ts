@@ -2,10 +2,26 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
+import { NodesService } from '../nodes/nodes.service';
 
 @Injectable()
 export class ConnectionService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private nodesService: NodesService,
+  ) {}
+
+  async getRecommendedNode(region: string) {
+    const nodes = await this.nodesService.getActiveNodesInRegion(region);
+
+    if (nodes.length === 0) {
+      return null;
+    }
+
+    // Simple load balancing: pick the one with the fewest active sessions or just first for now
+    // Future: consider metrics (CPU/RAM)
+    return nodes[0];
+  }
 
   async recordSession(sessionDto: ConnectionSessionDto) {
     try {

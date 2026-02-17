@@ -27,7 +27,8 @@ model User {
   appleIAPPurchases       AppleIAPPurchase[]
   trialGrant              TrialGrant?
   deviceTrialFingerprints DeviceTrialFingerprint[]
-  pushTokens                  PushToken[]
+  pushTokens              PushToken[]
+  nodeClients             NodeClient[]
 
   @@map("users")
 }
@@ -249,5 +250,36 @@ enum EventType {
   SESSION_END   @map("session_end")
 
   @@map("event_type")
+}
+
+model Node {
+  id            String       @id @default(uuid())
+  name          String?
+  publicKey     String       @unique @map("public_key")
+  region        String
+  ip            String?      @map("ip")
+  status        String       @default("ONLINE") // ONLINE, OFFLINE, DRAINING
+  lastHeartbeat DateTime?    @map("last_heartbeat") @db.Timestamptz
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  clients       NodeClient[]
+
+  @@index([region])
+  @@index([status])
+  @@map("nodes")
+}
+
+model NodeClient {
+  id         String   @id @default(uuid())
+  nodeId     String   @map("node_id")
+  userId     String   @map("user_id")
+  allowedIps String   @map("allowed_ips")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  node       Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@index([userId])
+  @@map("node_clients")
 }
 
