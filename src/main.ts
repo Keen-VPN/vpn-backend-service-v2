@@ -7,8 +7,26 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import helmet from 'helmet';
 import { SafeLogger } from './common/utils/logger.util';
+import { SecretsUtil } from './common/utils/secrets.util';
 
 async function bootstrap() {
+  // Fetch NODE_TOKEN from Secrets Manager if not provided in environment (for Staging/Prod)
+  const env = process.env.NODE_ENV || 'development';
+  if (['staging', 'production'].includes(env) && !process.env.NODE_TOKEN) {
+    SafeLogger.info('Fetching NODE_TOKEN from Secrets Manager', {
+      environment: env,
+    });
+    const token = await SecretsUtil.fetchNodeToken(env);
+    if (token) {
+      process.env.NODE_TOKEN = token;
+      SafeLogger.info('Successfully loaded NODE_TOKEN from Secrets Manager');
+    } else {
+      SafeLogger.warn(
+        'NODE_TOKEN not found in Secrets Manager. Node registration may fail.',
+      );
+    }
+  }
+
   const app = await NestFactory.create(AppModule, {
     rawBody: true, // Enable raw body for webhook signature verification
   });
