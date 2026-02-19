@@ -1,11 +1,12 @@
+/* eslint-disable */
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import { AppModule } from '../../src/app.module';
 import { ValidationPipe } from '@nestjs/common';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { HttpExceptionFilter } from '../../src/common/filters/http-exception.filter';
+import { LoggingInterceptor } from '../../src/common/interceptors/logging.interceptor';
 import helmet from 'helmet';
-import { SecretsUtil } from './common/utils/secrets.util';
-import { SafeLogger } from './common/utils/logger.util';
+import { SecretsUtil } from '../../src/common/utils/secrets.util';
+import { SafeLogger } from '../../src/common/utils/logger.util';
 import { ConfigService } from '@nestjs/config';
 import serverless from 'serverless-http';
 import { Handler } from '@netlify/functions';
@@ -110,7 +111,6 @@ async function bootstrap() {
 
   await app.init();
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const expressApp = app.getHttpAdapter().getInstance();
 
   return serverless(expressApp) as unknown as Handler;
@@ -123,6 +123,6 @@ export const handler: Handler = async (event, context) => {
   if (!requestHandler) {
     requestHandler = await bootstrap();
   }
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+
   return requestHandler(event, context) as any;
 };
