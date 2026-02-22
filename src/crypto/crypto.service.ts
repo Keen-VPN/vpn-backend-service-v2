@@ -13,12 +13,14 @@ export class CryptoService {
       process.env.BLIND_SIGNING_PRIVATE_KEY;
 
     if (!privateKeyPem) {
+      SafeLogger.error('BLIND_SIGNING_PRIVATE_KEY is required');
       throw new Error('BLIND_SIGNING_PRIVATE_KEY is required');
     }
 
     try {
       this.privateKey = crypto.createPrivateKey(privateKeyPem);
     } catch {
+      SafeLogger.error('Invalid BLIND_SIGNING_PRIVATE_KEY format');
       throw new Error('Invalid BLIND_SIGNING_PRIVATE_KEY format');
     }
   }
