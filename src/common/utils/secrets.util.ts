@@ -10,7 +10,7 @@ export class SecretsUtil {
       accessKeyId: process.env.APP_AWS_ACCESS_KEY_ID!,
       secretAccessKey: process.env.APP_AWS_SECRET_ACCESS_KEY!,
     },
-    region: process.env.AWS_REGION || 'us-east-1',
+    region: process.env.APP_AWS_REGION || 'us-east-1',
   });
 
   static async fetchNodeToken(environment: string): Promise<string | null> {
