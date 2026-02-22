@@ -25,7 +25,7 @@ export class UserResponseDto {
   provider?: string | null;
 }
 
-export class AccountDeletionResponseDto {
+export class AuthAccountDeletionResponseDto {
   @ApiProperty({
     example: 'Account deleted successfully',
     description: 'Success message',

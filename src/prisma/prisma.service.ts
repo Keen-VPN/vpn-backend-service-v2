@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Inject,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
 
@@ -7,11 +12,16 @@ export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
-  constructor(private configService: ConfigService) {
-    const databaseUrl = configService.get<string>('DATABASE_URL');
+  constructor(@Inject(ConfigService) private configService: ConfigService) {
+    let databaseUrl = configService?.get<string>('DATABASE_URL');
 
     if (!databaseUrl) {
-      throw new Error('DATABASE_URL is required');
+      // Fallback for Netlify bundled environment if DI fails
+      databaseUrl = process.env.DATABASE_URL;
+    }
+
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL is not defined (ConfigService or ENV)');
     }
 
     super({

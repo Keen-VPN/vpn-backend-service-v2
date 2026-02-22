@@ -11,7 +11,7 @@ import {
   ApiStandardResponse,
   ApiStandardErrorResponse,
 } from '../common/decorators/api-responses.decorator';
-import { AccountDeletionResponseDto } from '../common/dto/response/user.response.dto';
+import { AuthAccountDeletionResponseDto } from '../common/dto/response/user.response.dto';
 import type {
   FirebaseUserPayload,
   SessionUserPayload,
@@ -125,7 +125,7 @@ export class AuthController {
   @ApiStandardResponse({
     status: 200,
     description: 'Account deleted successfully',
-    type: AccountDeletionResponseDto,
+    type: AuthAccountDeletionResponseDto,
   })
   @Throttle({ default: { limit: 1, ttl: 3600000 } }) // 1 request per hour
   async deleteAccount(@CurrentUser() user: SessionUserPayload) {
