@@ -6,6 +6,7 @@ dist
 
 # Environment variables
 .env
+.env.staging
 .env.local
 .env.*.local
 
@@ -33,3 +34,6 @@ blind_signing_key.pem
 # Test Artifacts
 test-results.json
 e2e_output.txt
+# Local Netlify folder
+.netlify
+*.pem
