@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  BadRequestException,
+  Inject,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
@@ -59,7 +64,7 @@ export class VPNConfigService implements OnModuleInit {
   private cachedEtag: string | null = null;
 
   constructor(
-    private configService: ConfigService,
+    @Inject(ConfigService) private configService: ConfigService,
     private prisma: PrismaService,
     private cryptoService: CryptoService,
   ) {}
@@ -78,7 +83,10 @@ export class VPNConfigService implements OnModuleInit {
     etag: string;
   }> {
     // Validate client token if provided
-    const expectedToken = this.configService.get<string>('CONFIG_CLIENT_TOKEN');
+    const expectedToken =
+      this.configService?.get<string>('CONFIG_CLIENT_TOKEN') ||
+      process.env.CONFIG_CLIENT_TOKEN;
+
     if (clientToken && expectedToken && clientToken !== expectedToken) {
       SafeLogger.warn('Invalid config client token', {
         provided: clientToken.substring(0, 8) + '...',

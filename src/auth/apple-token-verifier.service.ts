@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 import * as jwksClient from 'jwks-rsa';
@@ -20,7 +20,7 @@ export class AppleTokenVerifierService {
   private client: jwksClient.JwksClient;
   private bundleId: string;
 
-  constructor(private configService: ConfigService) {
+  constructor(@Inject(ConfigService) private configService: ConfigService) {
     // Create HTTPS agent with timeout configuration
     const httpsAgent = new https.Agent({
       keepAlive: true,
@@ -41,7 +41,8 @@ export class AppleTokenVerifierService {
     });
 
     const configuredBundleId =
-      this.configService.get<string>('APPLE_BUNDLE_ID');
+      this.configService?.get<string>('APPLE_BUNDLE_ID') ||
+      process.env.APPLE_BUNDLE_ID;
     this.bundleId = configuredBundleId || 'com.keenvpn.KeenVPN.keenVPN';
 
     // Log if using default or if configured value looks like a placeholder

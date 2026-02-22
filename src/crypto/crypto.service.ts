@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { SafeLogger } from '../common/utils/logger.util';
@@ -7,10 +7,10 @@ import { SafeLogger } from '../common/utils/logger.util';
 export class CryptoService {
   private privateKey: crypto.KeyObject;
 
-  constructor(private configService: ConfigService) {
-    const privateKeyPem = this.configService.get<string>(
-      'BLIND_SIGNING_PRIVATE_KEY',
-    );
+  constructor(@Inject(ConfigService) private configService: ConfigService) {
+    const privateKeyPem =
+      this.configService?.get<string>('BLIND_SIGNING_PRIVATE_KEY') ||
+      process.env.BLIND_SIGNING_PRIVATE_KEY;
 
     if (!privateKeyPem) {
       throw new Error('BLIND_SIGNING_PRIVATE_KEY is required');

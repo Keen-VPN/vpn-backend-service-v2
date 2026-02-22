@@ -2,6 +2,7 @@ import {
   Injectable,
   CanActivate,
   ExecutionContext,
+  Inject,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -9,7 +10,7 @@ import { Request } from 'express';
 
 @Injectable()
 export class NodeAuthGuard implements CanActivate {
-  constructor(private configService: ConfigService) {}
+  constructor(@Inject(ConfigService) private configService: ConfigService) {}
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
@@ -22,7 +23,7 @@ export class NodeAuthGuard implements CanActivate {
 
     const token = authHeader.split('Bearer ')[1];
     const nodeToken =
-      process.env.NODE_TOKEN || this.configService.get<string>('NODE_TOKEN');
+      process.env.NODE_TOKEN || this.configService?.get<string>('NODE_TOKEN');
 
     if (!nodeToken || token !== nodeToken) {
       throw new UnauthorizedException('Invalid node token');

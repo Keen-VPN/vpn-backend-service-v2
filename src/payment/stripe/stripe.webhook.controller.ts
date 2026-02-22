@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Body,
   UseGuards,
+  Inject,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
@@ -37,11 +38,15 @@ export class StripeWebhookController {
 
   constructor(
     private stripeService: StripeService,
-    private configService: ConfigService,
+    @Inject(ConfigService) private configService: ConfigService,
   ) {
-    const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
+    const secretKey =
+      this.configService?.get<string>('STRIPE_SECRET_KEY') ||
+      process.env.STRIPE_SECRET_KEY;
     this.webhookSecret =
-      this.configService.get<string>('STRIPE_WEBHOOK_SECRET') || '';
+      this.configService?.get<string>('STRIPE_WEBHOOK_SECRET') ||
+      process.env.STRIPE_WEBHOOK_SECRET ||
+      '';
 
     if (!secretKey) {
       throw new Error('STRIPE_SECRET_KEY is required');

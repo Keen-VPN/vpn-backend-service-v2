@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
@@ -10,7 +10,7 @@ import * as jwt from 'jsonwebtoken';
 export class SubscriptionService {
   constructor(
     private prisma: PrismaService,
-    private configService: ConfigService,
+    @Inject(ConfigService) private configService: ConfigService,
     private trialService: TrialService,
   ) {}
 
@@ -18,8 +18,10 @@ export class SubscriptionService {
     try {
       // Verify session token
       const secret =
-        this.configService.get<string>('JWT_SECRET') ||
+        this.configService?.get<string>('JWT_SECRET') ||
+        process.env.JWT_SECRET ||
         'default-secret-change-in-production';
+
       const decoded = jwt.verify(sessionToken, secret) as {
         userId: string;
         email: string;

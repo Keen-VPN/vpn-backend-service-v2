@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  Inject,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as jwt from 'jsonwebtoken';
@@ -10,7 +15,7 @@ import * as jwt from 'jsonwebtoken';
 @Injectable()
 export class OptionalSessionGuard implements CanActivate {
   constructor(
-    private configService: ConfigService,
+    @Inject(ConfigService) private configService: ConfigService,
     private prisma: PrismaService,
   ) {}
 
@@ -32,8 +37,10 @@ export class OptionalSessionGuard implements CanActivate {
 
     try {
       const secret =
-        this.configService.get<string>('JWT_SECRET') ||
+        this.configService?.get<string>('JWT_SECRET') ||
+        process.env.JWT_SECRET ||
         'default-secret-change-in-production';
+
       const decoded = jwt.verify(sessionToken, secret) as {
         userId: string;
         email: string;

@@ -4,6 +4,7 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Inject,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -13,14 +14,15 @@ import { SafeLogger } from '../utils/logger.util';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-  constructor(private configService: ConfigService) {}
+  constructor(@Inject(ConfigService) private configService: ConfigService) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
     const isDevelopment =
-      this.configService.get<string>('NODE_ENV') === 'development';
+      (this.configService?.get<string>('NODE_ENV') || process.env.NODE_ENV) ===
+      'development';
 
     const status =
       exception instanceof HttpException

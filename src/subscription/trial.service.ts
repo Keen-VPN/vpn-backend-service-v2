@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
@@ -30,7 +30,7 @@ export interface TrialStatus {
 export class TrialService {
   constructor(
     private prisma: PrismaService,
-    private configService: ConfigService,
+    @Inject(ConfigService) private configService: ConfigService,
   ) {}
 
   /**
@@ -50,13 +50,17 @@ export class TrialService {
       { service: 'TrialService', userId: user.id },
       {
         deviceHash: deviceHash || 'null',
-        FF_TRIALS_ENABLED: this.configService.get<string>('FF_TRIALS_ENABLED'),
+        FF_TRIALS_ENABLED:
+          this.configService?.get<string>('FF_TRIALS_ENABLED') ||
+          process.env.FF_TRIALS_ENABLED,
       },
     );
 
     // Check feature flag
     const trialsEnabled =
-      this.configService.get<string>('FF_TRIALS_ENABLED') === 'true';
+      (this.configService?.get<string>('FF_TRIALS_ENABLED') ||
+        process.env.FF_TRIALS_ENABLED) === 'true';
+
     if (!trialsEnabled) {
       SafeLogger.debug('Trial feature flag is disabled', {
         service: 'TrialService',

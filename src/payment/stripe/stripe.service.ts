@@ -10,12 +10,15 @@ export class StripeService {
   private stripe: Stripe;
 
   constructor(
-    private configService: ConfigService,
+    @Inject(ConfigService) private configService: ConfigService,
     private prisma: PrismaService,
     @Inject(forwardRef(() => TrialService))
     private trialService: TrialService,
   ) {
-    const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
+    const secretKey =
+      this.configService?.get<string>('STRIPE_SECRET_KEY') ||
+      process.env.STRIPE_SECRET_KEY;
+
     if (!secretKey) {
       throw new Error('STRIPE_SECRET_KEY is required');
     }
@@ -333,10 +336,12 @@ export class StripeService {
   private getPriceIdForPlan(planId: string): string | null {
     const priceMap: Record<string, string> = {
       'individual-annual':
-        this.configService.get<string>('STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID') ||
+        this.configService?.get<string>('STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID') ||
+        process.env.STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID ||
         '',
       'individual-monthly':
-        this.configService.get<string>('STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID') ||
+        this.configService?.get<string>('STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID') ||
+        process.env.STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID ||
         '',
     };
 

@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
+  Inject,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -12,7 +13,7 @@ import * as jwt from 'jsonwebtoken';
 @Injectable()
 export class SessionAuthGuard implements CanActivate {
   constructor(
-    private configService: ConfigService,
+    @Inject(ConfigService) private configService: ConfigService,
     private prisma: PrismaService,
   ) {}
 
@@ -38,8 +39,10 @@ export class SessionAuthGuard implements CanActivate {
 
     try {
       const secret =
-        this.configService.get<string>('JWT_SECRET') ||
+        this.configService?.get<string>('JWT_SECRET') ||
+        process.env.JWT_SECRET ||
         'default-secret-change-in-production';
+
       const decoded = jwt.verify(sessionToken, secret) as {
         userId: string;
         type: string;

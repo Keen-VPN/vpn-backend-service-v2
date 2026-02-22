@@ -17,14 +17,16 @@ const APPLE_RECEIPT_URLS = {
 @Injectable()
 export class AppleService {
   constructor(
-    private configService: ConfigService,
+    @Inject(ConfigService) private configService: ConfigService,
     private prisma: PrismaService,
     @Inject(forwardRef(() => TrialService))
     private trialService: TrialService,
   ) {}
 
   async verifyReceipt(receiptData: string) {
-    const sharedSecret = this.configService.get<string>('APPLE_SHARED_SECRET');
+    const sharedSecret =
+      this.configService?.get<string>('APPLE_SHARED_SECRET') ||
+      process.env.APPLE_SHARED_SECRET;
 
     try {
       // Try production first
@@ -559,7 +561,9 @@ export class AppleService {
           // Apple transaction IDs are typically very large numbers, so "0" indicates an invalid/uninitialized value
           // In development, we allow "0" for testing purposes
           const isProduction =
-            this.configService.get<string>('NODE_ENV') === 'production';
+            (this.configService?.get<string>('NODE_ENV') ||
+              process.env.NODE_ENV) === 'production';
+
           const isInvalidTransactionId =
             (txInfo.transactionId === '0' ||
               txInfo.transactionId.trim() === '' ||

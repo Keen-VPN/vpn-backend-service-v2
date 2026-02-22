@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FirebaseConfig } from '../config/firebase.config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,7 +11,7 @@ export class AuthService {
   constructor(
     private firebaseConfig: FirebaseConfig,
     private prisma: PrismaService,
-    private configService: ConfigService,
+    @Inject(ConfigService) private configService: ConfigService,
     private appleTokenVerifier: AppleTokenVerifierService,
   ) {}
 
@@ -131,8 +131,10 @@ export class AuthService {
 
   private generateSessionToken(userId: string): string {
     const secret =
-      this.configService.get<string>('JWT_SECRET') ||
+      this.configService?.get<string>('JWT_SECRET') ||
+      process.env.JWT_SECRET ||
       'default-secret-change-in-production';
+
     return jwt.sign(
       { userId, type: 'session' },
       secret,
@@ -424,7 +426,8 @@ export class AuthService {
   async verifySession(sessionToken: string) {
     try {
       const secret =
-        this.configService.get<string>('JWT_SECRET') ||
+        this.configService?.get<string>('JWT_SECRET') ||
+        process.env.JWT_SECRET ||
         'default-secret-change-in-production';
       const decoded = jwt.verify(sessionToken, secret) as {
         userId: string;
