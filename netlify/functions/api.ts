@@ -13,20 +13,38 @@ import { Handler } from '@netlify/functions';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
-  // Fetch NODE_TOKEN from Secrets Manager if not provided in environment (for Staging/Prod)
+  // Fetch large secrets from Secrets Manager if not provided in environment (for Staging/Prod)
   const env = process.env.NODE_ENV || 'development';
-  if (['staging', 'production'].includes(env) && !process.env.NODE_TOKEN) {
-    SafeLogger.info('Fetching NODE_TOKEN from Secrets Manager', {
-      environment: env,
-    });
-    const token = await SecretsUtil.fetchNodeToken(env);
-    if (token) {
-      process.env.NODE_TOKEN = token;
-      SafeLogger.info('Successfully loaded NODE_TOKEN from Secrets Manager');
-    } else {
-      SafeLogger.warn(
-        'NODE_TOKEN not found in Secrets Manager. Node registration may fail.',
-      );
+  if (['staging', 'production'].includes(env)) {
+    const secretsToFetch = [
+      { key: 'NODE_TOKEN', fetch: () => SecretsUtil.fetchNodeToken(env) },
+      {
+        key: 'FIREBASE_PRIVATE_KEY',
+        fetch: () => SecretsUtil.fetchFirebasePrivateKey(env),
+      },
+      {
+        key: 'BLIND_SIGNING_PRIVATE_KEY',
+        fetch: () => SecretsUtil.fetchBlindSigningPrivateKey(env),
+      },
+    ];
+
+    for (const secret of secretsToFetch) {
+      if (!process.env[secret.key]) {
+        SafeLogger.info(`Fetching ${secret.key} from Secrets Manager`, {
+          environment: env,
+        });
+        const value = await secret.fetch();
+        if (value) {
+          process.env[secret.key] = value;
+          SafeLogger.info(
+            `Successfully loaded ${secret.key} from Secrets Manager`,
+          );
+        } else {
+          SafeLogger.warn(
+            `${secret.key} not found in Secrets Manager. App functionality may be limited.`,
+          );
+        }
+      }
     }
   }
 
