@@ -11,7 +11,11 @@ export const configValidationSchema = Joi.object({
   // Firebase Configuration
   FIREBASE_PROJECT_ID: Joi.string().required(),
   FIREBASE_PRIVATE_KEY_ID: Joi.string().required(),
-  FIREBASE_PRIVATE_KEY: Joi.string().required(),
+  FIREBASE_PRIVATE_KEY: Joi.string().when('NODE_ENV', {
+    is: Joi.string().valid('staging', 'production'),
+    then: Joi.string().optional(),
+    otherwise: Joi.string().required(),
+  }),
   FIREBASE_CLIENT_EMAIL: Joi.string().required(),
   FIREBASE_CLIENT_ID: Joi.string().required(),
   FIREBASE_AUTH_URI: Joi.string().default(
@@ -36,11 +40,19 @@ export const configValidationSchema = Joi.object({
   APPLE_BUNDLE_ID: Joi.string().optional(),
 
   // Blind Signing Configuration
-  BLIND_SIGNING_PRIVATE_KEY: Joi.string().required(),
+  BLIND_SIGNING_PRIVATE_KEY: Joi.string().when('NODE_ENV', {
+    is: Joi.string().valid('staging', 'production'),
+    then: Joi.string().optional(),
+    otherwise: Joi.string().required(),
+  }),
 
   // JWT Configuration
   JWT_SECRET: Joi.string().optional(),
 
   // Node Daemon Configuration
-  NODE_TOKEN: Joi.string().required(),
+  NODE_TOKEN: Joi.string().when('NODE_ENV', {
+    is: Joi.string().valid('staging', 'production'),
+    then: Joi.string().optional(),
+    otherwise: Joi.string().optional().default('dev-token-locally'),
+  }),
 });

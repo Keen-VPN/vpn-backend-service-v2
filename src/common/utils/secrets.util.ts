@@ -14,8 +14,24 @@ export class SecretsUtil {
   });
 
   static async fetchNodeToken(environment: string): Promise<string | null> {
-    const secretId = `/keenvpn/${environment}/node-token`;
+    return this.fetchSecret(`/keenvpn/${environment}/node-token`);
+  }
 
+  static async fetchFirebasePrivateKey(
+    environment: string,
+  ): Promise<string | null> {
+    return this.fetchSecret(`/keenvpn/${environment}/firebase-private-key`);
+  }
+
+  static async fetchBlindSigningPrivateKey(
+    environment: string,
+  ): Promise<string | null> {
+    return this.fetchSecret(
+      `/keenvpn/${environment}/blind-signing-private-key`,
+    );
+  }
+
+  private static async fetchSecret(secretId: string): Promise<string | null> {
     try {
       const response = await this.client.send(
         new GetSecretValueCommand({ SecretId: secretId }),
@@ -24,7 +40,7 @@ export class SecretsUtil {
       return response.SecretString || null;
     } catch (error) {
       SafeLogger.error(
-        `Failed to fetch NODE_TOKEN from Secrets Manager (${secretId})`,
+        `Failed to fetch secret from Secrets Manager (${secretId})`,
         error,
       );
       return null;
