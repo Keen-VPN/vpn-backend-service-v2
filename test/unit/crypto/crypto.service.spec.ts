@@ -74,11 +74,18 @@ describe('CryptoService', () => {
 
   describe('constructor', () => {
     it('should throw Error if BLIND_SIGNING_PRIVATE_KEY is missing', async () => {
+      const originalEnv = process.env.BLIND_SIGNING_PRIVATE_KEY;
+      delete process.env.BLIND_SIGNING_PRIVATE_KEY;
+
       mockConfigService.get.mockReturnValue(undefined);
 
       expect(() => new CryptoService(mockConfigService)).toThrow(
         'BLIND_SIGNING_PRIVATE_KEY is required',
       );
+
+      if (originalEnv !== undefined) {
+        process.env.BLIND_SIGNING_PRIVATE_KEY = originalEnv;
+      }
     });
 
     it('should throw Error if BLIND_SIGNING_PRIVATE_KEY is invalid', async () => {
