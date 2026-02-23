@@ -1,7 +1,9 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
+  Param,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -21,6 +23,8 @@ import { Throttle } from '@nestjs/throttler';
 import {
   SubscriptionStatusResponseDto,
   CancelSubscriptionResponseDto,
+  GetPlansResponseDto,
+  GetPlanByIdResponseDto,
 } from '../common/dto/response/subscription.response.dto';
 
 @ApiTags('Subscription')
@@ -30,6 +34,29 @@ export class SubscriptionController {
     @Inject(SubscriptionService)
     private readonly subscriptionService: SubscriptionService,
   ) {}
+
+  @Get('plans')
+  @ApiOperation({ summary: 'Get all subscription plans' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of subscription plans',
+    type: GetPlansResponseDto,
+  })
+  getPlans() {
+    return this.subscriptionService.getPlans();
+  }
+
+  @Get('plan/:id')
+  @ApiOperation({ summary: 'Get a specific plan by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Specific subscription plan details',
+    type: GetPlanByIdResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Plan not found' })
+  getPlanById(@Param('id') id: string) {
+    return this.subscriptionService.getPlanById(id);
+  }
 
   @Post('status-session')
   @HttpCode(HttpStatus.OK)

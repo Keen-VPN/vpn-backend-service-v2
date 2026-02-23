@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { TrialService } from './trial.service';
+import { PlansConfigService } from './config/plans.config';
 import { serializeTrialStatus } from './trial.util';
 import * as jwt from 'jsonwebtoken';
 
@@ -12,7 +13,60 @@ export class SubscriptionService {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(ConfigService) private configService: ConfigService,
     @Inject(TrialService) private trialService: TrialService,
+    @Inject(PlansConfigService) private plansConfigService: PlansConfigService,
   ) {}
+
+  getPlans() {
+    try {
+      const plans = this.plansConfigService.getSubscriptionPlans();
+      return {
+        success: true,
+        data: { plans },
+      };
+    } catch (error) {
+      SafeLogger.error(
+        'Failed to get subscription plans',
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      return {
+        success: false,
+        error: 'Failed to get subscription plans',
+      };
+    }
+  }
+
+  getPlanById(planId: string) {
+    try {
+      if (!planId) {
+        return {
+          success: false,
+          error: 'Plan ID is required',
+        };
+      }
+
+      const plan = this.plansConfigService.getPlanById(planId);
+      if (!plan) {
+        return {
+          success: false,
+          error: 'Plan not found',
+        };
+      }
+
+      return {
+        success: true,
+        data: { plan },
+      };
+    } catch (error) {
+      SafeLogger.error(
+        `Failed to get plan details for ${planId}`,
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      return {
+        success: false,
+        error: 'Failed to get plan details',
+      };
+    }
+  }
 
   async getStatusWithSession(sessionToken: string) {
     try {

@@ -3,6 +3,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import { SubscriptionService } from '../../../src/subscription/subscription.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { TrialService } from '../../../src/subscription/trial.service';
+import { PlansConfigService } from '../../../src/subscription/config/plans.config';
 import { ConfigService } from '@nestjs/config';
 import {
   createMockPrismaClient,
@@ -50,6 +51,13 @@ describe('SubscriptionService', () => {
             activateTrial: jest.fn(),
             expireIfNeeded: jest.fn(),
             status: jest.fn().mockResolvedValue({ status: 'ACTIVE' }),
+          },
+        },
+        {
+          provide: PlansConfigService,
+          useValue: {
+            getSubscriptionPlans: jest.fn().mockReturnValue([]),
+            getPlanById: jest.fn().mockReturnValue(null),
           },
         },
       ],
