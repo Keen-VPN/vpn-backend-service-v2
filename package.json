@@ -21,6 +21,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --config ./test/jest.config.ts --runInBand",
     "docker": "docker-compose up -d",
     "seed:vpn-config": "ts-node -r tsconfig-paths/register prisma/seed-vpn-config.ts",
+    "prisma:deploy": "prisma migrate deploy",
     "prepare": "husky"
   },
   "dependencies": {
