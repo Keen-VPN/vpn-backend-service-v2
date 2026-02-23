@@ -128,3 +128,66 @@ export class CancelSubscriptionResponseDto {
   })
   error: string | null;
 }
+
+export class SubscriptionPlanFeatureDto {
+  @ApiProperty({ type: String, example: 'Unlimited bandwidth' })
+  name: string;
+
+  @ApiProperty({ type: Boolean, example: true })
+  included: boolean;
+
+  @ApiProperty({ type: Boolean, example: true, required: false })
+  highlighted?: boolean;
+}
+
+export class SubscriptionPlanDto {
+  @ApiProperty({ type: String, example: 'premium_monthly' })
+  id: string;
+
+  @ApiProperty({ type: String, example: 'Premium VPN - Monthly' })
+  name: string;
+
+  @ApiProperty({ type: Number, example: 10.0 })
+  price: number;
+
+  @ApiProperty({ type: String, example: 'month' })
+  period: string;
+
+  @ApiProperty({ type: String, example: 'month' })
+  interval: string;
+
+  @ApiProperty({ type: String, example: 'month' })
+  billingPeriod: string;
+
+  @ApiProperty({ type: [SubscriptionPlanFeatureDto] })
+  features: SubscriptionPlanFeatureDto[];
+
+  @ApiProperty({ type: String, example: 'price_1...' })
+  priceId: string;
+}
+
+export class GetPlansDataDto {
+  @ApiProperty({ type: [SubscriptionPlanDto] })
+  plans: SubscriptionPlanDto[];
+}
+
+export class GetPlansResponseDto {
+  @ApiProperty({ type: Boolean, example: true })
+  success: boolean;
+
+  @ApiProperty({ type: GetPlansDataDto })
+  data: GetPlansDataDto;
+}
+
+export class GetPlanByIdDataDto {
+  @ApiProperty({ type: SubscriptionPlanDto })
+  plan: SubscriptionPlanDto;
+}
+
+export class GetPlanByIdResponseDto {
+  @ApiProperty({ type: Boolean, example: true })
+  success: boolean;
+
+  @ApiProperty({ type: GetPlanByIdDataDto })
+  data: GetPlanByIdDataDto;
+}
