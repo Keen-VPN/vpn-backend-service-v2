@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Res,
   ForbiddenException,
+  Inject,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -36,7 +37,9 @@ import {
 @ApiBearerAuth()
 @ApiStandardErrorResponse()
 export class AccountController {
-  constructor(private readonly accountService: AccountService) {}
+  constructor(
+    @Inject(AccountService) private readonly accountService: AccountService,
+  ) {}
 
   @Get('profile')
   @UseGuards(FirebaseAuthGuard)
@@ -94,7 +97,9 @@ export class AccountController {
 @ApiBearerAuth()
 @ApiStandardErrorResponse()
 export class AccountPaymentsController {
-  constructor(private readonly accountService: AccountService) {}
+  constructor(
+    @Inject(AccountService) private readonly accountService: AccountService,
+  ) {}
 
   @Get('payments')
   @UseGuards(FirebaseAuthGuard)

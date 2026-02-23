@@ -1,13 +1,22 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AppleSubscriptionInfoDto {
-  @ApiProperty({ example: 'active', description: 'Subscription status' })
+  @ApiProperty({
+    type: String,
+    example: 'active',
+    description: 'Subscription status',
+  })
   status: string;
 
-  @ApiProperty({ example: 'Premium VPN - Annual', description: 'Plan name' })
+  @ApiProperty({
+    type: String,
+    example: 'Premium VPN - Annual',
+    description: 'Plan name',
+  })
   planName: string;
 
   @ApiProperty({
+    type: Date,
     description: 'Current period end date',
     required: false,
     nullable: true,
@@ -16,10 +25,15 @@ export class AppleSubscriptionInfoDto {
 }
 
 export class AppleLinkPurchaseResponseDto {
-  @ApiProperty({ example: true, description: 'Operation success status' })
+  @ApiProperty({
+    type: Boolean,
+    example: true,
+    description: 'Operation success status',
+  })
   success: boolean;
 
   @ApiProperty({
+    type: String,
     example: 'Purchase linked successfully',
     description: 'Result message',
   })
@@ -33,41 +47,57 @@ export class AppleLinkPurchaseResponseDto {
 }
 
 export class LinkedPurchaseDto {
-  @ApiProperty({ description: 'Transaction ID' })
+  @ApiProperty({ type: String, description: 'Transaction ID' })
   transactionId: string;
 
-  @ApiProperty({ description: 'Original Transaction ID' })
+  @ApiProperty({ type: String, description: 'Original Transaction ID' })
   originalTransactionId: string;
 
-  @ApiProperty({ description: 'Product ID' })
+  @ApiProperty({ type: String, description: 'Product ID' })
   productId: string;
 
-  @ApiProperty({ description: 'Status of the purchase' })
+  @ApiProperty({ type: String, description: 'Status of the purchase' })
   status: string;
 
-  @ApiProperty({ description: 'Subscription ID associated with the purchase' })
+  @ApiProperty({
+    type: String,
+    description: 'Subscription ID associated with the purchase',
+  })
   subscriptionId: string;
 }
 
 export class PurchaseErrorDto {
-  @ApiProperty({ description: 'Transaction details causing the error' })
+  @ApiProperty({
+    type: Object,
+    description: 'Transaction details causing the error',
+  })
   transaction: any;
 
-  @ApiProperty({ description: 'Error message' })
+  @ApiProperty({ type: String, description: 'Error message' })
   error: string;
 }
 
 export class AppleBulkLinkResponseDto {
-  @ApiProperty({ example: true, description: 'Operation success status' })
+  @ApiProperty({
+    type: Boolean,
+    example: true,
+    description: 'Operation success status',
+  })
   success: boolean;
 
-  @ApiProperty({ description: 'Result message' })
+  @ApiProperty({ type: String, description: 'Result message' })
   message: string;
 
-  @ApiProperty({ description: 'Number of purchases successfully linked' })
+  @ApiProperty({
+    type: Number,
+    description: 'Number of purchases successfully linked',
+  })
   linkedCount: number;
 
-  @ApiProperty({ description: 'Total number of transactions processed' })
+  @ApiProperty({
+    type: Number,
+    description: 'Total number of transactions processed',
+  })
   totalCount: number;
 
   @ApiProperty({

@@ -3,6 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class LoginDto {
   @ApiProperty({
+    type: String,
     description: 'Firebase ID token for authentication',
     example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjZm...',
     minLength: 100,

@@ -9,9 +9,9 @@ import * as jwt from 'jsonwebtoken';
 @Injectable()
 export class SubscriptionService {
   constructor(
-    private prisma: PrismaService,
+    @Inject(PrismaService) private prisma: PrismaService,
     @Inject(ConfigService) private configService: ConfigService,
-    private trialService: TrialService,
+    @Inject(TrialService) private trialService: TrialService,
   ) {}
 
   async getStatusWithSession(sessionToken: string) {

@@ -34,7 +34,8 @@ export class PrismaService
   }
 
   async onModuleInit() {
-    await this.$connect();
+    // Intentionally left blank. Let Prisma construct connection lazily on the first query.
+    // In serverless environments, an aggressive initial connection can hang the container spin-up.
   }
 
   async onModuleDestroy() {

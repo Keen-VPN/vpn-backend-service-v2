@@ -3,16 +3,22 @@ import { TrialStatusDto } from './trial.response.dto';
 
 export class SubscriptionDetailsDto {
   @ApiProperty({
+    type: String,
     example: 'sub_123456',
     description: 'Subscription ID',
     required: false,
   })
   id?: string;
 
-  @ApiProperty({ example: 'active', description: 'Subscription status' })
+  @ApiProperty({
+    type: String,
+    example: 'active',
+    description: 'Subscription status',
+  })
   status: string;
 
   @ApiProperty({
+    type: String,
     example: 'premium_monthly',
     description: 'Plan name',
     required: false,
@@ -20,6 +26,7 @@ export class SubscriptionDetailsDto {
   planName?: string | null;
 
   @ApiProperty({
+    type: String,
     example: 'premium',
     description: 'Plan name alias',
     required: false,
@@ -27,6 +34,7 @@ export class SubscriptionDetailsDto {
   plan?: string | null;
 
   @ApiProperty({
+    type: Date,
     example: '2023-12-31T23:59:59.999Z',
     description: 'Current period end date',
     required: false,
@@ -34,6 +42,7 @@ export class SubscriptionDetailsDto {
   currentPeriodEnd?: Date | null;
 
   @ApiProperty({
+    type: String,
     example: '2023-12-31T23:59:59.999Z',
     description: 'End date alias',
     required: false,
@@ -41,6 +50,7 @@ export class SubscriptionDetailsDto {
   endDate?: string | null;
 
   @ApiProperty({
+    type: Boolean,
     example: false,
     description: 'Cancel at period end flag',
     required: false,
@@ -48,6 +58,7 @@ export class SubscriptionDetailsDto {
   cancelAtPeriodEnd?: boolean | null;
 
   @ApiProperty({
+    type: String,
     example: 'stripe',
     description: 'Subscription type (stripe/apple)',
     required: false,
@@ -55,6 +66,7 @@ export class SubscriptionDetailsDto {
   subscriptionType?: string | null;
 
   @ApiProperty({
+    type: String,
     example: 'cus_123456',
     description: 'Customer ID (Stripe/Apple)',
     required: false,
@@ -63,10 +75,18 @@ export class SubscriptionDetailsDto {
 }
 
 export class SubscriptionStatusResponseDto {
-  @ApiProperty({ example: true, description: 'Operation success status' })
+  @ApiProperty({
+    type: Boolean,
+    example: true,
+    description: 'Operation success status',
+  })
   success: boolean;
 
-  @ApiProperty({ example: true, description: 'Has active subscription' })
+  @ApiProperty({
+    type: Boolean,
+    example: true,
+    description: 'Has active subscription',
+  })
   hasActiveSubscription: boolean;
 
   @ApiProperty({
@@ -85,16 +105,22 @@ export class SubscriptionStatusResponseDto {
 }
 
 export class CancelSubscriptionResponseDto {
-  @ApiProperty({ example: true, description: 'Operation success status' })
+  @ApiProperty({
+    type: Boolean,
+    example: true,
+    description: 'Operation success status',
+  })
   success: boolean;
 
   @ApiProperty({
+    type: String,
     example: 'Subscription cancelled successfully',
     description: 'Status message',
   })
   message: string;
 
   @ApiProperty({
+    type: String,
     example: null,
     description: 'Error message if any',
     required: false,

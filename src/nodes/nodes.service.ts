@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { RegisterNodeDto } from './dto/register-node.dto';
@@ -6,7 +6,7 @@ import { NodeHeartbeatDto } from './dto/node-heartbeat.dto';
 
 @Injectable()
 export class NodesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
   async register(dto: RegisterNodeDto) {
     try {

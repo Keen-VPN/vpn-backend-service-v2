@@ -5,6 +5,8 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Inject,
+  Delete,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import {
@@ -21,7 +23,6 @@ import { LoginDto } from '../common/dto/login.dto';
 import { GoogleSignInDto } from '../common/dto/google-signin.dto';
 import { AppleSignInDto } from '../common/dto/apple-signin.dto';
 import { VerifySessionDto } from '../common/dto/verify-session.dto';
-import { Delete } from '@nestjs/common';
 import { FirebaseAuthGuard } from './guards/firebase-auth.guard';
 import { SessionAuthGuard } from './guards/session-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -38,8 +39,8 @@ import {
 @ApiStandardErrorResponse()
 export class AuthController {
   constructor(
-    private readonly authService: AuthService,
-    private readonly accountService: AccountService,
+    @Inject(AuthService) private readonly authService: AuthService,
+    @Inject(AccountService) private readonly accountService: AccountService,
   ) {}
 
   @Post('login')

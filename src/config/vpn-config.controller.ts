@@ -9,6 +9,7 @@ import {
   Res,
   Req,
   UseGuards,
+  Inject,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -34,7 +35,9 @@ import { SubscriptionService } from '../subscription/subscription.service';
 @Controller('config')
 export class VPNConfigController {
   constructor(
+    @Inject(VPNConfigService)
     private readonly vpnConfigService: VPNConfigService,
+    @Inject(SubscriptionService)
     private readonly subscriptionService: SubscriptionService,
   ) {}
 

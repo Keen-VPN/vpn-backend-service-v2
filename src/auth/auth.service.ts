@@ -9,9 +9,10 @@ import * as jwt from 'jsonwebtoken';
 @Injectable()
 export class AuthService {
   constructor(
-    private firebaseConfig: FirebaseConfig,
-    private prisma: PrismaService,
+    @Inject(FirebaseConfig) private firebaseConfig: FirebaseConfig,
+    @Inject(PrismaService) private prisma: PrismaService,
     @Inject(ConfigService) private configService: ConfigService,
+    @Inject(AppleTokenVerifierService)
     private appleTokenVerifier: AppleTokenVerifierService,
   ) {}
 

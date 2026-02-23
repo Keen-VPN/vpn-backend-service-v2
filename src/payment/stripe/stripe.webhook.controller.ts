@@ -5,7 +5,6 @@ import {
   Res,
   HttpCode,
   HttpStatus,
-  Body,
   UseGuards,
   Inject,
 } from '@nestjs/common';
@@ -37,7 +36,7 @@ export class StripeWebhookController {
   private webhookSecret: string;
 
   constructor(
-    private stripeService: StripeService,
+    @Inject(StripeService) private stripeService: StripeService,
     @Inject(ConfigService) private configService: ConfigService,
   ) {
     const secretKey =

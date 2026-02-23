@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
@@ -7,8 +7,8 @@ import { NodesService } from '../nodes/nodes.service';
 @Injectable()
 export class ConnectionService {
   constructor(
-    private prisma: PrismaService,
-    private nodesService: NodesService,
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(NodesService) private nodesService: NodesService,
   ) {}
 
   async getRecommendedNode(region: string) {

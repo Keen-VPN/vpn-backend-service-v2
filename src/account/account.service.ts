@@ -7,9 +7,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import PDFDocument from 'pdfkit';
 
+import { Inject } from '@nestjs/common';
+
 @Injectable()
 export class AccountService {
-  constructor(private prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
   async getProfileByFirebaseUid(firebaseUid: string) {
     const user = await this.prisma.user.findUnique({

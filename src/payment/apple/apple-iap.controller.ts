@@ -4,6 +4,7 @@ import {
   Body,
   HttpCode,
   HttpStatus,
+  Inject,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -29,7 +30,7 @@ import { SuccessResponseDto } from '../../common/dto/response/success.response.d
 @ApiTags('Apple IAP')
 @Controller('apple-iap')
 export class AppleIAPController {
-  constructor(private appleService: AppleService) {}
+  constructor(@Inject(AppleService) private appleService: AppleService) {}
 
   @Post('capture-purchase')
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute

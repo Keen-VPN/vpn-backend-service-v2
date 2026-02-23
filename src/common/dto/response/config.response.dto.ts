@@ -1,95 +1,155 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class VPNServerDto {
-  @ApiProperty({ description: 'Server ID' })
+  @ApiProperty({ type: String, description: 'Server ID' })
   id: string;
 
-  @ApiProperty({ description: 'Server name' })
+  @ApiProperty({ type: String, description: 'Server name' })
   name: string;
 
-  @ApiProperty({ description: 'Country code or name' })
+  @ApiProperty({ type: String, description: 'Country code or name' })
   country: string;
 
-  @ApiProperty({ description: 'City name' })
+  @ApiProperty({ type: String, description: 'City name' })
   city: string;
 
-  @ApiProperty({ description: 'Server address (IP or hostname)' })
+  @ApiProperty({ type: String, description: 'Server address (IP or hostname)' })
   serverAddress: string;
 
-  @ApiProperty({ description: 'Remote identifier', required: false })
+  @ApiProperty({
+    type: String,
+    description: 'The remote identifier for IKEv2 connection',
+  })
   remoteIdentifier?: string;
 
-  @ApiProperty({ description: 'Credential ID used by this server' })
+  @ApiProperty({
+    type: String,
+    description: 'Credential ID used by this server',
+  })
   credentialId: string;
 
-  @ApiProperty({ description: 'Asset key for flags/icons', required: false })
+  @ApiProperty({
+    type: String,
+    description: 'Asset key for flags/icons',
+    required: false,
+  })
   assetKey?: string;
 
-  @ApiProperty({ description: 'Flag URL', required: false })
+  @ApiProperty({ type: String, description: 'Flag URL', required: false })
   flagUrl?: string;
 
-  @ApiProperty({ description: 'Geographic coordinates', required: false })
+  @ApiProperty({
+    type: Object,
+    description: 'Geographic coordinates',
+    required: false,
+  })
   coordinates?: any;
 
-  @ApiProperty({ description: 'Is this the default server?', required: false })
+  @ApiProperty({
+    type: Boolean,
+    description: 'Is this the default server?',
+    required: false,
+  })
   isDefault?: boolean;
 
-  @ApiProperty({ description: 'Sort order', required: false })
+  @ApiProperty({ type: Number, description: 'Sort order', required: false })
   sortOrder?: number;
 
-  @ApiProperty({ description: 'Additional metadata', required: false })
-  metadata?: Record<string, string>;
+  @ApiProperty({
+    type: Object,
+    description: 'Additional metadata',
+    required: false,
+  })
+  metadata?: Record<string, any>;
 }
 
 export class VPNCredentialDto {
-  @ApiProperty({ description: 'Credential ID' })
+  @ApiProperty({ type: String, description: 'Credential ID' })
   id: string;
 
-  @ApiProperty({ description: 'Username' })
+  @ApiProperty({ type: String, description: 'Username' })
   username: string;
 
-  @ApiProperty({ description: 'Password' })
+  @ApiProperty({ type: String, description: 'Password' })
   password: string;
 
-  @ApiProperty({ description: 'Shared secret (PSK)', required: false })
+  @ApiProperty({
+    type: String,
+    description: 'Shared secret (PSK)',
+    required: false,
+  })
   sharedSecret?: string;
 
-  @ApiProperty({ description: 'Certificate', required: false })
+  @ApiProperty({ type: String, description: 'Certificate', required: false })
   certificate?: string;
 
-  @ApiProperty({ description: 'Certificate password', required: false })
+  @ApiProperty({
+    type: String,
+    description: 'Certificate password',
+    required: false,
+  })
   certificatePassword?: string;
 
-  @ApiProperty({ description: 'Additional metadata', required: false })
-  metadata?: Record<string, string>;
+  @ApiProperty({
+    type: Object,
+    description: 'Additional metadata',
+    required: false,
+  })
+  metadata?: Record<string, any>;
 }
 
 export class VPNRolloutDto {
-  @ApiProperty({ description: 'Minimum app version required', required: false })
+  @ApiProperty({
+    type: String,
+    description: 'Minimum app version required',
+    required: false,
+  })
   minAppVersion?: string;
 
-  @ApiProperty({ description: 'Maximum app version allowed', required: false })
+  @ApiProperty({
+    type: String,
+    description: 'Maximum app version allowed',
+    required: false,
+  })
   maxAppVersion?: string;
 
-  @ApiProperty({ description: 'Allow during review?', required: false })
+  @ApiProperty({
+    type: Boolean,
+    description: 'Allow during review?',
+    required: false,
+  })
   allowDuringReview?: boolean;
 
-  @ApiProperty({ description: 'Staged rollout percentage', required: false })
+  @ApiProperty({
+    type: Number,
+    description: 'Staged rollout percentage',
+    required: false,
+  })
   stagedPercentage?: number;
 
-  @ApiProperty({ description: 'Allowed channels', required: false })
+  @ApiProperty({
+    type: [String],
+    description: 'Allowed channels',
+    required: false,
+  })
   channels?: string[];
 
-  @ApiProperty({ description: 'Metadata', required: false })
+  @ApiProperty({ type: Object, description: 'Metadata', required: false })
   metadata?: Record<string, string>;
 }
 
 export class VPNConfigDto {
-  @ApiProperty({ description: 'Config version' })
+  @ApiProperty({
+    type: String,
+    example: '1.0.0',
+    description: 'Config version',
+  })
   version: string;
 
   @ApiProperty({
-    description: 'Last updated timestamp',
+    type: String,
+    example: '2023-01-01T00:00:00.000Z',
+    description: 'Last update date',
     required: false,
     nullable: true,
   })
@@ -109,6 +169,7 @@ export class VPNConfigDto {
   credentials: VPNCredentialDto[];
 
   @ApiProperty({
+    type: Object,
     description: 'Feature flags',
     required: false,
     nullable: true,
@@ -116,19 +177,23 @@ export class VPNConfigDto {
   featureFlags?: Record<string, boolean> | null;
 
   @ApiProperty({
-    type: VPNRolloutDto,
+    type: () => VPNRolloutDto,
     description: 'Rollout configuration',
     required: false,
     nullable: true,
   })
   rollout?: VPNRolloutDto | null;
 
-  @ApiProperty({ description: 'Metadata', required: false })
+  @ApiProperty({ type: Object, description: 'Metadata', required: false })
   metadata?: Record<string, string>;
 }
 
 export class VPNConfigResponseDto {
-  @ApiProperty({ example: 'ok', description: 'Status of the request' })
+  @ApiProperty({
+    type: String,
+    example: 'ok',
+    description: 'Status of the request',
+  })
   status: 'ok' | 'not-modified';
 
   @ApiProperty({
@@ -138,29 +203,37 @@ export class VPNConfigResponseDto {
   })
   config?: VPNConfigDto;
 
-  @ApiProperty({ description: 'ETag for caching' })
+  @ApiProperty({ type: String, description: 'ETag for caching' })
   etag: string;
 }
 
 export class VPNCredentialsResponseDto {
-  @ApiProperty({ description: 'Server address' })
+  @ApiProperty({ type: String, description: 'Server geographic location' })
   serverAddress: string;
 
-  @ApiProperty({ description: 'Remote identifier', required: false })
+  @ApiProperty({
+    type: String,
+    description: 'Remote identifier',
+    required: false,
+  })
   remoteIdentifier?: string;
 
-  @ApiProperty({ description: 'Username' })
+  @ApiProperty({ type: String, description: 'Username' })
   username: string;
 
-  @ApiProperty({ description: 'Password' })
+  @ApiProperty({ type: String, description: 'Password' })
   password: string;
 
-  @ApiProperty({ description: 'Shared secret', required: false })
+  @ApiProperty({ type: String, description: 'Shared secret', required: false })
   sharedSecret?: string;
 
-  @ApiProperty({ description: 'Certificate', required: false })
+  @ApiProperty({ type: String, description: 'Certificate', required: false })
   certificate?: string;
 
-  @ApiProperty({ description: 'Certificate password', required: false })
+  @ApiProperty({
+    type: String,
+    description: 'Certificate password',
+    required: false,
+  })
   certificatePassword?: string;
 }

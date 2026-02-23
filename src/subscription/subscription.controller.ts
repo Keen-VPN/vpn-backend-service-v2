@@ -5,6 +5,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Inject,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,7 +26,10 @@ import {
 @ApiTags('Subscription')
 @Controller('subscription')
 export class SubscriptionController {
-  constructor(private readonly subscriptionService: SubscriptionService) {}
+  constructor(
+    @Inject(SubscriptionService)
+    private readonly subscriptionService: SubscriptionService,
+  ) {}
 
   @Post('status-session')
   @HttpCode(HttpStatus.OK)

@@ -3,6 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CapturePurchaseDto {
   @ApiPropertyOptional({
+    type: String,
     description: 'The base64 encoded receipt data',
     example: 'MIIT8...',
   })
@@ -11,6 +12,7 @@ export class CapturePurchaseDto {
   receiptData?: string;
 
   @ApiProperty({
+    type: String,
     description: 'The transaction identifier',
     example: '1000000...',
   })
@@ -19,6 +21,7 @@ export class CapturePurchaseDto {
   transactionId: string;
 
   @ApiProperty({
+    type: String,
     description: 'The original transaction identifier',
     example: '1000000...',
   })
@@ -27,6 +30,7 @@ export class CapturePurchaseDto {
   originalTransactionId: string;
 
   @ApiProperty({
+    type: String,
     description: 'The product identifier',
     example: 'com.keen.vpn.monthly',
   })
@@ -35,6 +39,7 @@ export class CapturePurchaseDto {
   productId: string;
 
   @ApiProperty({
+    type: String,
     description: 'Purchase date in milliseconds',
     example: '1600000000000',
   })
@@ -43,6 +48,7 @@ export class CapturePurchaseDto {
   purchaseDateMs: string;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Expiration date in milliseconds',
     example: '1602678400000',
   })
@@ -51,6 +57,7 @@ export class CapturePurchaseDto {
   expiresDateMs?: string;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Environment (Sandbox/Production)',
     example: 'Sandbox',
   })
@@ -59,6 +66,7 @@ export class CapturePurchaseDto {
   environment?: string;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Device fingerprint for fraud detection',
     example: 'a1b2c3d4e5f6...',
   })
@@ -67,6 +75,7 @@ export class CapturePurchaseDto {
   deviceFingerprint?: string;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Device platform (ios, android, web)',
     example: 'ios',
   })

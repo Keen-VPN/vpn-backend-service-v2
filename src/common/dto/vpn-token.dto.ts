@@ -3,6 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class VpnTokenDto {
   @ApiProperty({
+    type: String,
     description: 'Base64 encoded blinded token to be signed',
     example: 'fd78a...',
     minLength: 100,

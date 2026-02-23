@@ -65,8 +65,8 @@ export class VPNConfigService implements OnModuleInit {
 
   constructor(
     @Inject(ConfigService) private configService: ConfigService,
-    private prisma: PrismaService,
-    private cryptoService: CryptoService,
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(CryptoService) private cryptoService: CryptoService,
   ) {}
 
   async onModuleInit() {

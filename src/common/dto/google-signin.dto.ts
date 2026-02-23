@@ -3,6 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class GoogleSignInDto {
   @ApiProperty({
+    type: String,
     description: 'Google ID token for authentication',
     example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjZm...',
   })
@@ -11,6 +12,7 @@ export class GoogleSignInDto {
   idToken: string;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Device fingerprint for fraud detection',
     example: 'a1b2c3d4e5f6...',
   })
@@ -19,6 +21,7 @@ export class GoogleSignInDto {
   deviceFingerprint?: string;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Device platform (ios, android, web)',
     example: 'ios',
   })

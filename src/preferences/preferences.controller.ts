@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Inject } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import {
   ApiStandardResponse,
@@ -12,7 +12,10 @@ import { ServerLocationPreferenceBodyDto } from '../common/dto/server-location-p
 @Controller('v1/user/preferences')
 @ApiStandardErrorResponse()
 export class PreferencesController {
-  constructor(private readonly preferencesService: PreferencesService) {}
+  constructor(
+    @Inject(PreferencesService)
+    private readonly preferencesService: PreferencesService,
+  ) {}
 
   @Post('server-locations')
   @UseGuards(OptionalSessionGuard)

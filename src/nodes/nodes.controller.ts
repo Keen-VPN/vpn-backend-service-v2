@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Inject } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -15,7 +15,10 @@ import { NodeAuthGuard } from '../auth/guards/node-auth.guard';
 @UseGuards(NodeAuthGuard)
 @Controller('nodes')
 export class NodesController {
-  constructor(private readonly nodesService: NodesService) {}
+  constructor(
+    @Inject(NodesService)
+    private readonly nodesService: NodesService,
+  ) {}
 
   @Post('register')
   @ApiOperation({ summary: 'Register a new VPN exit node' })

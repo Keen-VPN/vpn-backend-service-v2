@@ -3,6 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class VpnCredentialDto {
   @ApiProperty({
+    type: String,
     description: 'The original token (before blinding), base64 encoded',
     example: 'uKj...',
   })
@@ -12,6 +13,7 @@ export class VpnCredentialDto {
   token: string; // The original token (before blinding)
 
   @ApiProperty({
+    type: String,
     description:
       'The blind-signed signature (after unblinding), base64 encoded',
     example: 'MEUCIQD...',
@@ -22,6 +24,7 @@ export class VpnCredentialDto {
   signature: string; // The blind-signed signature (after unblinding)
 
   @ApiProperty({
+    type: String,
     description: 'The VPN server ID to connect to using these credentials',
     example: 'us-east-1',
   })

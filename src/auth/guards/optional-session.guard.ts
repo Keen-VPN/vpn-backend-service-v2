@@ -16,7 +16,7 @@ import * as jwt from 'jsonwebtoken';
 export class OptionalSessionGuard implements CanActivate {
   constructor(
     @Inject(ConfigService) private configService: ConfigService,
-    private prisma: PrismaService,
+    @Inject(PrismaService) private prisma: PrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

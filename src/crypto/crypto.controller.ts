@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Get,
   ForbiddenException,
+  Inject,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -29,7 +30,8 @@ import { SubscriptionService } from '../subscription/subscription.service';
 @Controller('auth')
 export class CryptoController {
   constructor(
-    private readonly cryptoService: CryptoService,
+    @Inject(CryptoService) private readonly cryptoService: CryptoService,
+    @Inject(SubscriptionService)
     private readonly subscriptionService: SubscriptionService,
   ) {}
 

@@ -1,13 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class TrialStatusDto {
-  @ApiProperty({ example: true, description: 'Is trial active' })
+  @ApiProperty({ type: Boolean, example: true, description: 'Is trial active' })
   active: boolean;
 
-  @ApiProperty({ example: 'premium', description: 'Trial tier' })
+  @ApiProperty({ type: String, example: 'premium', description: 'Trial tier' })
   tier: string;
 
   @ApiProperty({
+    type: String,
     example: '2023-01-01T00:00:00.000Z',
     description: 'Trial start date',
     required: false,
@@ -15,6 +16,7 @@ export class TrialStatusDto {
   startsAt: string | null;
 
   @ApiProperty({
+    type: String,
     example: '2023-01-08T00:00:00.000Z',
     description: 'Trial end date',
     required: false,
@@ -22,6 +24,7 @@ export class TrialStatusDto {
   endsAt: string | null;
 
   @ApiProperty({
+    type: Number,
     example: 7,
     description: 'Days remaining in trial',
     required: false,

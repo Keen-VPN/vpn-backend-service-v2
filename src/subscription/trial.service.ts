@@ -29,7 +29,7 @@ export interface TrialStatus {
 @Injectable()
 export class TrialService {
   constructor(
-    private prisma: PrismaService,
+    @Inject(PrismaService) private prisma: PrismaService,
     @Inject(ConfigService) private configService: ConfigService,
   ) {}
 

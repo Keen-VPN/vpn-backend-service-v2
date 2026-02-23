@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Body,
+  Inject,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AppleService } from './apple.service';
@@ -16,7 +17,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 @ApiTags('Apple Webhook')
 @Controller('payment/apple')
 export class AppleWebhookController {
-  constructor(private appleService: AppleService) {}
+  constructor(@Inject(AppleService) private appleService: AppleService) {}
 
   @Post('webhook')
   @HttpCode(HttpStatus.OK)

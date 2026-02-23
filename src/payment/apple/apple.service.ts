@@ -18,7 +18,7 @@ const APPLE_RECEIPT_URLS = {
 export class AppleService {
   constructor(
     @Inject(ConfigService) private configService: ConfigService,
-    private prisma: PrismaService,
+    @Inject(PrismaService) private prisma: PrismaService,
     @Inject(forwardRef(() => TrialService))
     private trialService: TrialService,
   ) {}

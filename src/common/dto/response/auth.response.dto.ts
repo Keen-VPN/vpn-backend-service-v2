@@ -4,13 +4,18 @@ import { SubscriptionDetailsDto } from './subscription.response.dto';
 import { TrialStatusDto } from './trial.response.dto';
 
 export class AuthResponseDto {
-  @ApiProperty({ description: 'Operation success status' })
+  @ApiProperty({
+    type: Boolean,
+    description: 'Operation success status',
+    required: false,
+  })
   success?: boolean;
 
   @ApiProperty({ type: UserResponseDto, description: 'User details' })
   user: UserResponseDto;
 
   @ApiProperty({
+    type: String,
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
     description: 'Session JWT token',
   })
@@ -25,6 +30,7 @@ export class AuthResponseDto {
   subscription: SubscriptionDetailsDto | null;
 
   @ApiProperty({
+    type: String,
     example: 'google',
     description: 'Authentication method',
     required: false,
@@ -33,7 +39,7 @@ export class AuthResponseDto {
 }
 
 export class VerifySessionResponseDto {
-  @ApiProperty({ description: 'Operation success status' })
+  @ApiProperty({ type: Boolean, description: 'Operation success status' })
   success: boolean;
 
   @ApiProperty({ type: UserResponseDto, description: 'User details' })
@@ -57,6 +63,10 @@ export class VerifySessionResponseDto {
 }
 
 export class LogoutResponseDto {
-  @ApiProperty({ example: true, description: 'Logout success status' })
+  @ApiProperty({
+    type: Boolean,
+    example: true,
+    description: 'Logout success status',
+  })
   success: boolean;
 }

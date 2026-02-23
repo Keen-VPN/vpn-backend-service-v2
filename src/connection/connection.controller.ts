@@ -1,4 +1,11 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Inject,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ConnectionService } from './connection.service';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
@@ -8,7 +15,10 @@ import { Throttle } from '@nestjs/throttler';
 @ApiTags('Connection')
 @Controller('connection')
 export class ConnectionController {
-  constructor(private readonly connectionService: ConnectionService) {}
+  constructor(
+    @Inject(ConnectionService)
+    private readonly connectionService: ConnectionService,
+  ) {}
 
   @Post('session')
   @HttpCode(HttpStatus.OK)

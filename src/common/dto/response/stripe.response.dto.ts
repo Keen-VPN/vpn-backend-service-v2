@@ -1,14 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class StripeCheckoutResponseDto {
-  @ApiProperty({ description: 'Checkout URL', required: false, nullable: true })
+  @ApiProperty({
+    type: String,
+    description: 'Checkout URL',
+    required: false,
+    nullable: true,
+  })
   url: string | null;
 
-  @ApiProperty({ description: 'Session ID' })
+  @ApiProperty({ type: String, description: 'Session ID' })
   sessionId: string;
 }
 
 export class StripePortalResponseDto {
-  @ApiProperty({ description: 'Portal URL' })
+  @ApiProperty({ type: String, description: 'Portal URL' })
   url: string;
 }
