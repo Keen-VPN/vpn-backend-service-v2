@@ -123,6 +123,15 @@
   },
   "overrides": {
     "fast-xml-parser": "5.3.6",
-    "@aws-sdk/core": "3.973.10"
+    "@aws-sdk/core": "3.973.10",
+    "@angular-devkit/core": {
+      "ajv": "^8.18.0"
+    },
+    "glob": {
+      "minimatch": "^10.2.2"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^9.0.5"
+    }
   }
 }
