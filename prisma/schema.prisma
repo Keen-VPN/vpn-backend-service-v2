@@ -16,19 +16,19 @@ model User {
   displayName             String?                  @map("display_name")
   provider                String                   @default("google")
   emailVerified           Boolean                  @default(false) @map("email_verified")
-  createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
   stripeCustomerId        String?                  @unique @map("stripe_customer_id")
   trialActive             Boolean                  @default(false) @map("trial_active")
-  trialStartsAt            DateTime?                @map("trial_starts_at") @db.Timestamptz
-  trialEndsAt              DateTime?                @map("trial_ends_at") @db.Timestamptz
-  trialTier                String?                  @map("trial_tier")
-  subscriptions           Subscription[]
+  trialStartsAt           DateTime?                @map("trial_starts_at") @db.Timestamptz(6)
+  trialEndsAt             DateTime?                @map("trial_ends_at") @db.Timestamptz(6)
+  trialTier               String?                  @map("trial_tier")
   appleIAPPurchases       AppleIAPPurchase[]
-  trialGrant              TrialGrant?
-  deviceTrialFingerprints DeviceTrialFingerprint[]
-  pushTokens              PushToken[]
   nodeClients             NodeClient[]
+  pushTokens              PushToken[]
+  subscriptions           Subscription[]
+  deviceTrialFingerprints DeviceTrialFingerprint[]
+  trialGrant              TrialGrant?
 
   @@map("users")
 }
@@ -44,12 +44,12 @@ model Subscription {
   priceAmount                Decimal?  @map("price_amount") @db.Decimal(10, 2)
   priceCurrency              String?   @default("USD") @map("price_currency")
   billingPeriod              String?   @map("billing_period")
-  currentPeriodStart         DateTime? @map("current_period_start") @db.Timestamptz
-  currentPeriodEnd           DateTime? @map("current_period_end") @db.Timestamptz
+  currentPeriodStart         DateTime? @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd           DateTime? @map("current_period_end") @db.Timestamptz(6)
   cancelAtPeriodEnd          Boolean   @default(false) @map("cancel_at_period_end")
-  cancelledAt                DateTime? @map("cancelled_at") @db.Timestamptz
-  createdAt                  DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  cancelledAt                DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  createdAt                  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   appleEnvironment           String?   @map("apple_environment")
   appleOriginalTransactionId String?   @map("apple_original_transaction_id")
   appleProductId             String?   @map("apple_product_id")
@@ -74,15 +74,15 @@ model AppleIAPPurchase {
   originalTransactionId String    @unique @map("original_transaction_id")
   productId             String    @map("product_id")
   environment           String?   @map("environment")
-  purchaseDate          DateTime  @map("purchase_date") @db.Timestamptz
-  expiresDate           DateTime? @map("expires_date") @db.Timestamptz
+  purchaseDate          DateTime  @map("purchase_date") @db.Timestamptz(6)
+  expiresDate           DateTime? @map("expires_date") @db.Timestamptz(6)
   receiptData           String?   @map("receipt_data")
   linkedUserId          String?   @map("linked_user_id")
   linkedEmail           String?   @map("linked_email")
-  linkedAt              DateTime? @map("linked_at") @db.Timestamptz
-  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  linkedUser            User?     @relation(fields: [linkedUserId], references: [id], onDelete: SetNull)
+  linkedAt              DateTime? @map("linked_at") @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  linkedUser            User?     @relation(fields: [linkedUserId], references: [id])
 
   @@index([linkedUserId])
   @@map("apple_iap_purchases")
@@ -91,8 +91,8 @@ model AppleIAPPurchase {
 model ConnectionSession {
   id                 String            @id @default(uuid())
   clientSessionId    String            @unique @map("client_session_id")
-  sessionStart       DateTime          @map("session_start") @db.Timestamptz
-  sessionEnd         DateTime?         @map("session_end") @db.Timestamptz
+  sessionStart       DateTime          @map("session_start") @db.Timestamptz(6)
+  sessionEnd         DateTime?         @map("session_end") @db.Timestamptz(6)
   durationSeconds    Int               @default(0) @map("duration_seconds")
   serverLocation     String?           @map("server_location")
   platform           String
@@ -104,9 +104,9 @@ model ConnectionSession {
   eventType          EventType         @default(SESSION_START) @map("event_type")
   protocol           String?           @default("wireguard")
   networkType        String?           @map("network_type")
-  heartbeatTimestamp DateTime?         @map("heartbeat_timestamp") @db.Timestamptz
-  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+  heartbeatTimestamp DateTime?         @map("heartbeat_timestamp") @db.Timestamptz(6)
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([sessionStart])
   @@index([sessionEnd])
@@ -123,7 +123,7 @@ model ConnectionSession {
 
 model SessionAggregate {
   id               String   @id @default(uuid())
-  aggregationDate  DateTime @map("aggregation_date") @db.Timestamptz
+  aggregationDate  DateTime @map("aggregation_date") @db.Timestamptz(6)
   platform         String
   serverLocation   String   @map("server_location")
   subscriptionTier String?  @map("subscription_tier")
@@ -133,8 +133,8 @@ model SessionAggregate {
   avgDuration      Int      @map("avg_duration")
   avgBytes         BigInt   @map("avg_bytes")
   uniqueUsers      Int      @map("unique_users")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@unique([aggregationDate, platform, serverLocation, subscriptionTier])
   @@index([aggregationDate])
@@ -146,7 +146,7 @@ model SessionAggregate {
 
 model SalesContact {
   id                       String   @id @default(uuid())
-  referenceId              String   @unique @map("reference_id") // Human-readable reference for customer
+  referenceId              String   @unique @map("reference_id")
   companyName              String   @map("company_name")
   workEmail                String   @map("work_email")
   teamSize                 Int      @map("team_size")
@@ -157,12 +157,12 @@ model SalesContact {
   preferredContactMethod   String?  @map("preferred_contact_method")
   preferredContactTime     String?  @map("preferred_contact_time")
   message                  String?  @map("message")
-  userAgent                String?  @map("user_agent") // For basic request tracking
-  status                   String   @default("pending") @map("status") // pending, contacted, converted, spam
+  userAgent                String?  @map("user_agent")
+  status                   String   @default("pending") @map("status")
   salesTeamNotified        Boolean  @default(false) @map("sales_team_notified")
   customerConfirmationSent Boolean  @default(false) @map("customer_confirmation_sent")
-  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt                DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([workEmail])
   @@index([referenceId])
@@ -171,15 +171,14 @@ model SalesContact {
   @@map("sales_contacts")
 }
 
-
 model VpnConfig {
   id        String   @id @default(uuid())
   version   String   @unique
-  payload   Json     @db.JsonB
+  payload   Json
   etag      String?  @map("etag")
   isActive  Boolean  @default(false) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([isActive, createdAt])
   @@map("vpn_configs")
@@ -189,10 +188,10 @@ model TrialGrant {
   id         String   @id @default(uuid())
   userId     String   @unique @map("user_id")
   deviceHash String   @map("device_hash")
-  grantedAt  DateTime @default(now()) @map("granted_at") @db.Timestamptz
-  expiresAt  DateTime @map("expires_at") @db.Timestamptz
+  grantedAt  DateTime @default(now()) @map("granted_at") @db.Timestamptz(6)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
   channel    String   @default("auto")
-  metadata   Json?    @db.JsonB
+  metadata   Json?
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([deviceHash], map: "trial_grants_device_hash")
@@ -204,8 +203,8 @@ model DeviceTrialFingerprint {
   userId    String   @map("user_id")
   hash      String   @unique
   platform  String?
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  lastSeen  DateTime @default(now()) @map("last_seen") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeen  DateTime @default(now()) @map("last_seen") @db.Timestamptz(6)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId], map: "trial_device_fingerprints_user_id")
@@ -219,8 +218,8 @@ model PushToken {
   deviceHash  String?  @map("device_hash")
   platform    String?  @map("platform")
   environment String?  @map("environment")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId], map: "push_tokens_user_id")
@@ -231,10 +230,43 @@ model ServerLocationPreference {
   id        String   @id @default(uuid())
   region    String
   reason    String
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  @@index([region])
+  @@index([createdAt])
   @@map("server_location_preferences")
+}
+
+model Node {
+  id            String       @id @default(uuid())
+  name          String?
+  publicKey     String       @unique @map("public_key")
+  region        String
+  ip            String?      @map("ip")
+  status        String       @default("ONLINE")
+  lastHeartbeat DateTime?    @map("last_heartbeat") @db.Timestamptz(6)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  clients       NodeClient[]
+
+  @@index([region])
+  @@index([status])
+  @@map("nodes")
+}
+
+model NodeClient {
+  id         String   @id @default(uuid())
+  nodeId     String   @map("node_id")
+  userId     String   @map("user_id")
+  allowedIps String   @map("allowed_ips")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  node       Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@index([userId])
+  @@map("node_clients")
 }
 
 enum TerminationReason {
@@ -251,35 +283,3 @@ enum EventType {
 
   @@map("event_type")
 }
-
-model Node {
-  id            String       @id @default(uuid())
-  name          String?
-  publicKey     String       @unique @map("public_key")
-  region        String
-  ip            String?      @map("ip")
-  status        String       @default("ONLINE") // ONLINE, OFFLINE, DRAINING
-  lastHeartbeat DateTime?    @map("last_heartbeat") @db.Timestamptz
-  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz
-  clients       NodeClient[]
-
-  @@index([region])
-  @@index([status])
-  @@map("nodes")
-}
-
-model NodeClient {
-  id         String   @id @default(uuid())
-  nodeId     String   @map("node_id")
-  userId     String   @map("user_id")
-  allowedIps String   @map("allowed_ips")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
-  node       Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([nodeId])
-  @@index([userId])
-  @@map("node_clients")
-}
-
