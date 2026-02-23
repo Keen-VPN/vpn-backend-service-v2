@@ -66,7 +66,12 @@ async function bootstrap() {
   // CORS configuration
   const allowedOrigins = configService
     .get<string>('CORS_ORIGINS')
-    ?.split(',') || ['http://localhost:3000', 'http://localhost:5173'];
+    ?.split(',') || [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://staging.vpnkeen.com',
+    'https://vpnkeen.com',
+  ];
 
   app.enableCors({
     origin: (
