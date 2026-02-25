@@ -1,4 +1,11 @@
-import { Body, Controller, Post, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  HttpCode,
+  HttpStatus,
+  Inject,
+} from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SalesContactService } from './sales-contact.service';
 import { CreateSalesContactDto } from './dto/create-sales-contact.dto';
@@ -6,7 +13,10 @@ import { CreateSalesContactDto } from './dto/create-sales-contact.dto';
 @ApiTags('Sales Contact')
 @Controller('sales-contact')
 export class SalesContactController {
-  constructor(private readonly salesContactService: SalesContactService) {}
+  constructor(
+    @Inject(SalesContactService)
+    private readonly salesContactService: SalesContactService,
+  ) {}
 
   @Post('submit')
   @HttpCode(HttpStatus.CREATED)

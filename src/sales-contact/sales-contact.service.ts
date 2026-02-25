@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSalesContactDto } from './dto/create-sales-contact.dto';
 import { ContactStatus } from '@prisma/client';
@@ -7,7 +7,7 @@ import { ContactStatus } from '@prisma/client';
 export class SalesContactService {
   private readonly logger = new Logger(SalesContactService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async submitContact(dto: CreateSalesContactDto) {
     const { workEmail } = dto;
