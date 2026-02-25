@@ -1,16 +1,20 @@
 /*
-  Warnings:
+Warnings:
 
-  - The values [closed] on the enum `contact_status` will be removed. If these variants are still used in the database, this will fail.
+- The values [closed] on the enum `contact_status` will be removed. If these variants are still used in the database, this will fail.
 
 */
 -- AlterEnum
 BEGIN;
+
 CREATE TYPE "contact_status_new" AS ENUM ('pending', 'contacted', 'converted', 'spam');
-ALTER TABLE "sales_contacts" ALTER COLUMN "status" TYPE "contact_status_new" USING ("status"::text::"contact_status_new");
+
 ALTER TYPE "contact_status" RENAME TO "contact_status_old";
+
 ALTER TYPE "contact_status_new" RENAME TO "contact_status";
+
 DROP TYPE "contact_status_old";
+
 COMMIT;
 
 -- CreateTable
@@ -32,21 +36,20 @@ CREATE TABLE "sales_contacts" (
     "customer_confirmation_sent" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
-
     CONSTRAINT "sales_contacts_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "sales_contacts_reference_id_key" ON "sales_contacts"("reference_id");
+CREATE UNIQUE INDEX "sales_contacts_reference_id_key" ON "sales_contacts" ("reference_id");
 
 -- CreateIndex
-CREATE INDEX "sales_contacts_work_email_idx" ON "sales_contacts"("work_email");
+CREATE INDEX "sales_contacts_work_email_idx" ON "sales_contacts" ("work_email");
 
 -- CreateIndex
-CREATE INDEX "sales_contacts_reference_id_idx" ON "sales_contacts"("reference_id");
+CREATE INDEX "sales_contacts_reference_id_idx" ON "sales_contacts" ("reference_id");
 
 -- CreateIndex
-CREATE INDEX "sales_contacts_created_at_idx" ON "sales_contacts"("created_at");
+CREATE INDEX "sales_contacts_created_at_idx" ON "sales_contacts" ("created_at");
 
 -- CreateIndex
-CREATE INDEX "sales_contacts_status_idx" ON "sales_contacts"("status");
+CREATE INDEX "sales_contacts_status_idx" ON "sales_contacts" ("status");
