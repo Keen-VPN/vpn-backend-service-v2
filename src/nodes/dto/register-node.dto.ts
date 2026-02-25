@@ -37,7 +37,7 @@ export class RegisterNodeDto {
   @ApiProperty({
     description: 'The current status of the node',
     example: 'ONLINE',
-    enum: ['ONLINE', 'OFFLINE', 'DRAINING'],
+    enum: ['ONLINE', 'OFFLINE'],
   })
   @IsString()
   @IsNotEmpty()

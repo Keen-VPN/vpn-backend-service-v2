@@ -12,6 +12,11 @@ export class NodeHeartbeatDto {
 
   @ApiPropertyOptional({
     description: 'System metrics reported by the node',
+    example: {
+      cpu_usage: 0.15,
+      ram_usage: 0.45,
+      bandwidth_stats: { rx: 1234567, tx: 7654321 },
+    },
   })
   @IsObject()
   @IsOptional()

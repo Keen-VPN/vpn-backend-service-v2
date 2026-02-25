@@ -109,8 +109,8 @@ async function bootstrap() {
 
   // Swagger/OpenAPI setup
   const config = new DocumentBuilder()
-    .setTitle('Keen Backend API')
-    .setDescription('API documentation for Keen Backend - Auth Service')
+    .setTitle('Keen VPN API')
+    .setDescription('Core Backend API for Keen VPN services')
     .setVersion('1.0')
     .addBearerAuth(
       {

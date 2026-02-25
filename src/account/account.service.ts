@@ -2,24 +2,26 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  Inject,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SubscriptionStatus, User, Subscription } from '@prisma/client';
 import { SafeLogger } from '../common/utils/logger.util';
 import PDFDocument from 'pdfkit';
-
-import { Inject } from '@nestjs/common';
 
 @Injectable()
 export class AccountService {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
-  async getProfileByFirebaseUid(firebaseUid: string) {
+  async getProfileByFirebaseUid(
+    firebaseUid: string,
+  ): Promise<User & { subscriptions: Subscription[] }> {
     const user = await this.prisma.user.findUnique({
       where: { firebaseUid },
       include: {
         subscriptions: {
           where: {
-            status: 'active',
+            status: SubscriptionStatus.ACTIVE,
             OR: [
               { currentPeriodEnd: null },
               { currentPeriodEnd: { gte: new Date() } },
@@ -44,7 +46,7 @@ export class AccountService {
       include: {
         subscriptions: {
           where: {
-            status: 'active',
+            status: SubscriptionStatus.ACTIVE,
             OR: [
               { currentPeriodEnd: null },
               { currentPeriodEnd: { gte: new Date() } },
@@ -73,7 +75,7 @@ export class AccountService {
       subscription: activeSubscription
         ? {
             id: activeSubscription.id,
-            status: activeSubscription.status,
+            status: SubscriptionStatus.ACTIVE,
             planName: activeSubscription.planName,
             currentPeriodEnd: activeSubscription.currentPeriodEnd,
             cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
@@ -123,7 +125,7 @@ export class AccountService {
     };
   }
 
-  async getPayments(userId: string) {
+  async getPayments(userId: string): Promise<{ payments: any[] }> {
     // Verify user exists
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

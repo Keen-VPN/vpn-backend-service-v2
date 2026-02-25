@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { SubscriptionService } from '../../../src/subscription/subscription.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { SubscriptionStatus } from '@prisma/client';
 import { TrialService } from '../../../src/subscription/trial.service';
 import { PlansConfigService } from '../../../src/subscription/config/plans.config';
 import { ConfigService } from '@nestjs/config';
@@ -75,7 +76,7 @@ describe('SubscriptionService', () => {
       const user = createMockUser();
       const subscription = createMockSubscription({
         userId: user.id,
-        status: 'active',
+        status: SubscriptionStatus.ACTIVE,
       });
       const sessionToken = 'valid_token';
 
@@ -93,7 +94,7 @@ describe('SubscriptionService', () => {
       expect(result.success).toBe(true);
       expect(result.hasActiveSubscription).toBe(true);
       expect(result.subscription).toBeDefined();
-      expect(result.subscription?.status).toBe('active');
+      expect(result.subscription?.status).toBe(SubscriptionStatus.ACTIVE);
     });
 
     it('should return subscription status without active subscription', async () => {
@@ -115,7 +116,7 @@ describe('SubscriptionService', () => {
       expect(result.hasActiveSubscription).toBe(false);
       expect(result.subscription).toEqual(
         expect.objectContaining({
-          status: 'inactive',
+          status: SubscriptionStatus.INACTIVE,
         }),
       );
     });
@@ -154,7 +155,7 @@ describe('SubscriptionService', () => {
       const user = createMockUser();
       const subscription = createMockSubscription({
         userId: user.id,
-        status: 'active',
+        status: SubscriptionStatus.ACTIVE,
       });
 
       mockPrisma.user.findUnique.mockResolvedValue(user);

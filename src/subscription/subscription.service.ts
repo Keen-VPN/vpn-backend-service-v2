@@ -6,6 +6,7 @@ import { TrialService } from './trial.service';
 import { PlansConfigService } from './config/plans.config';
 import { serializeTrialStatus } from './trial.util';
 import * as jwt from 'jsonwebtoken';
+import { SubscriptionStatus } from '@prisma/client';
 
 @Injectable()
 export class SubscriptionService {
@@ -99,7 +100,7 @@ export class SubscriptionService {
         where: {
           userId: user.id,
           status: {
-            in: ['active', 'trialing'], // Include both active and trialing subscriptions
+            in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING], // Include both active and trialing subscriptions
           },
           OR: [
             { currentPeriodEnd: null },
@@ -112,8 +113,8 @@ export class SubscriptionService {
       // Check if subscription is active (DB subscription or linked Apple IAP)
       let hasActiveSubscription =
         activeSubscription !== null &&
-        (activeSubscription.status === 'active' ||
-          activeSubscription.status === 'trialing');
+        (activeSubscription.status === SubscriptionStatus.ACTIVE ||
+          activeSubscription.status === SubscriptionStatus.TRIALING);
 
       if (!hasActiveSubscription) {
         const validIAP = await this.prisma.appleIAPPurchase.findFirst({
@@ -144,7 +145,7 @@ export class SubscriptionService {
         { service: 'SubscriptionService', userId: user.id },
         {
           hasActiveSubscription: !!activeSubscription,
-          status: activeSubscription?.status || 'none',
+          status: activeSubscription?.status || 'NONE',
         },
       );
 
@@ -164,7 +165,7 @@ export class SubscriptionService {
               subscriptionType: activeSubscription.subscriptionType,
             }
           : {
-              status: 'inactive',
+              status: SubscriptionStatus.INACTIVE,
               plan: '',
               endDate: '',
               customerId: '',
@@ -197,7 +198,7 @@ export class SubscriptionService {
       where: {
         userId,
         status: {
-          in: ['active', 'trialing'], // Include both active and trialing subscriptions
+          in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING], // Include both active and trialing subscriptions
         },
         OR: [
           { currentPeriodEnd: null },

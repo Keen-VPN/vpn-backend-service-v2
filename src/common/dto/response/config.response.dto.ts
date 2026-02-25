@@ -237,3 +237,67 @@ export class VPNCredentialsResponseDto {
   })
   certificatePassword?: string;
 }
+
+export class ActiveNodeDto {
+  @ApiProperty({ type: String, description: 'Node ID', example: 'us-east-1' })
+  id: string;
+
+  @ApiProperty({
+    type: String,
+    description: 'WireGuard public key of the node',
+    example: 'abcd...xyz',
+  })
+  publicKey: string;
+
+  @ApiProperty({
+    type: String,
+    description: 'Public IP of the node',
+    example: '1.2.3.4',
+  })
+  ip: string;
+
+  @ApiProperty({
+    type: Number,
+    description: 'Node health score (0-100)',
+    example: 95,
+  })
+  healthScore: number;
+}
+
+export class ActiveNodesResponseDto {
+  @ApiProperty({
+    type: String,
+    example: 'ok',
+    description: 'Status of the request',
+  })
+  status: string;
+
+  @ApiProperty({
+    type: [ActiveNodeDto],
+    description: 'List of online VPN nodes',
+  })
+  nodes: ActiveNodeDto[];
+}
+
+export class WireGuardCredentialsResponseDto {
+  @ApiProperty({
+    type: String,
+    description: 'WireGuard public key of the server',
+    example: 'abcd...xyz',
+  })
+  publicKey: string;
+
+  @ApiProperty({
+    type: String,
+    description: 'Public IP address of the server',
+    example: '1.2.3.4',
+  })
+  ip: string;
+
+  @ApiProperty({
+    type: String,
+    description: 'Internal IP address assigned to the client',
+    example: '10.66.0.2/32',
+  })
+  internalIp: string;
+}

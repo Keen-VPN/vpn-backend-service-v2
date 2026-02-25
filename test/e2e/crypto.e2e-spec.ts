@@ -15,6 +15,7 @@ import {
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { FirebaseConfig } from '../../src/config/firebase.config';
 import { ConfigService } from '@nestjs/config';
+import { SubscriptionStatus } from '@prisma/client';
 // No need to mock crypto - we use real RSA keys generated in jest.setup.ts
 
 describe('Crypto (e2e)', () => {
@@ -68,7 +69,7 @@ describe('Crypto (e2e)', () => {
       // Mock Prisma responses for SubscriptionService
       mockPrisma.user.findUnique.mockResolvedValue(user as any);
       mockPrisma.subscription.findFirst.mockResolvedValue({
-        status: 'active',
+        status: SubscriptionStatus.ACTIVE,
         trialActive: false,
       } as any);
 
@@ -110,7 +111,7 @@ describe('Crypto (e2e)', () => {
       // Mock auth success, but payload validation should fail
       mockPrisma.user.findUnique.mockResolvedValue(user as any);
       mockPrisma.subscription.findFirst.mockResolvedValue({
-        status: 'active',
+        status: SubscriptionStatus.ACTIVE,
       } as any);
 
       await request(app.getHttpServer())

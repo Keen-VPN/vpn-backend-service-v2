@@ -7,6 +7,7 @@ import {
   isBeforeUtc,
   computeTrialDaysRemaining,
 } from './trial-helpers';
+import { SubscriptionStatus } from '@prisma/client';
 
 const TRIAL_DURATION_DAYS = 30;
 const TRIAL_TIER_NAME = 'free_trial';
@@ -92,7 +93,7 @@ export class TrialService {
         where: {
           userId: user.id,
           status: {
-            in: ['active', 'trialing'], // Include both active and trialing subscriptions
+            in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING], // Include both active and trialing subscriptions
           },
           OR: [
             { currentPeriodEnd: null },
@@ -308,7 +309,7 @@ export class TrialService {
       where: {
         userId,
         status: {
-          in: ['active', 'trialing'],
+          in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING],
         },
         OR: [
           { currentPeriodEnd: null },

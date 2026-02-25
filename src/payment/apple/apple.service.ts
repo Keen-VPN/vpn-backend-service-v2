@@ -6,6 +6,7 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SubscriptionStatus } from '@prisma/client';
 import { SafeLogger } from '../../common/utils/logger.util';
 import { TrialService } from '../../subscription/trial.service';
 
@@ -103,7 +104,7 @@ export class AppleService {
         await this.prisma.subscription.update({
           where: { id: subscription.id },
           data: {
-            status: 'cancelled',
+            status: SubscriptionStatus.CANCELLED,
             cancelledAt: new Date(),
           },
         });
@@ -183,7 +184,9 @@ export class AppleService {
           appleProductId: productId,
           appleEnvironment: environment,
           status:
-            expiresDate && expiresDate > new Date() ? 'active' : 'inactive',
+            expiresDate && expiresDate > new Date()
+              ? SubscriptionStatus.ACTIVE
+              : SubscriptionStatus.INACTIVE,
           planId: productId,
           planName: this.getPlanName(productId),
           priceAmount: this.getPlanPrice(productId),
@@ -223,7 +226,9 @@ export class AppleService {
       // Update existing subscription
       if (
         existing.status !==
-          (expiresDate && expiresDate > new Date() ? 'active' : 'inactive') ||
+          (expiresDate && expiresDate > new Date()
+            ? SubscriptionStatus.ACTIVE
+            : SubscriptionStatus.INACTIVE) ||
         (expiresDate &&
           existing.currentPeriodEnd?.getTime() !== expiresDate.getTime())
       ) {
@@ -231,7 +236,9 @@ export class AppleService {
           where: { id: existing.id },
           data: {
             status:
-              expiresDate && expiresDate > new Date() ? 'active' : 'inactive',
+              expiresDate && expiresDate > new Date()
+                ? SubscriptionStatus.ACTIVE
+                : SubscriptionStatus.INACTIVE,
             currentPeriodEnd: expiresDate || undefined,
           },
         });
@@ -428,7 +435,9 @@ export class AppleService {
             appleOriginalTransactionId: originalTransactionId,
             appleProductId: productId,
             appleEnvironment: purchase.environment,
-            status: isActive ? 'active' : 'inactive',
+            status: isActive
+              ? SubscriptionStatus.ACTIVE
+              : SubscriptionStatus.INACTIVE,
             planId: productId,
             planName: this.getPlanName(productId),
             priceAmount: this.getPlanPrice(productId),
@@ -467,19 +476,24 @@ export class AppleService {
       } else {
         // Update existing subscription if status changed
         if (
-          existingSubscription.status !== (isActive ? 'active' : 'inactive')
+          existingSubscription.status !==
+          (isActive ? SubscriptionStatus.ACTIVE : SubscriptionStatus.INACTIVE)
         ) {
           await this.prisma.subscription.update({
             where: { id: existingSubscription.id },
             data: {
-              status: isActive ? 'active' : 'inactive',
+              status: isActive
+                ? SubscriptionStatus.ACTIVE
+                : SubscriptionStatus.INACTIVE,
               currentPeriodEnd: expiresDate || undefined,
             },
           });
           SafeLogger.info('Subscription status updated for linked purchase', {
             subscriptionId: existingSubscription.id,
             transactionId,
-            newStatus: isActive ? 'active' : 'inactive',
+            newStatus: isActive
+              ? SubscriptionStatus.ACTIVE
+              : SubscriptionStatus.INACTIVE,
           });
         }
       }
@@ -493,7 +507,9 @@ export class AppleService {
         success: true,
         message: 'Purchase linked successfully',
         subscription: {
-          status: isActive ? 'active' : 'inactive',
+          status: isActive
+            ? SubscriptionStatus.ACTIVE
+            : SubscriptionStatus.INACTIVE,
           planName: this.getPlanName(productId),
           currentPeriodEnd: expiresDate,
         },
@@ -722,7 +738,9 @@ export class AppleService {
                 appleOriginalTransactionId: txInfo.originalTransactionId,
                 appleProductId: txInfo.productId,
                 appleEnvironment: purchase.environment,
-                status: isActive ? 'active' : 'inactive',
+                status: isActive
+                  ? SubscriptionStatus.ACTIVE
+                  : SubscriptionStatus.INACTIVE,
                 planId: txInfo.productId,
                 planName: this.getPlanName(txInfo.productId),
                 priceAmount: this.getPlanPrice(txInfo.productId),
@@ -738,7 +756,9 @@ export class AppleService {
               subscriptionId,
               transactionId: txInfo.transactionId,
               userId,
-              status: isActive ? 'active' : 'inactive',
+              status: isActive
+                ? SubscriptionStatus.ACTIVE
+                : SubscriptionStatus.INACTIVE,
             });
 
             // Grant trial if eligible (after subscription is created)
@@ -769,19 +789,26 @@ export class AppleService {
             subscriptionId = existingSubscription.id;
             // Update subscription status if needed
             if (
-              existingSubscription.status !== (isActive ? 'active' : 'inactive')
+              existingSubscription.status !==
+              (isActive
+                ? SubscriptionStatus.ACTIVE
+                : SubscriptionStatus.INACTIVE)
             ) {
               await this.prisma.subscription.update({
                 where: { id: existingSubscription.id },
                 data: {
-                  status: isActive ? 'active' : 'inactive',
+                  status: isActive
+                    ? SubscriptionStatus.ACTIVE
+                    : SubscriptionStatus.INACTIVE,
                   currentPeriodEnd: purchase.expiresDate || undefined,
                 },
               });
               SafeLogger.info('Subscription status updated', {
                 subscriptionId,
                 transactionId: txInfo.transactionId,
-                newStatus: isActive ? 'active' : 'inactive',
+                newStatus: isActive
+                  ? SubscriptionStatus.ACTIVE
+                  : SubscriptionStatus.INACTIVE,
               });
             }
           }
@@ -790,7 +817,9 @@ export class AppleService {
             transactionId: txInfo.transactionId,
             originalTransactionId: txInfo.originalTransactionId,
             productId: txInfo.productId,
-            status: isActive ? 'active' : 'inactive',
+            status: isActive
+              ? SubscriptionStatus.ACTIVE
+              : SubscriptionStatus.INACTIVE,
             subscriptionId,
           });
         } catch (error) {

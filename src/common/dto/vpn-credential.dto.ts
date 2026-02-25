@@ -31,4 +31,13 @@ export class VpnCredentialDto {
   @IsString()
   @IsNotEmpty()
   serverId: string; // The VPN server ID to connect to
+
+  @ApiProperty({
+    type: String,
+    description: "The client's public key for WireGuard",
+    example: 'base64...',
+  })
+  @IsString()
+  @IsNotEmpty()
+  clientPublicKey: string; // The client's public key
 }
