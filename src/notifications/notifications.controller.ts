@@ -34,13 +34,13 @@ export class NotificationsController {
   @UseGuards(SessionAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Register push notification token' })
-  @ApiBody({ type: RegisterPushTokenDto })
   @ApiResponse({
     status: 200,
     description: 'Token registered successfully',
     type: SuccessResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiBody({ type: RegisterPushTokenDto })
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async register(
     @CurrentUser() user: { uid: string },

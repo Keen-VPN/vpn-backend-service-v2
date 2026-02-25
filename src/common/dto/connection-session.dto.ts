@@ -10,7 +10,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ConnectionSessionDto {
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'Unique client-generated session ID (UUID)',
     example: '123e4567-e89b-12d3-a456-426614174000',
   })
@@ -19,7 +19,7 @@ export class ConnectionSessionDto {
   client_session_id: string;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'Event type (START, HEARTBEAT, END)',
     example: 'START',
     enum: ['START', 'HEARTBEAT', 'END'],
@@ -29,7 +29,7 @@ export class ConnectionSessionDto {
   event_type: 'START' | 'HEARTBEAT' | 'END';
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'Session start timestamp (ISO 8601)',
     example: '2024-01-01T00:00:00Z',
   })
@@ -38,7 +38,7 @@ export class ConnectionSessionDto {
   session_start: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Session end timestamp (ISO 8601)',
     example: '2024-01-01T01:00:00Z',
   })
@@ -47,7 +47,7 @@ export class ConnectionSessionDto {
   session_end?: string;
 
   @ApiProperty({
-    type: Number,
+    type: 'number',
     description: 'Duration of the session in seconds',
     example: 3600,
     minimum: 0,
@@ -57,7 +57,7 @@ export class ConnectionSessionDto {
   duration_seconds: number;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'Device platform',
     example: 'ios',
   })
@@ -66,7 +66,7 @@ export class ConnectionSessionDto {
   platform: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Client application version',
     example: '1.0.0',
   })
@@ -75,7 +75,7 @@ export class ConnectionSessionDto {
   app_version?: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Server location (Country/City)',
     example: 'United States',
   })
@@ -84,7 +84,7 @@ export class ConnectionSessionDto {
   server_location?: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'VPN Protocol used',
     example: 'wireguard',
   })
@@ -93,7 +93,7 @@ export class ConnectionSessionDto {
   protocol?: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Network type (wifi, cellular, etc.)',
     example: 'wifi',
   })
@@ -102,7 +102,7 @@ export class ConnectionSessionDto {
   network_type?: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Reason for disconnection',
     example: 'USER_TERMINATION',
   })
@@ -111,7 +111,7 @@ export class ConnectionSessionDto {
   disconnect_reason?: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'User subscription tier',
     example: 'premium',
   })
@@ -120,7 +120,7 @@ export class ConnectionSessionDto {
   subscription_tier?: string;
 
   @ApiPropertyOptional({
-    type: Number,
+    type: 'number',
     description: 'Total bytes transferred during session',
     example: 1048576,
   })

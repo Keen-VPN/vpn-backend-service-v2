@@ -3,6 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class NodeHeartbeatDto {
   @ApiProperty({
+    type: 'string',
     description: 'The Public Key of the WireGuard interface',
     example: 'abcd...xyz',
   })
@@ -11,7 +12,9 @@ export class NodeHeartbeatDto {
   publicKey: string;
 
   @ApiPropertyOptional({
+    type: 'object',
     description: 'System metrics reported by the node',
+    additionalProperties: true,
     example: {
       cpu_usage: 0.15,
       ram_usage: 0.45,

@@ -5,14 +5,14 @@ export class ApiErrorDto {
   @ApiProperty({
     description: 'Error code (HTTP status or custom code)',
     example: 400,
-    type: String,
+    type: 'string',
   })
   code: string | number;
 
   @ApiProperty({
     description: 'Error message',
     example: 'Validation failed',
-    type: String,
+    type: 'string',
   })
   message: string;
 
@@ -26,7 +26,7 @@ export class ApiErrorDto {
 
 export class ApiErrorResponseDto implements ApiErrorResponse {
   @ApiProperty({
-    type: Boolean,
+    type: 'boolean',
     example: false,
     description: 'Operation success status',
   })
@@ -38,14 +38,14 @@ export class ApiErrorResponseDto implements ApiErrorResponse {
   @ApiProperty({
     description: 'Timestamp of the error',
     example: '2023-10-27T10:00:00.000Z',
-    type: String,
+    type: 'string',
   })
   timestamp: string;
 
   @ApiProperty({
     description: 'Request path',
     example: '/api/auth/login',
-    type: String,
+    type: 'string',
   })
   path: string;
 
@@ -59,7 +59,7 @@ export class ApiErrorResponseDto implements ApiErrorResponse {
   @ApiProperty({
     description: 'Stack trace (Development only)',
     required: false,
-    type: String,
+    type: 'string',
   })
   stack?: string;
 }

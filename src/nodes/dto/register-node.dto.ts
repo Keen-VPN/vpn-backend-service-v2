@@ -3,6 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RegisterNodeDto {
   @ApiProperty({
+    type: 'string',
     description: 'The Public Key of the WireGuard interface',
     example: 'abcd...xyz',
   })
@@ -11,6 +12,7 @@ export class RegisterNodeDto {
   publicKey: string;
 
   @ApiProperty({
+    type: 'string',
     description: 'The geographical region of the node',
     example: 'us-east-1',
   })
@@ -19,6 +21,7 @@ export class RegisterNodeDto {
   region: string;
 
   @ApiPropertyOptional({
+    type: 'string',
     description: 'A friendly name for the node',
     example: 'NY-Exit-01',
   })
@@ -27,6 +30,7 @@ export class RegisterNodeDto {
   name?: string;
 
   @ApiPropertyOptional({
+    type: 'string',
     description: 'The public IP address of the node',
     example: '1.2.3.4',
   })
@@ -35,6 +39,7 @@ export class RegisterNodeDto {
   publicIp?: string;
 
   @ApiProperty({
+    type: 'string',
     description: 'The current status of the node',
     example: 'ONLINE',
     enum: ['ONLINE', 'OFFLINE'],

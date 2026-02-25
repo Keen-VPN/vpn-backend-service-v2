@@ -10,6 +10,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 class TransactionIdDto {
   @ApiProperty({
+    type: 'string',
     description: 'The transaction identifier',
     example: '1000000...',
   })
@@ -18,6 +19,7 @@ class TransactionIdDto {
   transactionId: string;
 
   @ApiProperty({
+    type: 'string',
     description: 'The original transaction identifier',
     example: '1000000...',
   })
@@ -26,6 +28,7 @@ class TransactionIdDto {
   originalTransactionId: string;
 
   @ApiProperty({
+    type: 'string',
     description: 'The product identifier',
     example: 'com.keen.vpn.monthly',
   })
@@ -36,6 +39,7 @@ class TransactionIdDto {
 
 export class LinkWithTransactionIdsDto {
   @ApiProperty({
+    type: 'string',
     description: 'Active session token to link with',
     example: 'eyJhbGciOiJ...',
   })
@@ -53,6 +57,7 @@ export class LinkWithTransactionIdsDto {
   transactionIds: TransactionIdDto[];
 
   @ApiPropertyOptional({
+    type: 'string',
     description: 'Device fingerprint for fraud detection',
     example: 'a1b2c3d4e5f6...',
   })
@@ -61,6 +66,7 @@ export class LinkWithTransactionIdsDto {
   deviceFingerprint?: string;
 
   @ApiPropertyOptional({
+    type: 'string',
     description: 'Device platform (ios, android, web)',
     example: 'ios',
   })

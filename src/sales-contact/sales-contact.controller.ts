@@ -21,13 +21,13 @@ export class SalesContactController {
   @Post('submit')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Submit an enterprise sales inquiry' })
-  @ApiBody({ type: CreateSalesContactDto })
   @ApiResponse({ status: 201, description: 'Inquiry submitted successfully' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   @ApiResponse({
     status: 409,
     description: 'Recent submission already exist for this email',
   })
+  @ApiBody({ type: CreateSalesContactDto })
   async submit(@Body() createSalesContactDto: CreateSalesContactDto) {
     return this.salesContactService.submitContact(createSalesContactDto);
   }

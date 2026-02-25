@@ -1,41 +1,44 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class VPNServerDto {
-  @ApiProperty({ type: String, description: 'Server ID' })
+  @ApiProperty({ type: 'string', description: 'Server ID' })
   id: string;
 
-  @ApiProperty({ type: String, description: 'Server name' })
+  @ApiProperty({ type: 'string', description: 'Server name' })
   name: string;
 
-  @ApiProperty({ type: String, description: 'Country code or name' })
+  @ApiProperty({ type: 'string', description: 'Country code or name' })
   country: string;
 
-  @ApiProperty({ type: String, description: 'City name' })
+  @ApiProperty({ type: 'string', description: 'City name' })
   city: string;
 
-  @ApiProperty({ type: String, description: 'Server address (IP or hostname)' })
+  @ApiProperty({
+    type: 'string',
+    description: 'Server address (IP or hostname)',
+  })
   serverAddress: string;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'The remote identifier for IKEv2 connection',
   })
   remoteIdentifier?: string;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'Credential ID used by this server',
   })
   credentialId: string;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'Asset key for flags/icons',
     required: false,
   })
   assetKey?: string;
 
-  @ApiProperty({ type: String, description: 'Flag URL', required: false })
+  @ApiProperty({ type: 'string', description: 'Flag URL', required: false })
   flagUrl?: string;
 
   @ApiProperty({
@@ -46,13 +49,13 @@ export class VPNServerDto {
   coordinates?: any;
 
   @ApiProperty({
-    type: Boolean,
+    type: 'boolean',
     description: 'Is this the default server?',
     required: false,
   })
   isDefault?: boolean;
 
-  @ApiProperty({ type: Number, description: 'Sort order', required: false })
+  @ApiProperty({ type: 'number', description: 'Sort order', required: false })
   sortOrder?: number;
 
   @ApiProperty({

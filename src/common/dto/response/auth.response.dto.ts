@@ -5,7 +5,7 @@ import { TrialStatusDto } from './trial.response.dto';
 
 export class AuthResponseDto {
   @ApiProperty({
-    type: Boolean,
+    type: 'boolean',
     description: 'Operation success status',
     required: false,
   })
@@ -15,7 +15,7 @@ export class AuthResponseDto {
   user: UserResponseDto;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
     description: 'Session JWT token',
   })
@@ -39,7 +39,7 @@ export class AuthResponseDto {
 }
 
 export class VerifySessionResponseDto {
-  @ApiProperty({ type: Boolean, description: 'Operation success status' })
+  @ApiProperty({ type: 'boolean', description: 'Operation success status' })
   success: boolean;
 
   @ApiProperty({ type: UserResponseDto, description: 'User details' })
@@ -64,7 +64,7 @@ export class VerifySessionResponseDto {
 
 export class LogoutResponseDto {
   @ApiProperty({
-    type: Boolean,
+    type: 'boolean',
     example: true,
     description: 'Logout success status',
   })

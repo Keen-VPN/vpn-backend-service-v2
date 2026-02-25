@@ -46,12 +46,12 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with firebase ID token' })
-  @ApiBody({ type: LoginDto })
   @ApiStandardResponse({
     status: 200,
     description: 'Login successful',
     type: AuthResponseDto,
   })
+  @ApiBody({ type: LoginDto })
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto.idToken);
@@ -60,12 +60,12 @@ export class AuthController {
   @Post('google/signin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sign in with Google' })
-  @ApiBody({ type: GoogleSignInDto })
   @ApiStandardResponse({
     status: 200,
     description: 'Google sign-in successful',
     type: AuthResponseDto,
   })
+  @ApiBody({ type: GoogleSignInDto })
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async googleSignIn(@Body() googleSignInDto: GoogleSignInDto) {
     return this.authService.googleSignIn(googleSignInDto.idToken);
@@ -74,12 +74,12 @@ export class AuthController {
   @Post('apple/signin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sign in with Apple' })
-  @ApiBody({ type: AppleSignInDto })
   @ApiStandardResponse({
     status: 200,
     description: 'Apple sign-in successful',
     type: AuthResponseDto,
   })
+  @ApiBody({ type: AppleSignInDto })
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   async appleSignIn(@Body() appleSignInDto: AppleSignInDto) {
     return this.authService.appleSignIn(
@@ -96,12 +96,12 @@ export class AuthController {
   @Post('verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify session token' })
-  @ApiBody({ type: VerifySessionDto })
   @ApiStandardResponse({
     status: 200,
     description: 'Session verified',
     type: VerifySessionResponseDto,
   })
+  @ApiBody({ type: VerifySessionDto })
   @Throttle({ default: { limit: 30, ttl: 60000 } }) // 30 requests per minute for verification
   async verifySession(@Body() verifySessionDto: VerifySessionDto) {
     return this.authService.verifySession(verifySessionDto.sessionToken);

@@ -26,6 +26,7 @@ import {
   GetPlansResponseDto,
   GetPlanByIdResponseDto,
 } from '../common/dto/response/subscription.response.dto';
+import { SessionTokenDto } from '../common/dto/session-token.dto';
 
 @ApiTags('Subscription')
 @Controller('subscription')
@@ -67,14 +68,9 @@ export class SubscriptionController {
     type: SubscriptionStatusResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: { sessionToken: { type: 'string' } },
-    },
-  })
+  @ApiBody({ type: SessionTokenDto })
   @Throttle({ default: { limit: 30, ttl: 60000 } })
-  async getStatusWithSession(@Body() body: { sessionToken: string }) {
+  async getStatusWithSession(@Body() body: SessionTokenDto) {
     return this.subscriptionService.getStatusWithSession(body.sessionToken);
   }
 

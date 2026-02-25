@@ -18,21 +18,22 @@ export class UserProfileResponseDto {
 
 export class AccountDeletionResponseDto {
   @ApiProperty({
-    type: Boolean,
+    type: 'boolean',
     example: true,
     description: 'Deletion success status',
   })
   success: boolean;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: 'uuid-1234',
     description: 'ID of deleted user',
   })
   deletedUserId: string;
 
   @ApiProperty({
-    type: [String],
+    type: 'string',
+    isArray: true,
     example: ['cus_123456'],
     description: 'Associated Stripe customer IDs to clean up',
   })

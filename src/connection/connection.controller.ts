@@ -27,13 +27,13 @@ export class ConnectionController {
     description:
       'Records a session identified by client_session_id. User identity is from the Authorization Bearer token when present; no user_id or email in the body.',
   })
-  @ApiBody({ type: ConnectionSessionDto })
   @ApiResponse({
     status: 200,
     description: 'Session recorded successfully',
     type: SuccessResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Bad Request' })
+  @ApiBody({ type: ConnectionSessionDto })
   @Throttle({ default: { limit: 100, ttl: 60000 } })
   async recordSession(
     @Body() sessionDto: ConnectionSessionDto,

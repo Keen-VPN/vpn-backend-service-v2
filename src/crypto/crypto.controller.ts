@@ -41,7 +41,6 @@ export class CryptoController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Sign blinded VPN token' })
-  @ApiBody({ type: VpnTokenDto })
   @ApiResponse({
     status: 200,
     description: 'Token signed successfully',
@@ -53,6 +52,7 @@ export class CryptoController {
     status: 403,
     description: 'Forbidden - Subscription required',
   })
+  @ApiBody({ type: VpnTokenDto })
   @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 requests per minute
   async signBlindedToken(
     @Req() req: Request,

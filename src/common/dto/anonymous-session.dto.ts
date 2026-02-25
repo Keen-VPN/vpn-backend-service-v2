@@ -11,7 +11,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class AnonymousSessionDto {
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'The original random token (base64 encoded) before blinding',
     example: 'uKj...',
   })
@@ -21,7 +21,7 @@ export class AnonymousSessionDto {
   token: string; // The original token (before blinding)
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     description:
       'The blind-signed signature (base64 encoded) received from the server',
     example: 'MEUCIQD...',
@@ -32,7 +32,7 @@ export class AnonymousSessionDto {
   signature: string; // The blind-signed signature (after unblinding)
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'Session start timestamp (ISO 8601)',
     example: '2024-01-01T00:00:00Z',
   })
@@ -41,7 +41,7 @@ export class AnonymousSessionDto {
   session_start: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Session end timestamp (ISO 8601)',
     example: '2024-01-01T01:00:00Z',
   })
@@ -50,7 +50,7 @@ export class AnonymousSessionDto {
   session_end?: string;
 
   @ApiProperty({
-    type: Number,
+    type: 'number',
     description: 'Duration of the session in seconds',
     example: 3600,
     minimum: 0,
@@ -60,7 +60,7 @@ export class AnonymousSessionDto {
   duration_seconds: number;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'Device platform',
     example: 'ios',
   })
@@ -69,7 +69,7 @@ export class AnonymousSessionDto {
   platform: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Client application version',
     example: '1.0.0',
   })
@@ -78,7 +78,7 @@ export class AnonymousSessionDto {
   app_version?: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Server location (Country/City)',
     example: 'United States',
   })
@@ -87,7 +87,7 @@ export class AnonymousSessionDto {
   server_location?: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Server IP address or hostname',
     example: 'vpn-us-1.example.com',
   })
@@ -96,7 +96,7 @@ export class AnonymousSessionDto {
   server_address?: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'User subscription tier',
     example: 'premium',
   })
@@ -105,7 +105,7 @@ export class AnonymousSessionDto {
   subscription_tier?: string;
 
   @ApiPropertyOptional({
-    type: Number,
+    type: 'number',
     description: 'Total bytes transferred during session',
     example: 1048576,
   })

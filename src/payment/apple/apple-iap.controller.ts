@@ -37,7 +37,6 @@ export class AppleIAPController {
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Capture Apple IAP purchase' })
-  @ApiBody({ type: CapturePurchaseDto })
   @ApiResponse({
     status: 200,
     description: 'Purchase captured successfully',
@@ -45,6 +44,7 @@ export class AppleIAPController {
   })
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiResponse({ status: 500, description: 'Internal Server Error' })
+  @ApiBody({ type: CapturePurchaseDto })
   async capturePurchase(@Body() captureDto: CapturePurchaseDto) {
     try {
       // Verify device fingerprint if provided
@@ -87,7 +87,6 @@ export class AppleIAPController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Link Apple IAP purchase to user' })
-  @ApiBody({ type: LinkPurchaseDto })
   @ApiResponse({
     status: 200,
     description: 'Purchase linked successfully',
@@ -96,6 +95,7 @@ export class AppleIAPController {
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 500, description: 'Internal Server Error' })
+  @ApiBody({ type: LinkPurchaseDto })
   async linkPurchase(
     @Body() linkDto: LinkPurchaseDto,
     @CurrentUser() user: { uid: string },
@@ -138,7 +138,6 @@ export class AppleIAPController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Link multiple Apple IAP transactions to user' })
-  @ApiBody({ type: LinkWithTransactionIdsDto })
   @ApiResponse({
     status: 200,
     description: 'Transactions linked successfully',
@@ -147,6 +146,7 @@ export class AppleIAPController {
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 500, description: 'Internal Server Error' })
+  @ApiBody({ type: LinkWithTransactionIdsDto })
   async linkWithTransactionIds(
     @Body() linkDto: LinkWithTransactionIdsDto,
     @CurrentUser() user: { uid: string },

@@ -2,14 +2,14 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class AppleSubscriptionInfoDto {
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: 'active',
     description: 'Subscription status',
   })
   status: string;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: 'Premium VPN - Annual',
     description: 'Plan name',
   })
@@ -26,14 +26,14 @@ export class AppleSubscriptionInfoDto {
 
 export class AppleLinkPurchaseResponseDto {
   @ApiProperty({
-    type: Boolean,
+    type: 'boolean',
     example: true,
     description: 'Operation success status',
   })
   success: boolean;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: 'Purchase linked successfully',
     description: 'Result message',
   })
@@ -47,20 +47,20 @@ export class AppleLinkPurchaseResponseDto {
 }
 
 export class LinkedPurchaseDto {
-  @ApiProperty({ type: String, description: 'Transaction ID' })
+  @ApiProperty({ type: 'string', description: 'Transaction ID' })
   transactionId: string;
 
-  @ApiProperty({ type: String, description: 'Original Transaction ID' })
+  @ApiProperty({ type: 'string', description: 'Original Transaction ID' })
   originalTransactionId: string;
 
-  @ApiProperty({ type: String, description: 'Product ID' })
+  @ApiProperty({ type: 'string', description: 'Product ID' })
   productId: string;
 
-  @ApiProperty({ type: String, description: 'Status of the purchase' })
+  @ApiProperty({ type: 'string', description: 'Status of the purchase' })
   status: string;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'Subscription ID associated with the purchase',
   })
   subscriptionId: string;
@@ -73,23 +73,23 @@ export class PurchaseErrorDto {
   })
   transaction: any;
 
-  @ApiProperty({ type: String, description: 'Error message' })
+  @ApiProperty({ type: 'string', description: 'Error message' })
   error: string;
 }
 
 export class AppleBulkLinkResponseDto {
   @ApiProperty({
-    type: Boolean,
+    type: 'boolean',
     example: true,
     description: 'Operation success status',
   })
   success: boolean;
 
-  @ApiProperty({ type: String, description: 'Result message' })
+  @ApiProperty({ type: 'string', description: 'Result message' })
   message: string;
 
   @ApiProperty({
-    type: Number,
+    type: 'number',
     description: 'Number of purchases successfully linked',
   })
   linkedCount: number;

@@ -3,7 +3,7 @@ import { TrialStatusDto } from './trial.response.dto';
 
 export class SubscriptionDetailsDto {
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: 'sub_123456',
     description: 'Subscription ID',
     required: false,
@@ -11,14 +11,14 @@ export class SubscriptionDetailsDto {
   id?: string;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: 'active',
     description: 'Subscription status',
   })
   status: string;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: 'premium_monthly',
     description: 'Plan name',
     required: false,
@@ -26,7 +26,7 @@ export class SubscriptionDetailsDto {
   planName?: string | null;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: 'premium',
     description: 'Plan name alias',
     required: false,
@@ -34,7 +34,7 @@ export class SubscriptionDetailsDto {
   plan?: string | null;
 
   @ApiProperty({
-    type: Date,
+    type: 'string',
     example: '2023-12-31T23:59:59.999Z',
     description: 'Current period end date',
     required: false,
@@ -50,7 +50,7 @@ export class SubscriptionDetailsDto {
   endDate?: string | null;
 
   @ApiProperty({
-    type: Boolean,
+    type: 'boolean',
     example: false,
     description: 'Cancel at period end flag',
     required: false,
@@ -58,7 +58,7 @@ export class SubscriptionDetailsDto {
   cancelAtPeriodEnd?: boolean | null;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: 'stripe',
     description: 'Subscription type (stripe/apple)',
     required: false,
@@ -66,7 +66,7 @@ export class SubscriptionDetailsDto {
   subscriptionType?: string | null;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: 'cus_123456',
     description: 'Customer ID (Stripe/Apple)',
     required: false,
@@ -76,14 +76,14 @@ export class SubscriptionDetailsDto {
 
 export class SubscriptionStatusResponseDto {
   @ApiProperty({
-    type: Boolean,
+    type: 'boolean',
     example: true,
     description: 'Operation success status',
   })
   success: boolean;
 
   @ApiProperty({
-    type: Boolean,
+    type: 'boolean',
     example: true,
     description: 'Has active subscription',
   })
@@ -106,21 +106,21 @@ export class SubscriptionStatusResponseDto {
 
 export class CancelSubscriptionResponseDto {
   @ApiProperty({
-    type: Boolean,
+    type: 'boolean',
     example: true,
     description: 'Operation success status',
   })
   success: boolean;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: 'Subscription cancelled successfully',
     description: 'Status message',
   })
   message: string;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     example: null,
     description: 'Error message if any',
     required: false,
@@ -130,24 +130,24 @@ export class CancelSubscriptionResponseDto {
 }
 
 export class SubscriptionPlanFeatureDto {
-  @ApiProperty({ type: String, example: 'Unlimited bandwidth' })
+  @ApiProperty({ type: 'string', example: 'Unlimited bandwidth' })
   name: string;
 
   @ApiProperty({ type: Boolean, example: true })
   included: boolean;
 
-  @ApiProperty({ type: Boolean, example: true, required: false })
+  @ApiProperty({ type: 'boolean', example: true, required: false })
   highlighted?: boolean;
 }
 
 export class SubscriptionPlanDto {
-  @ApiProperty({ type: String, example: 'premium_monthly' })
+  @ApiProperty({ type: 'string', example: 'premium_monthly' })
   id: string;
 
-  @ApiProperty({ type: String, example: 'Premium VPN - Monthly' })
+  @ApiProperty({ type: 'string', example: 'Premium VPN - Monthly' })
   name: string;
 
-  @ApiProperty({ type: Number, example: 10.0 })
+  @ApiProperty({ type: 'number', example: 10.0 })
   price: number;
 
   @ApiProperty({ type: String, example: 'month' })
@@ -162,7 +162,7 @@ export class SubscriptionPlanDto {
   @ApiProperty({ type: [SubscriptionPlanFeatureDto] })
   features: SubscriptionPlanFeatureDto[];
 
-  @ApiProperty({ type: String, example: 'price_1...' })
+  @ApiProperty({ type: 'string', example: 'price_1...' })
   priceId: string;
 }
 
@@ -172,7 +172,7 @@ export class GetPlansDataDto {
 }
 
 export class GetPlansResponseDto {
-  @ApiProperty({ type: Boolean, example: true })
+  @ApiProperty({ type: 'boolean', example: true })
   success: boolean;
 
   @ApiProperty({ type: GetPlansDataDto })
@@ -185,7 +185,7 @@ export class GetPlanByIdDataDto {
 }
 
 export class GetPlanByIdResponseDto {
-  @ApiProperty({ type: Boolean, example: true })
+  @ApiProperty({ type: 'boolean', example: true })
   success: boolean;
 
   @ApiProperty({ type: GetPlanByIdDataDto })

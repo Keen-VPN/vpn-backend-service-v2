@@ -22,12 +22,12 @@ export class PreferencesController {
   @ApiOperation({
     summary: 'Submit server location preference request (auth optional)',
   })
-  @ApiBody({ type: ServerLocationPreferenceBodyDto })
   @ApiStandardResponse({
     status: 201,
     description:
       'Server location preference submitted (works with or without auth)',
   })
+  @ApiBody({ type: ServerLocationPreferenceBodyDto })
   async submitServerLocationPreference(
     @Body() body: ServerLocationPreferenceBodyDto,
   ) {

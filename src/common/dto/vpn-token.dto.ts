@@ -9,7 +9,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class VpnTokenDto {
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'Base64 encoded blinded token to be signed',
     example: 'fd78a...',
     minLength: 100,
@@ -22,7 +22,7 @@ export class VpnTokenDto {
   blindedToken: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Optional session token (alternative to Bearer auth header)',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })

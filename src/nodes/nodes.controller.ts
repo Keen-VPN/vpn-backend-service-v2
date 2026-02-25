@@ -27,13 +27,13 @@ export class NodesController {
 
   @Post('register')
   @ApiOperation({ summary: 'Register or update a VPN exit node' })
-  @ApiBody({ type: RegisterNodeDto })
   @ApiResponse({
     status: 201,
     description: 'Node registered successfully',
     type: NodeResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Bad Request' })
+  @ApiBody({ type: RegisterNodeDto })
   async register(@Body() dto: RegisterNodeDto) {
     return this.nodesService.register(dto);
   }
@@ -42,13 +42,13 @@ export class NodesController {
   @ApiOperation({
     summary: 'Report node health and receive status confirmation',
   })
-  @ApiBody({ type: NodeHeartbeatDto })
   @ApiResponse({
     status: 200,
     description: 'Heartbeat processed successfully',
     type: NodeHeartbeatResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Node not found' })
+  @ApiBody({ type: NodeHeartbeatDto })
   async heartbeat(@Body() dto: NodeHeartbeatDto) {
     return this.nodesService.heartbeat(dto);
   }

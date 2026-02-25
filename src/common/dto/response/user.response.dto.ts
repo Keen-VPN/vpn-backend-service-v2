@@ -20,7 +20,7 @@ export class UserResponseDto {
   displayName?: string | null;
 
   @ApiProperty({
-    type: Boolean,
+    type: 'boolean',
     example: true,
     description: 'Is email verified',
   })

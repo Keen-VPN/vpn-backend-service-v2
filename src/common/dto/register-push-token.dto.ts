@@ -3,7 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RegisterPushTokenDto {
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'Active session token associated with the device',
     example: 'eyJhbGciOiJ...',
   })
@@ -12,7 +12,7 @@ export class RegisterPushTokenDto {
   sessionToken: string;
 
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'The push notification token (APNs/FCM)',
     example: 'f23c4d...',
   })
@@ -21,7 +21,7 @@ export class RegisterPushTokenDto {
   token: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Device hash/fingerprint',
     example: 'hash123...',
   })
@@ -30,7 +30,7 @@ export class RegisterPushTokenDto {
   deviceHash?: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Device platform (ios, android, web)',
     example: 'ios',
   })
@@ -39,7 +39,7 @@ export class RegisterPushTokenDto {
   platform?: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Environment (Sandbox/Production)',
     example: 'Production',
   })

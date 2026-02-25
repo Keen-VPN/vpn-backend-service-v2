@@ -3,7 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class VerifySessionDto {
   @ApiProperty({
-    type: String,
+    type: 'string',
     description: 'Active session token to verify',
     example: 'eyJhbGciOiJ...',
   })
@@ -12,7 +12,7 @@ export class VerifySessionDto {
   sessionToken: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Device fingerprint for fraud detection',
     example: 'a1b2c3d4e5f6...',
   })
@@ -21,7 +21,7 @@ export class VerifySessionDto {
   deviceFingerprint?: string;
 
   @ApiPropertyOptional({
-    type: String,
+    type: 'string',
     description: 'Device platform (ios, android, web)',
     example: 'ios',
   })
