@@ -1,5 +1,5 @@
 import { faker } from '@faker-js/faker';
-import { Prisma } from '@prisma/client';
+import { Prisma, SubscriptionStatus } from '@prisma/client';
 import type { User, Subscription, AppleIAPPurchase } from '@prisma/client';
 
 export function createMockUser(overrides?: Partial<User>): User {
@@ -31,7 +31,7 @@ export function createMockSubscription(
     userId: faker.string.uuid(),
     stripeCustomerId: `cus_${faker.string.alphanumeric(24)}`,
     stripeSubscriptionId: `sub_${faker.string.alphanumeric(24)}`,
-    status: 'active',
+    status: SubscriptionStatus.ACTIVE,
     planId: 'premium-annual',
     planName: 'Premium VPN - Annual',
     priceAmount: new Prisma.Decimal(130.99),

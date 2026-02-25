@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { RegisterNodeDto } from './dto/register-node.dto';
 import { NodeHeartbeatDto } from './dto/node-heartbeat.dto';
+import { NodeStatus } from '@prisma/client';
 
 @Injectable()
 export class NodesService {
@@ -15,16 +16,14 @@ export class NodesService {
         update: {
           region: dto.region,
           ip: dto.publicIp,
-          name: dto.name,
-          status: dto.status,
+          status: dto.status as NodeStatus,
           lastHeartbeat: new Date(),
         },
         create: {
           publicKey: dto.publicKey,
           region: dto.region,
           ip: dto.publicIp,
-          name: dto.name,
-          status: dto.status,
+          status: dto.status as NodeStatus,
           lastHeartbeat: new Date(),
         },
       });
@@ -58,20 +57,17 @@ export class NodesService {
         where: { id: node.id },
         data: {
           lastHeartbeat: new Date(),
-          status: 'ONLINE',
+          status: NodeStatus.ONLINE,
         },
       });
 
       // Fetch peers for this node
       const clients = await this.prisma.nodeClient.findMany({
         where: { nodeId: node.id },
-        include: {
-          user: true,
-        },
       });
 
       const peers = clients.map((c) => ({
-        publicKey: c.user.id, // Placeholder: assuming user ID is related to their WG public key or similar
+        publicKey: c.clientPublicKey,
         allowedIps: c.allowedIps,
       }));
 
@@ -79,7 +75,7 @@ export class NodesService {
         status: 'ok',
         peers: peers,
         instructions: {
-          drain: node.status === 'DRAINING',
+          drain: node.status === NodeStatus.DRAINING,
         },
       };
     } catch (error) {
@@ -92,7 +88,7 @@ export class NodesService {
     return this.prisma.node.findMany({
       where: {
         region: region,
-        status: 'ONLINE',
+        status: NodeStatus.ONLINE,
         lastHeartbeat: {
           gte: new Date(Date.now() - 5 * 60 * 1000), // Seen in last 5 minutes
         },

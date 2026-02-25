@@ -2,6 +2,7 @@ import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SubscriptionStatus } from '@prisma/client';
 import { SafeLogger } from '../../common/utils/logger.util';
 import { TrialService } from '../../subscription/trial.service';
 
@@ -205,8 +206,8 @@ export class StripeService {
         data: {
           status:
             subscription.status === 'canceled'
-              ? 'cancelled'
-              : subscription.status,
+              ? SubscriptionStatus.CANCELLED
+              : (subscription.status.toUpperCase() as SubscriptionStatus),
           cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
         },
       });
@@ -220,8 +221,8 @@ export class StripeService {
           stripeSubscriptionId: subscription.id,
           status:
             subscription.status === 'canceled'
-              ? 'cancelled'
-              : subscription.status,
+              ? SubscriptionStatus.CANCELLED
+              : (subscription.status.toUpperCase() as SubscriptionStatus),
           planId: planInfo.planId || undefined,
           planName: planInfo.planName || undefined,
           priceAmount: planInfo.priceAmount || undefined,
@@ -263,7 +264,7 @@ export class StripeService {
       await this.prisma.subscription.update({
         where: { id: existing.id },
         data: {
-          status: 'cancelled',
+          status: SubscriptionStatus.CANCELLED,
           cancelledAt: new Date(),
           cancelAtPeriodEnd: false,
         },

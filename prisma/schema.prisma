@@ -24,22 +24,22 @@ model User {
   trialEndsAt             DateTime?                @map("trial_ends_at") @db.Timestamptz(6)
   trialTier               String?                  @map("trial_tier")
   appleIAPPurchases       AppleIAPPurchase[]
-  nodeClients             NodeClient[]
   pushTokens              PushToken[]
   subscriptions           Subscription[]
   deviceTrialFingerprints DeviceTrialFingerprint[]
   trialGrant              TrialGrant?
 
   @@map("users")
+  @@index([provider])
 }
 
 model Subscription {
-  id                         String    @id @default(uuid())
-  userId                     String    @map("user_id")
-  stripeCustomerId           String?   @map("stripe_customer_id")
-  stripeSubscriptionId       String?   @map("stripe_subscription_id")
-  status                     String    @default("inactive")
-  planId                     String?   @map("plan_id")
+  id                         String             @id @default(uuid())
+  userId                     String             @map("user_id")
+  stripeCustomerId           String?            @map("stripe_customer_id")
+  stripeSubscriptionId       String?            @map("stripe_subscription_id")
+  status                     SubscriptionStatus @default(INACTIVE)
+  planId                     String?            @map("plan_id")
   planName                   String?   @map("plan_name")
   priceAmount                Decimal?  @map("price_amount") @db.Decimal(10, 2)
   priceCurrency              String?   @default("USD") @map("price_currency")
@@ -118,6 +118,7 @@ model ConnectionSession {
   @@index([heartbeatTimestamp])
   @@index([createdAt])
   @@index([subscriptionTier])
+  @@index([platform, sessionStart])
   @@map("connection_sessions")
 }
 
@@ -145,24 +146,23 @@ model SessionAggregate {
 }
 
 model SalesContact {
-  id                       String   @id @default(uuid())
-  referenceId              String   @unique @map("reference_id")
-  companyName              String   @map("company_name")
-  workEmail                String   @map("work_email")
-  teamSize                 Int      @map("team_size")
-  countryRegion            String?  @map("country_region")
-  hasConsent               Boolean  @map("has_consent")
-  phone                    String?  @map("phone")
-  useCase                  String?  @map("use_case")
-  preferredContactMethod   String?  @map("preferred_contact_method")
-  preferredContactTime     String?  @map("preferred_contact_time")
-  message                  String?  @map("message")
-  userAgent                String?  @map("user_agent")
-  status                   String   @default("pending") @map("status")
-  salesTeamNotified        Boolean  @default(false) @map("sales_team_notified")
-  customerConfirmationSent Boolean  @default(false) @map("customer_confirmation_sent")
-  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                       String        @id @default(uuid())
+  referenceId              String        @unique @map("reference_id")
+  companyName              String        @map("company_name")
+  workEmail                String        @map("work_email")
+  teamSize                 Int           @map("team_size")
+  countryRegion            String?       @map("country_region")
+  hasConsent               Boolean       @map("has_consent")
+  phone                    String?       @map("phone")
+  useCase                  String?       @map("use_case")
+  preferredContactMethod   String?       @map("preferred_contact_method")
+  preferredContactTime     String?       @map("preferred_contact_time")
+  message                  String?       @map("message")
+  status                   ContactStatus @default(PENDING) @map("status")
+  salesTeamNotified        Boolean       @default(false) @map("sales_team_notified")
+  customerConfirmationSent Boolean       @default(false) @map("customer_confirmation_sent")
+  createdAt                DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([workEmail])
   @@index([referenceId])
@@ -171,18 +171,6 @@ model SalesContact {
   @@map("sales_contacts")
 }
 
-model VpnConfig {
-  id        String   @id @default(uuid())
-  version   String   @unique
-  payload   Json
-  etag      String?  @map("etag")
-  isActive  Boolean  @default(false) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  @@index([isActive, createdAt])
-  @@map("vpn_configs")
-}
 
 model TrialGrant {
   id         String   @id @default(uuid())
@@ -240,11 +228,10 @@ model ServerLocationPreference {
 
 model Node {
   id            String       @id @default(uuid())
-  name          String?
   publicKey     String       @unique @map("public_key")
   region        String
   ip            String?      @map("ip")
-  status        String       @default("ONLINE")
+  status        NodeStatus   @default(ONLINE)
   lastHeartbeat DateTime?    @map("last_heartbeat") @db.Timestamptz(6)
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -252,20 +239,21 @@ model Node {
 
   @@index([region])
   @@index([status])
+  @@index([region, status])
   @@map("nodes")
 }
 
 model NodeClient {
-  id         String   @id @default(uuid())
-  nodeId     String   @map("node_id")
-  userId     String   @map("user_id")
-  allowedIps String   @map("allowed_ips")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  node       Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String   @id @default(uuid())
+  nodeId          String   @map("node_id")
+  clientPublicKey String   @map("client_public_key")
+  allowedIps      String   @map("allowed_ips")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  node            Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@index([nodeId])
-  @@index([userId])
+  @@index([clientPublicKey])
+  @@index([nodeId, clientPublicKey])
   @@map("node_clients")
 }
 
@@ -282,4 +270,31 @@ enum EventType {
   SESSION_END   @map("session_end")
 
   @@map("event_type")
+}
+
+enum SubscriptionStatus {
+  ACTIVE    @map("active")
+  INACTIVE  @map("inactive")
+  TRIALING  @map("trialing")
+  PAST_DUE  @map("past_due")
+  CANCELLED @map("cancelled")
+  EXPIRED   @map("expired")
+
+  @@map("subscription_status")
+}
+
+enum ContactStatus {
+  PENDING   @map("pending")
+  CONTACTED @map("contacted")
+  CLOSED    @map("closed")
+
+  @@map("contact_status")
+}
+
+enum NodeStatus {
+  ONLINE   @map("ONLINE")
+  OFFLINE  @map("OFFLINE")
+  DRAINING @map("DRAINING")
+
+  @@map("node_status")
 }

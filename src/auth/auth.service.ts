@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FirebaseConfig } from '../config/firebase.config';
 import { PrismaService } from '../prisma/prisma.service';
+import { SubscriptionStatus } from '@prisma/client';
 import { SafeLogger } from '../common/utils/logger.util';
 import { AppleTokenVerifierService } from './apple-token-verifier.service';
 import * as jwt from 'jsonwebtoken';
@@ -81,7 +82,7 @@ export class AuthService {
       const activeSubscription = await this.prisma.subscription.findFirst({
         where: {
           userId,
-          status: 'active',
+          status: SubscriptionStatus.ACTIVE,
           OR: [
             { currentPeriodEnd: null },
             { currentPeriodEnd: { gte: new Date() } },
@@ -451,7 +452,7 @@ export class AuthService {
       const activeSubscription = await this.prisma.subscription.findFirst({
         where: {
           userId: user.id,
-          status: 'active',
+          status: SubscriptionStatus.ACTIVE,
           OR: [
             { currentPeriodEnd: null },
             { currentPeriodEnd: { gte: new Date() } },

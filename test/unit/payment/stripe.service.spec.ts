@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { StripeService } from '../../../src/payment/stripe/stripe.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { TrialService } from '../../../src/subscription/trial.service';
+import { SubscriptionStatus } from '@prisma/client';
 import {
   createMockPrismaClient,
   createMockConfigService,
@@ -189,7 +190,7 @@ describe('StripeService', () => {
       expect(mockPrisma.subscription.update).toHaveBeenCalledWith({
         where: { id: existingSubscription.id },
         data: expect.objectContaining({
-          status: 'cancelled',
+          status: SubscriptionStatus.CANCELLED,
         }),
       });
     });
