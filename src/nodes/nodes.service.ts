@@ -15,14 +15,14 @@ export class NodesService {
         where: { publicKey: dto.publicKey },
         update: {
           region: dto.region,
-          ip: dto.publicIp,
+          ...(dto.publicIp && { ip: dto.publicIp }),
           status: dto.status as NodeStatus,
           lastHeartbeat: new Date(),
         },
         create: {
           publicKey: dto.publicKey,
           region: dto.region,
-          ip: dto.publicIp,
+          ip: dto.publicIp || '',
           status: dto.status as NodeStatus,
           lastHeartbeat: new Date(),
         },
