@@ -240,28 +240,14 @@ export class VPNCredentialsResponseDto {
 
 export class ActiveNodeDto {
   @ApiProperty({ type: String, description: 'Node ID', example: 'us-east-1' })
-  id: string;
+  node_id: string;
 
   @ApiProperty({
     type: String,
-    description: 'WireGuard public key of the node',
-    example: 'abcd...xyz',
+    description: 'Geographic region of the node',
+    example: 'Lagos, Nigeria',
   })
-  publicKey: string;
-
-  @ApiProperty({
-    type: String,
-    description: 'Public IP of the node',
-    example: '1.2.3.4',
-  })
-  ip: string;
-
-  @ApiProperty({
-    type: Number,
-    description: 'Node health score (0-100)',
-    example: 95,
-  })
-  healthScore: number;
+  region: string;
 }
 
 export class ActiveNodesResponseDto {

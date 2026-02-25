@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  Inject,
+  BadRequestException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FirebaseConfig } from '../config/firebase.config';
 import { PrismaService } from '../prisma/prisma.service';
@@ -427,6 +432,22 @@ export class AuthService {
 
   async verifySession(sessionToken: string) {
     try {
+      if (!sessionToken) {
+        SafeLogger.error('Request body is missing', new Error('Missing body'), {
+          service: 'AuthController',
+          path: '/auth/verify',
+        });
+        throw new BadRequestException('Request body is missing');
+      }
+
+      if (!sessionToken) {
+        SafeLogger.warn('sessionToken is missing from body', {
+          service: 'AuthController',
+          body: sessionToken,
+        });
+        throw new BadRequestException('sessionToken is required');
+      }
+
       const secret =
         this.configService?.get<string>('JWT_SECRET') ||
         process.env.JWT_SECRET ||

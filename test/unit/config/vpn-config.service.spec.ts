@@ -56,8 +56,7 @@ describe('VPNConfigService', () => {
       const mockNodes = [
         {
           id: 'n1',
-          publicKey: 'pk1',
-          ip: '1.1.1.1',
+          region: 'US',
           status: NodeStatus.ONLINE,
         },
       ];
@@ -67,7 +66,8 @@ describe('VPNConfigService', () => {
 
       expect(mockPrisma.node.findMany).toHaveBeenCalled();
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('n1');
+      expect(result[0].node_id).toBe('n1');
+      expect(result[0].region).toBe('US');
     });
   });
 

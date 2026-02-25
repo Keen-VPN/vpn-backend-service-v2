@@ -21,14 +21,12 @@ export class VPNConfigService {
     @Inject(CryptoService) private cryptoService: CryptoService,
   ) {}
 
-  async getActiveNodesSimplified(): Promise<VPNServer[]> {
+  async getActiveNodesSimplified(): Promise<any[]> {
     const nodes = await this.prisma.node.findMany({
       where: { status: NodeStatus.ONLINE },
       select: {
         id: true,
-        publicKey: true,
-        ip: true,
-        healthScore: true,
+        region: true,
       },
       orderBy: {
         healthScore: 'desc',
@@ -36,10 +34,8 @@ export class VPNConfigService {
     });
 
     return nodes.map((n) => ({
-      id: n.id,
-      publicKey: n.publicKey,
-      ip: n.ip || '',
-      healthScore: n.healthScore ?? 100,
+      node_id: n.id,
+      region: n.region,
     }));
   }
 

@@ -27,7 +27,7 @@ describe('VPNConfigController', () => {
 
   describe('GET /config/vpn', () => {
     it('should return VPN nodes', async () => {
-      const mockNodes = [{ id: 'node-1', region: 'us-east' }];
+      const mockNodes = [{ node_id: 'node-1', region: 'us-east' }];
       vpnConfigService.getActiveNodesSimplified.mockResolvedValue(mockNodes);
 
       const result = await controller.getActiveNodes();
