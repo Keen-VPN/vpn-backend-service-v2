@@ -6,7 +6,7 @@ import {
   HttpStatus,
   Inject,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { ConnectionService } from './connection.service';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
 import { SuccessResponseDto } from '../common/dto/response/success.response.dto';
@@ -27,6 +27,7 @@ export class ConnectionController {
     description:
       'Records a session identified by client_session_id. User identity is from the Authorization Bearer token when present; no user_id or email in the body.',
   })
+  @ApiBody({ type: ConnectionSessionDto })
   @ApiResponse({
     status: 200,
     description: 'Session recorded successfully',

@@ -1,5 +1,11 @@
-import { IsString, IsNotEmpty, IsBase64, Length } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsString,
+  IsNotEmpty,
+  IsBase64,
+  Length,
+  IsOptional,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class VpnTokenDto {
   @ApiProperty({
@@ -14,4 +20,13 @@ export class VpnTokenDto {
   @IsBase64()
   @Length(100, 5000) // Base64 encoded blinded token
   blindedToken: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Optional session token (alternative to Bearer auth header)',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
+  @IsString()
+  @IsOptional()
+  sessionToken?: string;
 }

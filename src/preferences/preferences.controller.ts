@@ -1,5 +1,5 @@
 import { Controller, Post, Body, UseGuards, Inject } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
 import {
   ApiStandardResponse,
   ApiStandardErrorResponse,
@@ -22,6 +22,7 @@ export class PreferencesController {
   @ApiOperation({
     summary: 'Submit server location preference request (auth optional)',
   })
+  @ApiBody({ type: ServerLocationPreferenceBodyDto })
   @ApiStandardResponse({
     status: 201,
     description:

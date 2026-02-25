@@ -62,6 +62,10 @@ export class StripeWebhookController {
   @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
   @ApiResponse({ status: 400, description: 'Missing signature or secret' })
   @ApiResponse({ status: 500, description: 'Webhook handler failed' })
+  @ApiBody({
+    description: 'Stripe webhook event object',
+    schema: { type: 'object' },
+  })
   async handleWebhook(@Req() req: Request, @Res() res: Response) {
     const sig = req.headers['stripe-signature'];
 

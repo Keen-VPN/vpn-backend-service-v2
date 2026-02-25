@@ -12,6 +12,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiBody,
 } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
@@ -33,6 +34,7 @@ export class NotificationsController {
   @UseGuards(SessionAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Register push notification token' })
+  @ApiBody({ type: RegisterPushTokenDto })
   @ApiResponse({
     status: 200,
     description: 'Token registered successfully',

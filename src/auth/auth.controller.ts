@@ -8,7 +8,7 @@ import {
   Inject,
   Delete,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import {
   ApiStandardResponse,
   ApiStandardErrorResponse,
@@ -46,6 +46,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with firebase ID token' })
+  @ApiBody({ type: LoginDto })
   @ApiStandardResponse({
     status: 200,
     description: 'Login successful',
@@ -59,6 +60,7 @@ export class AuthController {
   @Post('google/signin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sign in with Google' })
+  @ApiBody({ type: GoogleSignInDto })
   @ApiStandardResponse({
     status: 200,
     description: 'Google sign-in successful',
@@ -72,6 +74,7 @@ export class AuthController {
   @Post('apple/signin')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Sign in with Apple' })
+  @ApiBody({ type: AppleSignInDto })
   @ApiStandardResponse({
     status: 200,
     description: 'Apple sign-in successful',
@@ -93,6 +96,7 @@ export class AuthController {
   @Post('verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify session token' })
+  @ApiBody({ type: VerifySessionDto })
   @ApiStandardResponse({
     status: 200,
     description: 'Session verified',

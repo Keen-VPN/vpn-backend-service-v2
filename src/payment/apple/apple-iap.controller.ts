@@ -13,6 +13,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiBody,
 } from '@nestjs/swagger';
 import { AppleService } from './apple.service';
 import { CapturePurchaseDto } from '../../common/dto/capture-purchase.dto';
@@ -36,6 +37,7 @@ export class AppleIAPController {
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Capture Apple IAP purchase' })
+  @ApiBody({ type: CapturePurchaseDto })
   @ApiResponse({
     status: 200,
     description: 'Purchase captured successfully',
@@ -85,6 +87,7 @@ export class AppleIAPController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Link Apple IAP purchase to user' })
+  @ApiBody({ type: LinkPurchaseDto })
   @ApiResponse({
     status: 200,
     description: 'Purchase linked successfully',
@@ -135,6 +138,7 @@ export class AppleIAPController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Link multiple Apple IAP transactions to user' })
+  @ApiBody({ type: LinkWithTransactionIdsDto })
   @ApiResponse({
     status: 200,
     description: 'Transactions linked successfully',

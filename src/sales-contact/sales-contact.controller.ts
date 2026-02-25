@@ -6,7 +6,7 @@ import {
   HttpStatus,
   Inject,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags, ApiBody } from '@nestjs/swagger';
 import { SalesContactService } from './sales-contact.service';
 import { CreateSalesContactDto } from './dto/create-sales-contact.dto';
 
@@ -21,6 +21,7 @@ export class SalesContactController {
   @Post('submit')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Submit an enterprise sales inquiry' })
+  @ApiBody({ type: CreateSalesContactDto })
   @ApiResponse({ status: 201, description: 'Inquiry submitted successfully' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   @ApiResponse({

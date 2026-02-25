@@ -15,6 +15,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiBody,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { CryptoService } from './crypto.service';
@@ -40,6 +41,7 @@ export class CryptoController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Sign blinded VPN token' })
+  @ApiBody({ type: VpnTokenDto })
   @ApiResponse({
     status: 200,
     description: 'Token signed successfully',

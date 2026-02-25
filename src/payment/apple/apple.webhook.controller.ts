@@ -24,6 +24,19 @@ export class AppleWebhookController {
   @ApiOperation({ summary: 'Handle Apple server-to-server notifications' })
   @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
   @ApiResponse({ status: 500, description: 'Webhook handler failed' })
+  @ApiBody({
+    description: 'Apple V2 Server Notification payload (signedPayload)',
+    schema: {
+      type: 'object',
+      properties: {
+        signedPayload: {
+          type: 'string',
+          description: 'A JSON Web Signature (JWS) string',
+          example: 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjZm...',
+        },
+      },
+    },
+  })
   async handleWebhook(@Req() req: Request, @Res() res: Response) {
     try {
       const event = req.body as Record<string, any>;

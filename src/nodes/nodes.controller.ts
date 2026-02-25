@@ -4,6 +4,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiBody,
 } from '@nestjs/swagger';
 import { NodesService } from './nodes.service';
 import { RegisterNodeDto } from './dto/register-node.dto';
@@ -26,6 +27,7 @@ export class NodesController {
 
   @Post('register')
   @ApiOperation({ summary: 'Register or update a VPN exit node' })
+  @ApiBody({ type: RegisterNodeDto })
   @ApiResponse({
     status: 201,
     description: 'Node registered successfully',
@@ -40,6 +42,7 @@ export class NodesController {
   @ApiOperation({
     summary: 'Report node health and receive status confirmation',
   })
+  @ApiBody({ type: NodeHeartbeatDto })
   @ApiResponse({
     status: 200,
     description: 'Heartbeat processed successfully',
