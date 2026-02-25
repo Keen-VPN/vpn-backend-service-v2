@@ -26,8 +26,9 @@ describe('VPNConfigService', () => {
         update: jest.fn(),
       },
       nodeClient: {
-        findFirst: jest.fn(),
-        create: jest.fn(),
+        findUnique: jest.fn(),
+        upsert: jest.fn(),
+        count: jest.fn(),
       },
     };
     mockConfigService = {
@@ -71,12 +72,17 @@ describe('VPNConfigService', () => {
   });
 
   describe('processVpnConnection', () => {
-    it('should process connection successfully', async () => {
-      const mockNode = { id: 's1', ip: '1.2.3.4', status: NodeStatus.ONLINE };
+    it('should process connection successfully for new client', async () => {
+      const mockNode = {
+        id: 's1',
+        ip: '1.2.3.4',
+        publicKey: 'node-pk',
+        status: NodeStatus.ONLINE,
+      };
       mockPrisma.node.findUnique.mockResolvedValue(mockNode);
-      mockPrisma.node.findMany.mockResolvedValue([mockNode]);
-      mockPrisma.nodeClient.findFirst.mockResolvedValue(null);
-      mockPrisma.nodeClient.create.mockResolvedValue({ id: 'c1' });
+      mockPrisma.nodeClient.findUnique.mockResolvedValue(null);
+      mockPrisma.nodeClient.count.mockResolvedValue(0);
+      mockPrisma.nodeClient.upsert.mockResolvedValue({ id: 'c1' });
       (axios.post as jest.Mock).mockResolvedValue({ status: 201 });
 
       const result = await service.processVpnConnection(
@@ -87,32 +93,85 @@ describe('VPNConfigService', () => {
       );
 
       expect(mockCryptoService.verifyBlindSignedToken).toHaveBeenCalled();
-      expect(result).toBeDefined();
-      expect(result.ip).toBe('1.2.3.4');
+      expect(result).toEqual({
+        publicKey: 'node-pk',
+        ip: '1.2.3.4',
+        internalIp: '10.66.0.2/32',
+      });
+      expect(mockPrisma.nodeClient.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { clientPublicKey: 'client-pk' },
+          create: expect.objectContaining({ nodeId: 's1' }),
+        }),
+      );
     });
-  });
 
-  describe('generateTokenBasedCredentials', () => {
-    it('should return legacy credentials for compatibility', async () => {
-      const mockNode = { id: 's1', ip: '1.2.3.4', status: NodeStatus.ONLINE };
-      mockPrisma.node.findMany.mockResolvedValue([mockNode]);
+    it('should reuse internal IP if client is on the same server', async () => {
+      const mockNode = {
+        id: 's1',
+        ip: '1.2.3.4',
+        publicKey: 'node-pk',
+        status: NodeStatus.ONLINE,
+      };
+      const mockExisting = {
+        id: 'c1',
+        nodeId: 's1',
+        allowedIps: '10.66.0.5/32',
+      };
+      mockPrisma.node.findUnique.mockResolvedValue(mockNode);
+      mockPrisma.nodeClient.findUnique.mockResolvedValue(mockExisting);
+      mockPrisma.nodeClient.upsert.mockResolvedValue(mockExisting);
+      (axios.post as jest.Mock).mockResolvedValue({ status: 200 });
 
-      const result = await service.generateTokenBasedCredentials(
+      const result = await service.processVpnConnection(
         'token',
         'sig',
         's1',
+        'client-pk',
       );
 
-      expect(result.serverAddress).toBe('1.2.3.4');
-      expect(result.username).toBeDefined();
+      expect(result.internalIp).toBe('10.66.0.5/32');
+      expect(mockPrisma.nodeClient.count).not.toHaveBeenCalled();
     });
-  });
 
-  describe('stripCredentials', () => {
-    it('should remove credentials property', () => {
-      const config: any = { servers: [], credentials: [1, 2, 3] };
-      const result = service.stripCredentials(config);
-      expect((result as any).credentials).toEqual([]);
+    it('should migrate client and assign new IP if switching servers', async () => {
+      const mockNodeB = {
+        id: 's2',
+        ip: '2.2.2.2',
+        publicKey: 'node-pk-b',
+        status: NodeStatus.ONLINE,
+      };
+      const mockExistingA = {
+        id: 'c1',
+        nodeId: 's1',
+        allowedIps: '10.66.0.5/32',
+      };
+
+      mockPrisma.node.findUnique.mockResolvedValue(mockNodeB);
+      mockPrisma.nodeClient.findUnique.mockResolvedValue(mockExistingA);
+      mockPrisma.nodeClient.count.mockResolvedValue(10); // 10 existing on Node B
+      mockPrisma.nodeClient.upsert.mockResolvedValue({
+        ...mockExistingA,
+        nodeId: 's2',
+      });
+      (axios.post as jest.Mock).mockResolvedValue({ status: 200 });
+
+      const result = await service.processVpnConnection(
+        'token',
+        'sig',
+        's2',
+        'client-pk',
+      );
+
+      expect(result.internalIp).toBe('10.66.0.12/32'); // 10 + 2 = 12
+      expect(mockPrisma.nodeClient.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({
+            nodeId: 's2',
+            allowedIps: '10.66.0.12/32',
+          }),
+        }),
+      );
     });
   });
 });

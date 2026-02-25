@@ -144,7 +144,6 @@ model SessionAggregate {
   @@index([subscriptionTier])
   @@map("session_aggregates")
 }
-
 model SalesContact {
   id                       String        @id @default(uuid())
   referenceId              String        @unique @map("reference_id")
@@ -170,6 +169,9 @@ model SalesContact {
   @@index([status])
   @@map("sales_contacts")
 }
+
+
+
 
 
 model TrialGrant {
@@ -230,8 +232,9 @@ model Node {
   id            String       @id @default(uuid())
   publicKey     String       @unique @map("public_key")
   region        String
-  ip            String?      @map("ip")
+  ip            String       @map("ip")
   status        NodeStatus   @default(ONLINE)
+  healthScore   Float        @default(100) @map("health_score")
   lastHeartbeat DateTime?    @map("last_heartbeat") @db.Timestamptz(6)
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -246,14 +249,12 @@ model Node {
 model NodeClient {
   id              String   @id @default(uuid())
   nodeId          String   @map("node_id")
-  clientPublicKey String   @map("client_public_key")
+  clientPublicKey String   @unique @map("client_public_key")
   allowedIps      String   @map("allowed_ips")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   node            Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@index([nodeId])
-  @@index([clientPublicKey])
-  @@index([nodeId, clientPublicKey])
   @@map("node_clients")
 }
 
@@ -286,7 +287,8 @@ enum SubscriptionStatus {
 enum ContactStatus {
   PENDING   @map("pending")
   CONTACTED @map("contacted")
-  CLOSED    @map("closed")
+  CONVERTED @map("converted")
+  SPAM      @map("spam")
 
   @@map("contact_status")
 }
@@ -294,7 +296,6 @@ enum ContactStatus {
 enum NodeStatus {
   ONLINE   @map("ONLINE")
   OFFLINE  @map("OFFLINE")
-  DRAINING @map("DRAINING")
 
   @@map("node_status")
 }

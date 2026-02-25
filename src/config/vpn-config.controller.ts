@@ -8,12 +8,14 @@ import {
   Inject,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
-import type { Request, Response } from 'express';
 import { VPNConfigService } from './vpn-config.service';
 import { VpnCredentialDto } from '../common/dto/vpn-credential.dto';
+import {
+  ActiveNodesResponseDto,
+  WireGuardCredentialsResponseDto,
+} from '../common/dto/response/config.response.dto';
 import { Throttle } from '@nestjs/throttler';
 import { SafeLogger } from '../common/utils/logger.util';
-import { SubscriptionService } from '../subscription/subscription.service';
 
 @ApiTags('Config')
 @Controller('config')
@@ -21,8 +23,6 @@ export class VPNConfigController {
   constructor(
     @Inject(VPNConfigService)
     private readonly vpnConfigService: VPNConfigService,
-    @Inject(SubscriptionService)
-    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   @Get('vpn')
@@ -31,9 +31,10 @@ export class VPNConfigController {
   @ApiResponse({
     status: 200,
     description: 'List of online nodes returned',
+    type: ActiveNodesResponseDto,
   })
   @Throttle({ default: { limit: 100, ttl: 60000 } })
-  async getVPNConfig() {
+  async getActiveNodes() {
     const nodes = await this.vpnConfigService.getActiveNodesSimplified();
     return {
       status: 'ok',
@@ -43,10 +44,13 @@ export class VPNConfigController {
 
   @Post('vpn/credentials')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Generate VPN credentials and register peer' })
+  @ApiOperation({
+    summary: 'Generate WireGuard credentials and register client',
+  })
   @ApiResponse({
     status: 200,
-    description: 'VPN credentials generated and peer registered',
+    description: 'VPN credentials generated and client registered on node',
+    type: WireGuardCredentialsResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiBody({ type: VpnCredentialDto })

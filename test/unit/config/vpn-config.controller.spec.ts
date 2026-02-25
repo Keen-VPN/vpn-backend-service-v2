@@ -1,9 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { VPNConfigController } from '../../../src/config/vpn-config.controller';
 import { VPNConfigService } from '../../../src/config/vpn-config.service';
-import { SubscriptionService } from '../../../src/subscription/subscription.service';
-import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../../../src/prisma/prisma.service';
 
 describe('VPNConfigController', () => {
   let controller: VPNConfigController;
@@ -11,9 +8,6 @@ describe('VPNConfigController', () => {
 
   beforeEach(async () => {
     vpnConfigService = {
-      getVPNConfig: jest.fn(),
-      stripCredentials: jest.fn((config) => config),
-      generateTokenBasedCredentials: jest.fn(),
       getActiveNodesSimplified: jest.fn(),
       processVpnConnection: jest.fn(),
     };
@@ -24,18 +18,6 @@ describe('VPNConfigController', () => {
         {
           provide: VPNConfigService,
           useValue: vpnConfigService,
-        },
-        {
-          provide: ConfigService,
-          useValue: { get: jest.fn() },
-        },
-        {
-          provide: PrismaService,
-          useValue: { user: { findUnique: jest.fn() } },
-        },
-        {
-          provide: SubscriptionService,
-          useValue: { getStatusWithSession: jest.fn() },
         },
       ],
     }).compile();
@@ -48,7 +30,7 @@ describe('VPNConfigController', () => {
       const mockNodes = [{ id: 'node-1', region: 'us-east' }];
       vpnConfigService.getActiveNodesSimplified.mockResolvedValue(mockNodes);
 
-      const result = await controller.getVPNConfig();
+      const result = await controller.getActiveNodes();
 
       expect(vpnConfigService.getActiveNodesSimplified).toHaveBeenCalled();
       expect(result).toEqual({
@@ -61,13 +43,13 @@ describe('VPNConfigController', () => {
       vpnConfigService.getActiveNodesSimplified.mockRejectedValue(
         new Error('DB Error'),
       );
-      await expect(controller.getVPNConfig()).rejects.toThrow('DB Error');
+      await expect(controller.getActiveNodes()).rejects.toThrow('DB Error');
     });
   });
 
   describe('POST /config/vpn/credentials', () => {
     it('should return credentials', async () => {
-      const mockCredentials = { username: 'user', password: 'pass' };
+      const mockCredentials = { publicKey: 'pk', ip: '1.2.3.4' };
       vpnConfigService.processVpnConnection.mockResolvedValue(mockCredentials);
 
       const dto = {

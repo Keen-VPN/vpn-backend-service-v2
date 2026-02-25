@@ -15,6 +15,7 @@ import { VPNConfigModule } from './config/vpn-config.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PreferencesModule } from './preferences/preferences.module';
 import { NodesModule } from './nodes/nodes.module';
+import { SalesContactModule } from './sales-contact/sales-contact.module';
 import { SecurityMiddleware } from './common/middleware/security.middleware';
 
 @Module({
@@ -38,6 +39,7 @@ import { SecurityMiddleware } from './common/middleware/security.middleware';
     NotificationsModule,
     PreferencesModule,
     NodesModule,
+    SalesContactModule,
   ],
   controllers: [AppController],
   providers: [

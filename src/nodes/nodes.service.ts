@@ -53,30 +53,19 @@ export class NodesService {
         );
       }
 
+      const healthScore = this.calculateHealthScore(dto.metrics);
+
       await this.prisma.node.update({
         where: { id: node.id },
         data: {
           lastHeartbeat: new Date(),
           status: NodeStatus.ONLINE,
+          healthScore,
         },
       });
-
-      // Fetch peers for this node
-      const clients = await this.prisma.nodeClient.findMany({
-        where: { nodeId: node.id },
-      });
-
-      const peers = clients.map((c) => ({
-        publicKey: c.clientPublicKey,
-        allowedIps: c.allowedIps,
-      }));
 
       return {
         status: 'ok',
-        peers: peers,
-        instructions: {
-          drain: node.status === NodeStatus.DRAINING,
-        },
       };
     } catch (error) {
       SafeLogger.error('Error processing node heartbeat', error);
@@ -93,6 +82,25 @@ export class NodesService {
           gte: new Date(Date.now() - 5 * 60 * 1000), // Seen in last 5 minutes
         },
       },
+      orderBy: {
+        healthScore: 'desc',
+      },
     });
+  }
+
+  private calculateHealthScore(metrics?: any): number {
+    if (!metrics) return 100;
+
+    const cpuUsage = (metrics as { cpu_usage?: number }).cpu_usage ?? 0;
+    const ramUsage = (metrics as { ram_usage?: number }).ram_usage ?? 0;
+
+    // Simple scoring algorithm:
+    // Started at 100. Subtract usage percentages with weights.
+    // CPU weight: 60%, RAM weight: 40%
+    const cpuPenalty = Math.min(cpuUsage * 100 * 0.6, 60);
+    const ramPenalty = Math.min(ramUsage * 100 * 0.4, 40);
+
+    const score = 100 - cpuPenalty - ramPenalty;
+    return Math.max(0, Math.round(score));
   }
 }
