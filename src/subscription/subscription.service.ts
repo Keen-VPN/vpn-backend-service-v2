@@ -186,7 +186,7 @@ export class SubscriptionService {
 
   async cancel(userId: string) {
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where: { firebaseUid: userId },
     });
 
     if (!user) {
@@ -196,7 +196,7 @@ export class SubscriptionService {
     // Find active subscription (includes both "active" and "trialing" status)
     const activeSubscription = await this.prisma.subscription.findFirst({
       where: {
-        userId,
+        userId: user.id,
         status: {
           in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING], // Include both active and trialing subscriptions
         },
