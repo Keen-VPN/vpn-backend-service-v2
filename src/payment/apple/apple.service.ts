@@ -251,14 +251,17 @@ export class AppleService {
   }
 
   private getPlanName(productId: string): string {
-    if (productId.includes('annual')) {
+    if (productId.includes('annual') || productId.includes('yearly')) {
       return 'Premium VPN - Annual';
+    }
+    if (productId.includes('monthly')) {
+      return 'Premium VPN - Monthly';
     }
     return 'Premium VPN';
   }
 
   private getPlanPrice(productId: string): number {
-    if (productId.includes('annual')) {
+    if (productId.includes('annual') || productId.includes('yearly')) {
       return 130.99;
     }
     return 0;

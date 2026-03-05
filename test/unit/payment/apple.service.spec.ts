@@ -597,7 +597,7 @@ describe('AppleService', () => {
       expect(mockPrisma.subscription.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            planName: 'Premium VPN',
+            planName: 'Premium VPN - Monthly',
             priceAmount: 0,
           }),
         }),

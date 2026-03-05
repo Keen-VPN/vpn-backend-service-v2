@@ -155,7 +155,7 @@ export class SubscriptionService {
         subscription: activeSubscription
           ? {
               status: activeSubscription.status,
-              plan: activeSubscription.planName || '',
+              plan: this.resolveApplePlanName(activeSubscription),
               endDate: activeSubscription.currentPeriodEnd?.toISOString() || '',
               customerId:
                 activeSubscription.stripeCustomerId ||
@@ -236,5 +236,37 @@ export class SubscriptionService {
         'Subscription will be cancelled at the end of the current period',
       error: null,
     };
+  }
+
+  /**
+   * Derives the correct plan name from appleProductId when the stored planName
+   * is generic (e.g. "Premium VPN" without Monthly/Annual qualifier).
+   * This fixes existing DB records without requiring a manual SQL migration.
+   */
+  private resolveApplePlanName(subscription: {
+    planName: string | null;
+    appleProductId?: string | null;
+  }): string {
+    const planName = subscription.planName || '';
+    const productId = subscription.appleProductId || '';
+
+    // If planName already contains a qualifier, use it as-is
+    if (
+      planName.toLowerCase().includes('monthly') ||
+      planName.toLowerCase().includes('annual') ||
+      planName.toLowerCase().includes('yearly')
+    ) {
+      return planName;
+    }
+
+    // Derive from appleProductId for Apple IAP subscriptions with generic planName
+    if (productId.includes('yearly') || productId.includes('annual')) {
+      return 'Premium VPN - Annual';
+    }
+    if (productId.includes('monthly')) {
+      return 'Premium VPN - Monthly';
+    }
+
+    return planName;
   }
 }

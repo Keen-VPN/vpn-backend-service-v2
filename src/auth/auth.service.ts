@@ -117,6 +117,7 @@ export class AuthService {
               id: activeSubscription.id,
               status: activeSubscription.status,
               planName: activeSubscription.planName,
+              plan: this.resolveSubscriptionPlan(activeSubscription),
               currentPeriodEnd: activeSubscription.currentPeriodEnd,
               cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
               subscriptionType: activeSubscription.subscriptionType,
@@ -545,6 +546,7 @@ export class AuthService {
               id: activeSubscription.id,
               status: activeSubscription.status,
               planName: activeSubscription.planName,
+              plan: this.resolveSubscriptionPlan(activeSubscription),
               currentPeriodEnd: activeSubscription.currentPeriodEnd,
               cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
               subscriptionType: activeSubscription.subscriptionType,
@@ -558,5 +560,38 @@ export class AuthService {
       });
       throw new UnauthorizedException('Invalid session token');
     }
+  }
+
+  /**
+   * Resolves the human-readable plan name from subscription data.
+   * Handles cases where planName is generic (e.g. "Premium VPN") by
+   * deriving the qualifier from appleProductId or subscriptionType.
+   */
+  private resolveSubscriptionPlan(subscription: {
+    planName: string | null;
+    appleProductId?: string | null;
+    subscriptionType?: string | null;
+  }): string {
+    const planName = subscription.planName || '';
+    const productId = subscription.appleProductId || '';
+
+    // If planName already contains a qualifier, use it as-is
+    if (
+      planName.toLowerCase().includes('monthly') ||
+      planName.toLowerCase().includes('annual') ||
+      planName.toLowerCase().includes('yearly')
+    ) {
+      return planName;
+    }
+
+    // Derive from appleProductId for Apple IAP subscriptions
+    if (productId.includes('yearly') || productId.includes('annual')) {
+      return 'Premium VPN - Annual';
+    }
+    if (productId.includes('monthly')) {
+      return 'Premium VPN - Monthly';
+    }
+
+    return planName;
   }
 }
