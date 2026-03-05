@@ -71,6 +71,7 @@ async function bootstrap() {
     'http://localhost:5173',
     'https://staging.vpnkeen.com',
     'https://vpnkeen.com',
+    'http://localhost:8080',
   ];
 
   app.enableCors({

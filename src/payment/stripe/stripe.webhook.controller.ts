@@ -147,7 +147,7 @@ export class StripeWebhookController {
       cancelUrl || 'https://vpnkeen.com/cancel',
     );
 
-    return { url: session.url, sessionId: session.id };
+    return { success: true, url: session.url, sessionId: session.id };
   }
 
   @Post('portal')

@@ -30,7 +30,7 @@ export class StripeService {
 
   async getCustomerIdByUserId(userId: string): Promise<string | null> {
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where: { firebaseUid: userId },
       select: { stripeCustomerId: true },
     });
     return user?.stripeCustomerId || null;
@@ -43,7 +43,7 @@ export class StripeService {
     cancelUrl: string,
   ) {
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where: { firebaseUid: userId },
     });
 
     if (!user) {
@@ -61,7 +61,7 @@ export class StripeService {
       customerId = customer.id;
 
       await this.prisma.user.update({
-        where: { id: userId },
+        where: { firebaseUid: userId },
         data: { stripeCustomerId: customerId },
       });
     }
@@ -335,15 +335,20 @@ export class StripeService {
   }
 
   private getPriceIdForPlan(planId: string): string | null {
+    const annualPriceId =
+      this.configService?.get<string>('STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID') ||
+      process.env.STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID ||
+      '';
+    const monthlyPriceId =
+      this.configService?.get<string>('STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID') ||
+      process.env.STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID ||
+      '';
+
     const priceMap: Record<string, string> = {
-      'individual-annual':
-        this.configService?.get<string>('STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID') ||
-        process.env.STRIPE_INDIVIDUAL_ANNUAL_PRICE_ID ||
-        '',
-      'individual-monthly':
-        this.configService?.get<string>('STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID') ||
-        process.env.STRIPE_INDIVIDUAL_MONTHLY_PRICE_ID ||
-        '',
+      'individual-annual': annualPriceId,
+      'individual-monthly': monthlyPriceId,
+      premium_annual: annualPriceId,
+      premium_monthly: monthlyPriceId,
     };
 
     return priceMap[planId] || null;
