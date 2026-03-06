@@ -123,7 +123,8 @@
     ]
   },
   "overrides": {
-    "fast-xml-parser": "5.3.6",
+    "fast-xml-parser": "5.3.8",
+    "multer": "2.1.1",
     "@aws-sdk/core": "3.973.10",
     "@angular-devkit/core": {
       "ajv": "^8.18.0"
