@@ -92,6 +92,7 @@ describe('AuthController', () => {
           id: subscription.id,
           status: subscription.status,
           planName: subscription.planName,
+          plan: subscription.planName || '',
           currentPeriodEnd: subscription.currentPeriodEnd,
           cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
           subscriptionType: subscription.subscriptionType,
