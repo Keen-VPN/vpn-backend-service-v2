@@ -1,12 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { AllocationService } from '../allocation/allocation.service';
 import { VPNConfigResponseDto } from './dto/vpn-config-response.dto';
 import { RedeemTokenDto } from './dto/redeem-token.dto';
 
 @Injectable()
 export class RedemptionService {
-  constructor(private readonly allocationService: AllocationService) {}
-
   redeemToken(_dto: RedeemTokenDto): Promise<VPNConfigResponseDto> {
     // TODO:
     // 1. Verify RSA signature against Auth Service's Public Key
