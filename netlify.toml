@@ -1,5 +1,5 @@
 [build]
-  command = "prisma generate && prisma migrate deploy && npm run build"
+  command = "prisma generate && prisma migrate resolve --rolled-back 20260109093758_add_node_model && prisma migrate resolve --applied 20260223101618_init && prisma migrate resolve --applied 20260223102708_add_server_loc_pref_indexes && prisma migrate resolve --applied 20260225000800_refactor_node_and_node_client_tables && prisma migrate resolve --applied 20260225003729_db_cleanup_and_optimization && prisma migrate resolve --applied 20260225013535_add_node_health_score && prisma migrate resolve --applied 20260225030406_enforce_unique_node_client_pk && prisma migrate resolve --applied 20260225031944_db_schema_cleanup_and_tightening && prisma migrate resolve --applied 20260225033853_reinstate_sales_contact_final && prisma migrate deploy && npm run build"
   publish = "dist"
   functions = "netlify/functions"
   node_bundle = true
