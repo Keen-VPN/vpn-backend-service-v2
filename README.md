@@ -1,99 +1,171 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# KeenVPN Backend Service V2
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+[![NestJS](https://img.shields.io/badge/NestJS-11.0-E0234E?logo=nestjs)](https://nestjs.com/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)](https://www.postgresql.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-6.1-2D3748?logo=prisma)](https://www.prisma.io/)
+[![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+> A production-ready, privacy-focused VPN backend service built with NestJS. Features include blind signature cryptography (for anonymous access), usage aggregation, active node synchronization, and automated subscription management.
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 📋 Table of Contents
 
-## Project setup
+- [Overview](#-overview)
+- [Features](#-features)
+- [Technology Stack](#-technology-stack)
+- [Module Overview](#-module-overview)
+- [Architecture](#-architecture)
+- [Getting Started](#-getting-started)
+- [Deployment (Netlify)](#-deployment-netlify)
+- [Database Management](#-database-management)
+- [Testing](#-testing)
 
-```bash
-$ yarn install
-```
+---
 
-## Compile and run the project
+## 🎯 Overview
 
-```bash
-# development
-$ yarn run start
+**KeenVPN Backend Service V2** serves as the central control plane for the KeenVPN ecosystem. It manages users, subscriptions (Stripe/Apple), VPN credentials via cryptographic blind signing, and realtime metric tracking through periodic synchronization with dedicated "Node Daemons" running on individual VPN servers.
 
-# watch mode
-$ yarn run start:dev
+This architecture ensures high privacy for end-users by decoupling usage tracking from identities, and it ensures high availability by continuously calculating a \`healthScore\` for active nodes.
 
-# production mode
-$ yarn run start:prod
-```
+---
 
-## Run tests
+## ✨ Features
 
-```bash
-# unit tests
-$ yarn run test
+- **Privacy-First (Church & State)**: Complete segregation between user payments ("Church") and VPN connection logging/IP assignment ("State") using **RSA-FDH Blind Signatures**.
+- **Dynamic Node Loading & IP Allocation**: Node Daemons sync heartbeats every 60 seconds with this backend. The backend dynamically calculates node \`healthScore\` based on active clients and uptime. Clients receive IP assignments and VPN routing details mapped to the healthiest available nodes.
+- **Aggregated Usage Metrics**: Client bandwidth is streamed to the backend periodically. Analytics are stored as \`SessionAggregate\` components that completely obscure individual traffic histories.
+- **B2B Capabilities**: Provides contact management APIs for KeenVPN Business users (\`SalesContact\` module).
+- **Billing**: Manages Stripe webhooks, Apple App Store Server integrations, trials, and user session token management natively.
 
-# e2e tests
-$ yarn run test:e2e
+---
 
-# test coverage
-$ yarn run test:cov
-```
+## 🛠 Technology Stack
 
-## Deployment
+- **Framework**: NestJS 11.x
+- **Language**: TypeScript (Strict Mode)
+- **Database**: PostgreSQL
+- **ORM**: Prisma (w/ Migrations)
+- **Caching**: Redis
+- **Security**: Helmet, `@nestjs/throttler` (Rate Limiting), custom Crypto utilities.
+- **Serverless Runtime**: `@vendia/serverless-express` setup for zero-downtime execution in AWS Lambda / Netlify.
+- **Tooling**: ESLint, Prettier, Husky, lint-staged, Jest, Supertest.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+---
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## 📦 Module Overview
 
-```bash
-$ yarn install -g @nestjs/mau
-$ mau deploy
-```
+The `src` directory is functionally grouped into highly cohesive domain modules:
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+- **🔐 `auth`**: Firebase admin integration, Token parsing, user registration, Google OAuth, and Apple Sign-In implementations.
+- **👤 `account`**: Account deletion and profiling. Includes data scrub routines.
+- **🎛 `config`**: The **VPN Config** endpoints (`/api/config/vpn`). Returns dynamically generated VPN connection sets using blind-signed tokens, allowing nodes to remain entirely untied from Firebase user IDs.
+- **🖥 `nodes`**: The sync engine (`/api/nodes`). VPN Nodes submit heartbeats here, transferring usage bytes, and authenticating via a static `NODE_TOKEN`. Generates dynamic IP addresses (CIDRs) on the fly for connecting clients.
+- **🔌 `connection`**: Manages connection lifecycles tracking session starts, ends, and termination reasons for debugging disconnects (fully disconnected from PII).
+- **📋 `subscription`**: Handles checks for active subscriptions, trials (using device fingerprinting hashes), and returns available plans endpoints (`/api/subscription/plans`).
+- **💳 `payment`**: Processes incoming Stripe webhooks and Apple App Store asynchronous server alerts.
+- **🔐 `crypto`**: Generates and handles RSA-FDH cryptography to support anonymous WireGuard tokens.
+- **💼 `sales-contact`**: Specialized B2B landing page endpoints.
+- **⭐ `preferences` & 🔔 `notifications`**: Stores region preferences and FCM tokens.
 
-## Resources
+---
 
-Check out a few resources that may come in handy when working with NestJS:
+## 🏗 Architecture
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### 1. The "Church & State" Data Barrier
 
-## Support
+The API is uniquely partitioned:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+1. **User Side**: A user buys a subscription and logs in with Firebase.
+2. **Access Side**: The user requests a **Base64 VPN Token**. Before they connect, the backend mathematically blinds the token. The backend subsequently receives unblinded requests for VPN endpoint generation. Thus, the database cannot correlate Stripe payments with WireGuard public keys.
+3. **Node Side**: The client takes the generated connection details directly to the VPN Node Daemon without ever providing an identity token.
 
-## Stay in touch
+### 2. Node Auto-scaling Architecture
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Rather than maintaining a rigid database mapping for nodes, nodes call the `PUT /api/nodes/:publicKey/sync` endpoint regularly. The node transmits its stats (running connections, total bytes, `wireguard` state), and the backend acknowledges this heartbeat.
 
-## License
+If a user tries to connect, the `VPNConfig` service identifies the node with the highest `healthScore` matching their region preference and returns an `allowedIps` block strictly scoped to them.
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
-# vpn-backend-service-v2
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Node.js** >= 18.x
+- **PostgreSQL** >= 14
+- **Redis** >= 7
+- **Stripe / Firebase Account** (Keys required).
+
+### Installation & Local Setup
+
+1. **Clone & Install**:
+
+   ```bash
+   git clone .../vpn-backend-service-v2.git
+   cd vpn-backend-service-v2
+   npm install
+   ```
+
+2. **Environment Configuration**:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   *Note: Populate `DATABASE_URL`, `REDIS_URL`, `FIREBASE_*`, `STRIPE_*`, `NODE_TOKEN` and generate an RSA key inside `BLIND_SIGNING_PRIVATE_KEY`.*
+
+3. **Database Initialization**:
+
+   ```bash
+   npx prisma generate
+   npx prisma migrate deploy
+   ```
+
+4. **Launch Application**:
+
+   ```bash
+   npm run start:dev
+   ```
+
+*(See `.env.example` for comprehensive parameter listings).*
+
+---
+
+## ☁️ Deployment (Netlify)
+
+This backend is structured as a single API endpoint handler deployed via Serverless architecture onto Netlify Functions, eliminating the need for cold Docker processes.
+
+1. Netlify uses `netlify.toml` which rewrites all paths to `/.netlify/functions/server`.
+2. The continuous deployment pipeline naturally connects to the GitHub repository. It runs:
+
+   ```bash
+   prisma generate && prisma migrate deploy && npm run build
+   ```
+
+3. Environmental variables exceeding standard length (like `FIREBASE_PRIVATE_KEY`) can be fetched at runtime through alternative secret managers or compressed directly in the Netlify dashboard.
+
+---
+
+## 🗄 Database Management
+
+Leveraging Prisma, migration strategies are fully automated:
+
+- **Create a New Migration**: `npx prisma migrate dev --name <migration_name>`
+- **Wipe Database completely**: `npx prisma migrate reset`
+- **View Migrations**: `npx prisma migrate status`
+- **GUI Administration**: `npx prisma studio` (Available at localhost:5555)
+
+---
+
+## 🧪 Testing
+
+The repository relies on standard NestJS testing paradigms heavily isolated through dependency injection.
+
+- **Fast Unit Tests**: `npm run test:unit`
+- **Coverage Check**: `npm run test:cov` (Outputs to `./coverage/`)
+- **E2E Controller Tests**: `npm run test:e2e`
+
+*Note: You may need a test container PostgreSQL database running to execute the full E2E suite gracefully.*

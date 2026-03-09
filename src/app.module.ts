@@ -1,27 +1,57 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { RedisModule } from './redis/redis.module';
-import { NodeManagementModule } from './node-management/node-management.module';
-import { RedemptionModule } from './redemption/redemption.module';
-import { AllocationModule } from './allocation/allocation.module';
-import { LocationModule } from './location/location.module';
-import { NotificationModule } from './notification/notification.module';
+import { AuthModule } from './auth/auth.module';
+import { CryptoModule } from './crypto/crypto.module';
+import { AccountModule } from './account/account.module';
+import { PaymentModule } from './payment/payment.module';
+import { SubscriptionModule } from './subscription/subscription.module';
+import { ConnectionModule } from './connection/connection.module';
+import { VPNConfigModule } from './config/vpn-config.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { PreferencesModule } from './preferences/preferences.module';
+import { NodesModule } from './nodes/nodes.module';
+import { SalesContactModule } from './sales-contact/sales-contact.module';
+import { SecurityMiddleware } from './common/middleware/security.middleware';
 
 @Module({
   imports: [
     ConfigModule,
     PrismaModule,
-    RedisModule,
-    NodeManagementModule,
-    RedemptionModule,
-    AllocationModule,
-    LocationModule,
-    NotificationModule,
+    ThrottlerModule.forRoot([
+      {
+        name: 'default',
+        ttl: 60000, // 1 minute
+        limit: 100, // 100 requests per minute
+      },
+    ]),
+    AuthModule,
+    CryptoModule,
+    AccountModule,
+    PaymentModule,
+    SubscriptionModule,
+    ConnectionModule,
+    VPNConfigModule,
+    NotificationsModule,
+    PreferencesModule,
+    NodesModule,
+    SalesContactModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(SecurityMiddleware).forRoutes('*path');
+  }
+}

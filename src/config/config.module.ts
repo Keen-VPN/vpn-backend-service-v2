@@ -7,12 +7,15 @@ import { configValidationSchema } from './config.schema';
     NestConfigModule.forRoot({
       isGlobal: true,
       envFilePath: [`.env.${process.env.NODE_ENV || 'development'}`, '.env'],
-      validationSchema: configValidationSchema,
+      // Skip validation in test mode - tests will override ConfigService
+      validationSchema:
+        process.env.NODE_ENV === 'test' ? undefined : configValidationSchema,
       validationOptions: {
         allowUnknown: true,
         abortEarly: false,
       },
     }),
   ],
+  exports: [NestConfigModule],
 })
 export class ConfigModule {}

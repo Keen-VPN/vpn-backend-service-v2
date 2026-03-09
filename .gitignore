@@ -6,6 +6,7 @@ dist
 
 # Environment variables
 .env
+.env.staging
 .env.local
 .env.*.local
 .env.development
@@ -29,5 +30,11 @@ coverage
 # OS
 .DS_Store
 Thumbs.db
+blind_signing_key.pem
 
-/generated/prisma
+# Test Artifacts
+test-results.json
+e2e_output.txt
+# Local Netlify folder
+.netlify
+*.pem

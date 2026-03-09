@@ -1,0 +1,14 @@
+[build]
+  command = "prisma generate && prisma migrate deploy && npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+  node_bundle = true
+
+[functions]
+  external_node_modules = ["@nestjs/microservices", "@nestjs/websockets", "cache-manager", "class-transformer", "class-validator"]
+
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/api"
+  status = 200
+  force = true

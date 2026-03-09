@@ -8,56 +8,65 @@
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "start": "nest start",
-    "start:dev": "NODE_ENV=development nest start --watch",
-    "start:staging": "NODE_ENV=staging nest start",
-    "start:prod": "NODE_ENV=production node dist/main",
+    "start": "nest start --watch",
+    "dev": "nest start --watch",
+    "start:prod": "node dist/src/main",
     "start:debug": "nest start --debug --watch",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "test": "jest --config ./test/jest-unit.json",
-    "test:unit": "jest --config ./test/jest-unit.json",
-    "test:unit:watch": "jest --config ./test/jest-unit.json --watch",
-    "test:unit:cov": "jest --config ./test/jest-unit.json --coverage",
-    "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:e2e:watch": "jest --config ./test/jest-e2e.json --watch",
-    "test:all": "npm run test:unit && npm run test:e2e",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand --config ./test/jest-unit.json",
-    "docker:dev": "docker-compose -f docker-compose.development.yml up",
-    "docker:local": "docker-compose -f docker-compose.development.yml up",
-    "docker:staging": "docker-compose -f docker-compose.staging.yml up",
-    "docker:production": "docker-compose -f docker-compose.production.yml up",
-    "docker:build": "docker-compose build",
+    "test": "jest --config ./test/jest.config.ts",
+    "test:unit": "jest --config ./test/jest.config.ts --testPathPatterns=unit",
+    "test:e2e": "jest --config ./test/jest.config.ts --testPathPatterns=e2e",
+    "test:watch": "jest --config ./test/jest.config.ts --watch",
+    "test:cov": "jest --config ./test/jest.config.ts --coverage",
+    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --config ./test/jest.config.ts --runInBand",
+    "docker": "docker-compose up -d",
+    "seed:vpn-config": "ts-node -r tsconfig-paths/register prisma/seed-vpn-config.ts",
+    "prisma:deploy": "prisma migrate deploy",
     "prepare": "husky"
   },
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.992.0",
+    "@aws-sdk/credential-providers": "^3.992.0",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
+    "@nestjs/jwt": "^11.0.2",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.2.4",
-    "@prisma/adapter-pg": "^7.2.0",
-    "@prisma/client": "^7.2.0",
-    "@types/ioredis": "^4.28.10",
-    "axios": "^1.13.2",
+    "@nestjs/throttler": "^6.5.0",
+    "@netlify/functions": "^5.1.2",
+    "@prisma/client": "6.1.0",
+    "@vendia/serverless-express": "^4.12.6",
+    "axios": "^1.13.5",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
-    "ioredis": "^5.9.1",
+    "firebase-admin": "^13.6.1",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.10.0",
     "joi": "^18.0.2",
+    "jsonwebtoken": "^9.0.3",
+    "jwks-rsa": "^3.2.0",
+    "pdfkit": "^0.17.2",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "stripe": "^20.1.1",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
+    "@faker-js/faker": "^10.2.0",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
+    "@types/aws-lambda": "^8.10.160",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.10.7",
+    "@types/pdfkit": "^0.17.4",
     "@types/pg": "^8.16.0",
     "@types/supertest": "^6.0.2",
     "eslint": "^9.18.0",
@@ -66,9 +75,10 @@
     "globals": "^16.0.0",
     "husky": "^9.1.7",
     "jest": "^30.0.0",
+    "jest-mock-extended": "^4.0.0",
     "lint-staged": "^16.2.7",
     "prettier": "^3.4.2",
-    "prisma": "^7.2.0",
+    "prisma": "^6.1.0",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",
@@ -78,10 +88,54 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
   },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "rootDir": ".",
+    "testMatch": [
+      "**/test/**/*.spec.ts",
+      "**/test/**/*.e2e-spec.ts"
+    ],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "collectCoverageFrom": [
+      "src/**/*.(t|j)s",
+      "!src/**/*.spec.ts",
+      "!src/main.ts",
+      "!src/**/*.module.ts"
+    ],
+    "coverageDirectory": "./coverage",
+    "setupFilesAfterEnv": [
+      "<rootDir>/test/setup/jest.setup.ts"
+    ],
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/src/$1"
+    }
+  },
   "lint-staged": {
     "*.ts": [
       "eslint --fix",
       "prettier --write"
     ]
+  },
+  "overrides": {
+    "fast-xml-parser": "5.3.8",
+    "multer": "2.1.1",
+    "@aws-sdk/core": "3.973.10",
+    "@angular-devkit/core": {
+      "ajv": "^8.18.0"
+    },
+    "glob": {
+      "minimatch": "^10.2.2"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^9.0.5"
+    }
   }
 }

@@ -1,35 +1,41 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Inject,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { Pool } from 'pg';
 
 @Injectable()
 export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
-  constructor(private configService: ConfigService) {
-    // Get database URL from config or environment
-    const databaseUrl =
-      process.env.DATABASE_URL || configService.get<string>('DATABASE_URL');
+  constructor(@Inject(ConfigService) private configService: ConfigService) {
+    let databaseUrl = configService?.get<string>('DATABASE_URL');
 
-    // Create PostgreSQL connection pool
-    const pool = new Pool({
-      connectionString: databaseUrl,
-    });
+    if (!databaseUrl) {
+      // Fallback for Netlify bundled environment if DI fails
+      databaseUrl = process.env.DATABASE_URL;
+    }
 
-    // Create Prisma adapter
-    const adapter = new PrismaPg(pool);
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL is not defined (ConfigService or ENV)');
+    }
 
-    // Initialize PrismaClient with adapter
     super({
-      adapter,
+      datasources: {
+        db: {
+          url: databaseUrl,
+        },
+      },
     });
   }
 
   async onModuleInit() {
-    await this.$connect();
+    // Intentionally left blank. Let Prisma construct connection lazily on the first query.
+    // In serverless environments, an aggressive initial connection can hang the container spin-up.
   }
 
   async onModuleDestroy() {
