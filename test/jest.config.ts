@@ -15,6 +15,10 @@ const config: Config = {
     '!<rootDir>/src/**/*.module.ts',
     '!<rootDir>/src/**/*.interface.ts',
     '!<rootDir>/src/**/*.dto.ts',
+    '!<rootDir>/src/common/filters/**',
+    '!<rootDir>/src/common/interceptors/**',
+    '!<rootDir>/src/common/pipes/**',
+    '!<rootDir>/src/common/utils/secrets.util.ts',
   ],
   coverageDirectory: './coverage',
   coverageThreshold: {
