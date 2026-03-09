@@ -24,7 +24,7 @@ export class StripeService {
       throw new Error('STRIPE_SECRET_KEY is required');
     }
     this.stripe = new Stripe(secretKey, {
-      apiVersion: '2026-01-28.clover',
+      apiVersion: '2026-02-25.clover',
     });
   }
 
