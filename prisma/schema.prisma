@@ -29,8 +29,8 @@ model User {
   deviceTrialFingerprints DeviceTrialFingerprint[]
   trialGrant              TrialGrant?
 
-  @@map("users")
   @@index([provider])
+  @@map("users")
 }
 
 model Subscription {
@@ -40,22 +40,22 @@ model Subscription {
   stripeSubscriptionId       String?            @map("stripe_subscription_id")
   status                     SubscriptionStatus @default(INACTIVE)
   planId                     String?            @map("plan_id")
-  planName                   String?   @map("plan_name")
-  priceAmount                Decimal?  @map("price_amount") @db.Decimal(10, 2)
-  priceCurrency              String?   @default("USD") @map("price_currency")
-  billingPeriod              String?   @map("billing_period")
-  currentPeriodStart         DateTime? @map("current_period_start") @db.Timestamptz(6)
-  currentPeriodEnd           DateTime? @map("current_period_end") @db.Timestamptz(6)
-  cancelAtPeriodEnd          Boolean   @default(false) @map("cancel_at_period_end")
-  cancelledAt                DateTime? @map("cancelled_at") @db.Timestamptz(6)
-  createdAt                  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  appleEnvironment           String?   @map("apple_environment")
-  appleOriginalTransactionId String?   @map("apple_original_transaction_id")
-  appleProductId             String?   @map("apple_product_id")
-  appleTransactionId         String?   @unique @map("apple_transaction_id")
-  subscriptionType           String    @default("stripe") @map("subscription_type")
-  user                       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planName                   String?            @map("plan_name")
+  priceAmount                Decimal?           @map("price_amount") @db.Decimal(10, 2)
+  priceCurrency              String?            @default("USD") @map("price_currency")
+  billingPeriod              String?            @map("billing_period")
+  currentPeriodStart         DateTime?          @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd           DateTime?          @map("current_period_end") @db.Timestamptz(6)
+  cancelAtPeriodEnd          Boolean            @default(false) @map("cancel_at_period_end")
+  cancelledAt                DateTime?          @map("cancelled_at") @db.Timestamptz(6)
+  createdAt                  DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  appleEnvironment           String?            @map("apple_environment")
+  appleOriginalTransactionId String?            @map("apple_original_transaction_id")
+  appleProductId             String?            @map("apple_product_id")
+  appleTransactionId         String?            @unique @map("apple_transaction_id")
+  subscriptionType           String             @default("stripe") @map("subscription_type")
+  user                       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([stripeSubscriptionId, currentPeriodStart], map: "subscription_period_unique")
   @@index([userId])
@@ -144,6 +144,7 @@ model SessionAggregate {
   @@index([subscriptionTier])
   @@map("session_aggregates")
 }
+
 model SalesContact {
   id                       String        @id @default(uuid())
   referenceId              String        @unique @map("reference_id")
@@ -169,10 +170,6 @@ model SalesContact {
   @@index([status])
   @@map("sales_contacts")
 }
-
-
-
-
 
 model TrialGrant {
   id         String   @id @default(uuid())
@@ -294,8 +291,8 @@ enum ContactStatus {
 }
 
 enum NodeStatus {
-  ONLINE   @map("ONLINE")
-  OFFLINE  @map("OFFLINE")
+  ONLINE  @map("ONLINE")
+  OFFLINE @map("OFFLINE")
 
   @@map("node_status")
 }
