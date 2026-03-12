@@ -191,6 +191,28 @@ export const handler: Handler = async (
     };
   }
 
+  // Netlify redirect sends all traffic to this function; the path often arrives as
+  // /.netlify/functions/api/config/vpn while Nest routes are registered as /api/config/vpn
+  // (global prefix "api"). Rewrite so serverless-express forwards the path Express expects.
+  const netlifyFunctionPrefix = '/.netlify/functions/api';
+  const rewritePath = (p: string): string => {
+    if (!p.startsWith(netlifyFunctionPrefix)) return p;
+    const rest = p.slice(netlifyFunctionPrefix.length);
+    // /api + /config/vpn -> /api/config/vpn
+    if (!rest || rest === '/') return '/api';
+    return `/api${rest.startsWith('/') ? rest : `/${rest}`}`;
+  };
+  if (typeof event.path === 'string') {
+    event.path = rewritePath(event.path);
+    if (event.requestContext) {
+      event.requestContext.path = event.path;
+      event.requestContext.resourcePath = event.path;
+    }
+  }
+  if (typeof event.rawPath === 'string') {
+    event.rawPath = rewritePath(event.rawPath);
+  }
+
   const server = await bootstrap();
   return server(event, context, callback);
 };
