@@ -5,7 +5,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SubscriptionStatus } from '@prisma/client';
 import { SafeLogger } from '../../common/utils/logger.util';
 import { TrialService } from '../../subscription/trial.service';
-import { AuthService } from '../../auth/auth.service';
 
 @Injectable()
 export class StripeService {
@@ -16,7 +15,6 @@ export class StripeService {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(forwardRef(() => TrialService))
     private trialService: TrialService,
-    @Inject(AuthService) private authService: AuthService,
   ) {
     const secretKey =
       this.configService?.get<string>('STRIPE_SECRET_KEY') ||
@@ -44,13 +42,12 @@ export class StripeService {
     successUrl: string,
     cancelUrl: string,
   ) {
-    let user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { firebaseUid: userId },
     });
 
     if (!user) {
-      // User may have signed in with Apple via Firebase but never hit /auth/login
-      user = await this.authService.ensureUserByFirebaseUid(userId);
+      throw new Error('User not found');
     }
 
     // Get or create Stripe customer
