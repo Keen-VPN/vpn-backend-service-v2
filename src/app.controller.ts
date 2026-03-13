@@ -7,6 +7,17 @@ import { AppService, HealthCheckResponse } from './app.service';
 export class AppController {
   constructor(@Inject(AppService) private readonly appService: AppService) {}
 
+  @Get('test-error')
+  @ApiOperation({
+    summary: 'Trigger test error (Slack)',
+    description:
+      'Throws an error to verify Slack error reporting. Remove or guard in production.',
+  })
+  @ApiResponse({ status: 500, description: 'Always returns 500' })
+  triggerTestError(): never {
+    throw new Error('Manual test error – Slack notification check');
+  }
+
   @Get('/')
   @ApiOperation({
     summary: 'Health check endpoint',
