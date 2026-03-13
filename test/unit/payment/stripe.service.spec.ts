@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { StripeService } from '../../../src/payment/stripe/stripe.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { TrialService } from '../../../src/subscription/trial.service';
+import { AuthService } from '../../../src/auth/auth.service';
 import { SubscriptionStatus } from '@prisma/client';
 import {
   createMockPrismaClient,
@@ -50,6 +51,12 @@ describe('StripeService', () => {
           useValue: {
             checkTrialStatus: jest.fn(),
             activateTrial: jest.fn(),
+          },
+        },
+        {
+          provide: AuthService,
+          useValue: {
+            ensureUserByFirebaseUid: jest.fn(),
           },
         },
       ],
