@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { FirebaseConfig } from '../config/firebase.config';
 import { PrismaService } from '../prisma/prisma.service';
-import { SubscriptionStatus } from '@prisma/client';
+import { SubscriptionStatus, User } from '@prisma/client';
 import { SafeLogger } from '../common/utils/logger.util';
 import { AppleTokenVerifierService } from './apple-token-verifier.service';
 import * as jwt from 'jsonwebtoken';
@@ -135,6 +135,55 @@ export class AuthService {
     // For Firebase, tokens are stateless, so we just log the logout
     SafeLogger.info('User logged out', { service: 'AuthService', userId });
     return Promise.resolve({ success: true });
+  }
+
+  /**
+   * Find or create a User by Firebase UID using Firebase Admin.
+   * Used when a valid Firebase token is presented (e.g. Stripe checkout) but we have
+   * no User row yet (e.g. user signed in with Apple via Firebase and never called /auth/login).
+   */
+  async ensureUserByFirebaseUid(firebaseUid: string): Promise<User> {
+    const firebaseUser = await this.firebaseConfig
+      .getAuth()
+      .getUser(firebaseUid);
+    const email =
+      firebaseUser.email || `firebase_${firebaseUid}@placeholder.keen`;
+    const displayName = firebaseUser.displayName ?? firebaseUser.email ?? null;
+    const emailVerified = firebaseUser.emailVerified ?? false;
+    const provider = firebaseUser.providerData?.[0]?.providerId || 'apple';
+
+    let user = await this.prisma.user.findUnique({
+      where: { firebaseUid },
+    });
+
+    if (!user) {
+      user = await this.prisma.user.findUnique({
+        where: { email },
+      });
+      if (user) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: { firebaseUid, displayName, emailVerified },
+        });
+      } else {
+        user = await this.prisma.user.create({
+          data: {
+            firebaseUid,
+            email,
+            displayName,
+            provider,
+            emailVerified,
+          },
+        });
+      }
+      SafeLogger.info('User ensured from Firebase UID', {
+        service: 'AuthService',
+        userId: user.id,
+        firebaseUid,
+      });
+    }
+
+    return user;
   }
 
   private generateSessionToken(userId: string): string {
