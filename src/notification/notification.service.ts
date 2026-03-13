@@ -42,7 +42,15 @@ export class NotificationService {
     private readonly configService: ConfigService,
   ) {}
 
+  private isDevelopment(): boolean {
+    const nodeEnv =
+      this.configService.get<string>('NODE_ENV') || process.env.NODE_ENV;
+    return nodeEnv === 'development';
+  }
+
   async sendSlackAlert(alert: Alert): Promise<void> {
+    if (this.isDevelopment()) return;
+
     const webhookUrl = this.configService.get<string>('SLACK_WEBHOOK_URL');
 
     if (!webhookUrl) {
@@ -131,6 +139,8 @@ export class NotificationService {
     statusCode: number,
     requestId: string,
   ): Promise<void> {
+    if (this.isDevelopment()) return;
+
     const webhookUrl = this.configService.get<string>('SLACK_WEBHOOK_URL');
     if (!webhookUrl) return;
 
