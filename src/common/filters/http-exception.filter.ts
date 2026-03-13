@@ -4,17 +4,20 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
-  Inject,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { ApiErrorResponse } from '../interfaces/api-error.interface';
 import { randomUUID } from 'crypto';
 import { SafeLogger } from '../utils/logger.util';
+import { NotificationService } from '../../notification/notification.service';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-  constructor(@Inject(ConfigService) private configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -98,6 +101,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
         errorCode: code,
       });
     }
+
+    // Notify Slack of every error (file and line included when available)
+    void this.notificationService
+      .reportErrorToSlack(exception, request, status, requestId)
+      .catch(() => {});
 
     response.status(status).json(errorResponse);
   }

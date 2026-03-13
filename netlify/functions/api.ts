@@ -2,7 +2,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../src/app.module';
 import { ValidationPipe } from '@nestjs/common';
-import { HttpExceptionFilter } from '../../src/common/filters/http-exception.filter';
 import { LoggingInterceptor } from '../../src/common/interceptors/logging.interceptor';
 import helmet from 'helmet';
 import { SecretsUtil } from '../../src/common/utils/secrets.util';
@@ -122,9 +121,6 @@ async function bootstrap() {
         transform: true,
       }),
     );
-
-    // Global exception filter
-    app.useGlobalFilters(new HttpExceptionFilter(configService));
 
     // Global logging interceptor
     app.useGlobalInterceptors(new LoggingInterceptor());
