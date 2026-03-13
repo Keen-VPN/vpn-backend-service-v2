@@ -5,6 +5,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { ApiErrorResponse } from '../interfaces/api-error.interface';
@@ -16,7 +17,7 @@ import { NotificationService } from '../../notification/notification.service';
 export class HttpExceptionFilter implements ExceptionFilter {
   constructor(
     private readonly configService: ConfigService,
-    private readonly notificationService: NotificationService,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
@@ -102,10 +103,22 @@ export class HttpExceptionFilter implements ExceptionFilter {
       });
     }
 
-    // Notify Slack of every error (file and line included when available)
-    void this.notificationService
-      .reportErrorToSlack(exception, request, status, requestId)
-      .catch(() => {});
+    // Notify Slack (resolve at runtime so it works when Netlify bundle breaks constructor DI)
+    try {
+      const notificationService = this.moduleRef.get(NotificationService, {
+        strict: false,
+      });
+      if (
+        notificationService?.reportErrorToSlack &&
+        typeof notificationService.reportErrorToSlack === 'function'
+      ) {
+        void notificationService
+          .reportErrorToSlack(exception, request, status, requestId)
+          .catch(() => {});
+      }
+    } catch {
+      // Ignore if NotificationService cannot be resolved (e.g. in tests or broken bundle)
+    }
 
     response.status(status).json(errorResponse);
   }
