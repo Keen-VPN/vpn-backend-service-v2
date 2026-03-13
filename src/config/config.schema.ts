@@ -55,4 +55,7 @@ export const configValidationSchema = Joi.object({
     then: Joi.string().optional(),
     otherwise: Joi.string().optional().default('dev-token-locally'),
   }),
+
+  // Slack error reporting (optional)
+  SLACK_WEBHOOK_URL: Joi.string().uri().optional(),
 });

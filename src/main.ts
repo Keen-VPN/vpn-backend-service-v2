@@ -3,7 +3,6 @@ import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import helmet from 'helmet';
 import { SafeLogger } from './common/utils/logger.util';
@@ -98,9 +97,6 @@ async function bootstrap() {
       transform: true,
     }),
   );
-
-  // Global exception filter
-  app.useGlobalFilters(new HttpExceptionFilter(configService));
 
   // Global logging interceptor
   app.useGlobalInterceptors(new LoggingInterceptor());

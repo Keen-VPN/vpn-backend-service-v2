@@ -36,7 +36,11 @@ describe('NotificationService', () => {
 
     service = module.get<NotificationService>(NotificationService);
 
-    mockConfigService.get.mockReturnValue('https://hooks.slack.com/test');
+    mockConfigService.get.mockImplementation((key: string) => {
+      if (key === 'NODE_ENV') return 'test';
+      if (key === 'SLACK_WEBHOOK_URL') return 'https://hooks.slack.com/test';
+      return undefined;
+    });
   });
 
   afterEach(() => {
@@ -118,7 +122,29 @@ describe('NotificationService', () => {
     });
 
     it('should skip sending if no webhook URL configured', async () => {
-      mockConfigService.get.mockReturnValue(undefined);
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'test';
+        if (key === 'SLACK_WEBHOOK_URL') return undefined;
+        return undefined;
+      });
+
+      const alert = {
+        type: AlertType.HIGH_LOAD,
+        severity: 'warning' as const,
+        message: 'Test',
+      };
+
+      await service.sendSlackAlert(alert);
+
+      expect(mockHttpService.post).not.toHaveBeenCalled();
+    });
+
+    it('should not send to Slack when NODE_ENV is development', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'development';
+        if (key === 'SLACK_WEBHOOK_URL') return 'https://hooks.slack.com/test';
+        return undefined;
+      });
 
       const alert = {
         type: AlertType.HIGH_LOAD,
@@ -189,6 +215,30 @@ describe('NotificationService', () => {
           text: expect.stringContaining('🔴') as string,
         }),
       );
+    });
+  });
+
+  describe('reportErrorToSlack', () => {
+    it('should not send to Slack when NODE_ENV is development', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'development';
+        if (key === 'SLACK_WEBHOOK_URL') return 'https://hooks.slack.com/test';
+        return undefined;
+      });
+
+      const mockRequest = {
+        method: 'GET',
+        url: '/test',
+      } as any;
+
+      await service.reportErrorToSlack(
+        new Error('Test error'),
+        mockRequest,
+        500,
+        'req-123',
+      );
+
+      expect(mockHttpService.post).not.toHaveBeenCalled();
     });
   });
 
