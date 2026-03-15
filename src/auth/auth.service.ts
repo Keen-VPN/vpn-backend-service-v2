@@ -412,10 +412,26 @@ export class AuthService {
           const fbDecoded = await this.firebaseConfig
             .getAuth()
             .verifyIdToken(firebaseToken);
-          user = await this.prisma.user.update({
-            where: { id: user.id },
-            data: { firebaseUid: fbDecoded.uid },
+
+          // Guard against unique-constraint violation: if this Firebase UID is
+          // already owned by a different user (e.g. a Google account), skip the
+          // link rather than throwing and silently swallowing the error.
+          const existingFbUser = await this.prisma.user.findUnique({
+            where: { firebaseUid: fbDecoded.uid },
           });
+
+          if (existingFbUser && existingFbUser.id !== user.id) {
+            SafeLogger.warn(
+              'Firebase UID already linked to a different user — skipping link',
+              { service: 'AuthService' },
+              { existingUserId: existingFbUser.id, appleUserId: user.id },
+            );
+          } else {
+            user = await this.prisma.user.update({
+              where: { id: user.id },
+              data: { firebaseUid: fbDecoded.uid },
+            });
+          }
         } catch (e) {
           SafeLogger.warn(
             'Could not link Firebase UID during Apple sign-in',
@@ -442,6 +458,7 @@ export class AuthService {
         },
         sessionToken,
         authMethod: 'apple',
+        firebaseLinked: !!user.firebaseUid,
       };
     } catch (error) {
       SafeLogger.error('Apple sign-in failed', error, {
