@@ -21,6 +21,7 @@ interface GeoResponse {
 export class NodesService {
   private geoCache = new Map<string, { data: Partial<Node>; expiry: number }>();
   private readonly CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+  private readonly MAX_CACHE_SIZE = 1000;
 
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
@@ -69,10 +70,13 @@ export class NodesService {
   }
 
   private async fetchGeoLocation(ip: string): Promise<Partial<Node>> {
-    // 1. Check Cache
+    // 1. Check Cache and Evict if expired
     const cached = this.geoCache.get(ip);
-    if (cached && cached.expiry > Date.now()) {
-      return cached.data;
+    if (cached) {
+      if (cached.expiry > Date.now()) {
+        return cached.data;
+      }
+      this.geoCache.delete(ip); // Evict expired entry
     }
 
     try {
@@ -95,7 +99,17 @@ export class NodesService {
             : undefined,
         };
 
-        // 3. Update Cache
+        // 3. Update Cache with size limit enforcement
+        if (this.geoCache.size >= this.MAX_CACHE_SIZE) {
+          // Simple FIFO eviction: delete first entry
+          const firstKey = this.geoCache.keys().next().value as
+            | string
+            | undefined;
+          if (firstKey) {
+            this.geoCache.delete(firstKey);
+          }
+        }
+
         this.geoCache.set(ip, {
           data: geoData,
           expiry: Date.now() + this.CACHE_TTL,

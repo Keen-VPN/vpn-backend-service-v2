@@ -18,9 +18,16 @@ describe('Nodes (e2e)', () => {
 
   beforeEach(async () => {
     const mockConfig = createMockConfigService();
-    jest.spyOn(mockConfig, 'get').mockImplementation((key: string) => {
-      if (key === 'NODE_TOKEN') return NODE_TOKEN;
-      return null;
+    // Safely override NODE_TOKEN without recursion by using a fresh implementation
+    const defaults: Record<string, any> = {
+      NODE_TOKEN: NODE_TOKEN,
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
+      JWT_SECRET: 'test-secret',
+    };
+
+    mockConfig.get.mockImplementation((key: string, defaultValue?: any) => {
+      return defaults[key] || defaultValue;
     });
 
     const mockPrisma = createMockPrismaClient();
@@ -48,7 +55,13 @@ describe('Nodes (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe());
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     await app.init();
   });
 

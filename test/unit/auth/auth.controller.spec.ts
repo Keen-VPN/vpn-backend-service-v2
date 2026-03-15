@@ -182,9 +182,10 @@ describe('AuthController', () => {
         appleSignInDto.userIdentifier,
         appleSignInDto.email,
         appleSignInDto.fullName,
-        expect.any(Array), // Just check it's an array to avoid strict reference checks if objects are recreated
+        expect.any(Array),
         appleSignInDto.deviceFingerprint,
         appleSignInDto.devicePlatform,
+        undefined, // firebaseToken is not provided in this test case
       );
     });
 
@@ -216,6 +217,7 @@ describe('AuthController', () => {
         appleSignInDto.transactionIds,
         undefined,
         undefined,
+        undefined, // firebaseToken
       );
     });
   });
