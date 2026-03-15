@@ -420,6 +420,7 @@ export class AuthService {
           SafeLogger.warn(
             'Could not link Firebase UID during Apple sign-in',
             { service: 'AuthService' },
+            { error: e instanceof Error ? e.message : String(e) },
           );
         }
       }
