@@ -407,6 +407,7 @@ export class AuthService {
       }
 
       // Link Firebase UID so Stripe checkout can look up this user by firebaseUid
+      let firebaseLinkError: string | null = null;
       if (firebaseToken && !user.firebaseUid) {
         try {
           const fbDecoded = await this.firebaseConfig
@@ -421,10 +422,11 @@ export class AuthService {
           });
 
           if (existingFbUser && existingFbUser.id !== user.id) {
+            firebaseLinkError = 'conflict';
             SafeLogger.warn(
               'Firebase UID already linked to a different user — skipping link',
               { service: 'AuthService' },
-              { existingUserId: existingFbUser.id, appleUserId: user.id },
+              { existingUserId: existingFbUser.id, currentUserId: user.id },
             );
           } else {
             user = await this.prisma.user.update({
@@ -459,6 +461,7 @@ export class AuthService {
         sessionToken,
         authMethod: 'apple',
         firebaseLinked: !!user.firebaseUid,
+        ...(firebaseLinkError && { firebaseLinkError }),
       };
     } catch (error) {
       SafeLogger.error('Apple sign-in failed', error, {
