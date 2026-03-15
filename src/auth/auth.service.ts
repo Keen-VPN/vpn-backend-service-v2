@@ -245,6 +245,7 @@ export class AuthService {
     }>,
     deviceFingerprint?: string,
     devicePlatform?: string,
+    firebaseToken?: string,
   ) {
     try {
       // Try to verify Apple identity token using Apple's public keys
@@ -405,6 +406,43 @@ export class AuthService {
         });
       }
 
+      // Link Firebase UID so Stripe checkout can look up this user by firebaseUid
+      let firebaseLinkError: string | null = null;
+      if (firebaseToken && !user.firebaseUid) {
+        try {
+          const fbDecoded = await this.firebaseConfig
+            .getAuth()
+            .verifyIdToken(firebaseToken);
+
+          // Guard against unique-constraint violation: if this Firebase UID is
+          // already owned by a different user (e.g. a Google account), skip the
+          // link rather than throwing and silently swallowing the error.
+          const existingFbUser = await this.prisma.user.findUnique({
+            where: { firebaseUid: fbDecoded.uid },
+          });
+
+          if (existingFbUser && existingFbUser.id !== user.id) {
+            firebaseLinkError = 'conflict';
+            SafeLogger.warn(
+              'Firebase UID already linked to a different user — skipping link',
+              { service: 'AuthService' },
+              { existingUserId: existingFbUser.id, currentUserId: user.id },
+            );
+          } else {
+            user = await this.prisma.user.update({
+              where: { id: user.id },
+              data: { firebaseUid: fbDecoded.uid },
+            });
+          }
+        } catch (e) {
+          SafeLogger.warn(
+            'Could not link Firebase UID during Apple sign-in',
+            { service: 'AuthService' },
+            { error: e instanceof Error ? e.message : String(e) },
+          );
+        }
+      }
+
       const sessionToken = this.generateSessionToken(user.id);
 
       SafeLogger.info(
@@ -422,6 +460,8 @@ export class AuthService {
         },
         sessionToken,
         authMethod: 'apple',
+        firebaseLinked: !!user.firebaseUid,
+        ...(firebaseLinkError && { firebaseLinkError }),
       };
     } catch (error) {
       SafeLogger.error('Apple sign-in failed', error, {

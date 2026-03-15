@@ -90,6 +90,7 @@ export class AuthController {
       appleSignInDto.transactionIds,
       appleSignInDto.deviceFingerprint,
       appleSignInDto.devicePlatform,
+      appleSignInDto.firebaseToken,
     );
   }
 
