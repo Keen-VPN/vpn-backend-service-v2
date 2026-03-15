@@ -40,3 +40,4 @@ e2e_output.txt
 *.pem
 
 .gemini
+.gemini/*
