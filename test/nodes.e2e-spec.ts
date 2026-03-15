@@ -4,6 +4,8 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios';
+import { of } from 'rxjs';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { FirebaseConfig } from '../src/config/firebase.config';
 import {
@@ -27,7 +29,7 @@ describe('Nodes (e2e)', () => {
     };
 
     mockConfig.get.mockImplementation((key: string, defaultValue?: any) => {
-      return defaults[key] || defaultValue;
+      return defaults[key] ?? defaultValue;
     });
 
     const mockPrisma = createMockPrismaClient();
@@ -52,6 +54,20 @@ describe('Nodes (e2e)', () => {
       .useValue(mockPrisma)
       .overrideProvider(FirebaseConfig)
       .useValue(createMockFirebaseConfig())
+      .overrideProvider(HttpService)
+      .useValue({
+        get: jest.fn().mockReturnValue(
+          of({
+            data: {
+              country_name: 'Australia',
+              city: 'Sydney',
+              country_code: 'AU',
+              latitude: -33.86,
+              longitude: 151.2,
+            },
+          }),
+        ),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();

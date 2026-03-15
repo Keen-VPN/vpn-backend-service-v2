@@ -114,5 +114,25 @@ describe('NodesService', () => {
       const upsertArgs = mockPrisma.node.upsert.mock.calls[0][0];
       expect(upsertArgs.create.country).toBeUndefined();
     });
+
+    it('should set missing geo fields to null when API returns partial data', async () => {
+      const partialGeoResponse = {
+        data: {
+          country_name: 'United States',
+          // city is missing
+          country_code: 'US',
+        },
+      };
+
+      mockHttpService.get.mockReturnValue(of(partialGeoResponse));
+      mockPrisma.node.upsert.mockResolvedValue({ id: '1', ...registerDto });
+
+      await service.register({ ...registerDto, publicIp: '2.2.2.2' });
+
+      const upsertArgs = mockPrisma.node.upsert.mock.calls[0][0];
+      expect(upsertArgs.update.country).toBe('United States');
+      expect(upsertArgs.update.city).toBeNull();
+      expect(upsertArgs.update.latitude).toBeNull();
+    });
   });
 });

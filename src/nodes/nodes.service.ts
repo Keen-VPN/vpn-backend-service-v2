@@ -70,6 +70,16 @@ export class NodesService {
   }
 
   private async fetchGeoLocation(ip: string): Promise<Partial<Node>> {
+    // 0. Defensive Validation: Ensure input is a valid IP format
+    const ipv4Regex =
+      /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}$/;
+    const ipv6Regex = /^(?:[a-fA-F\d]{1,4}:){7}[a-fA-F\d]{1,4}$/; // Basic IPv6 check
+
+    if (!ipv4Regex.test(ip) && !ipv6Regex.test(ip)) {
+      SafeLogger.warn('Invalid IP format provided for geolocation', { ip });
+      return {};
+    }
+
     // 1. Check Cache and Evict if expired
     const cached = this.geoCache.get(ip);
     if (cached) {
@@ -90,13 +100,13 @@ export class NodesService {
 
       if (response.data && !response.data.error) {
         const geoData: Partial<Node> = {
-          country: response.data.country_name,
-          city: response.data.city,
-          latitude: response.data.latitude,
-          longitude: response.data.longitude,
+          country: response.data.country_name ?? null,
+          city: response.data.city ?? null,
+          latitude: response.data.latitude ?? null,
+          longitude: response.data.longitude ?? null,
           flagUrl: response.data.country_code
             ? `https://flagcdn.com/w40/${response.data.country_code.toLowerCase()}.png`
-            : undefined,
+            : null,
         };
 
         // 3. Update Cache with size limit enforcement

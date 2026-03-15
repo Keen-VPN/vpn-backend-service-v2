@@ -293,6 +293,85 @@ describe('AuthService', () => {
       expect(result.user.id).toBe(newUser.id);
       expect(mockPrisma.user.create).toHaveBeenCalled();
     });
+
+    it('should return conflict if firebaseUid is already linked to another user', async () => {
+      const decodedToken = {
+        sub: userIdentifier,
+        email,
+        email_verified: true,
+      };
+      const user = createMockUser({
+        appleUserId: userIdentifier,
+        email,
+        firebaseUid: null,
+      });
+      const existingFbUser = createMockUser({ firebaseUid: 'other-fb-uid' });
+      const firebaseToken = 'valid-fb-token';
+
+      mockAppleTokenVerifierService.verifyIdentityToken.mockResolvedValue(
+        decodedToken,
+      );
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce(user) // For finding user by appleUserId
+        .mockResolvedValueOnce(existingFbUser); // For checking if firebaseUid exists
+      mockPrisma.user.update.mockResolvedValue(user);
+      mockFirebaseAuth.verifyIdToken.mockResolvedValue({
+        uid: 'other-fb-uid',
+      } as any);
+
+      const result = await service.appleSignIn(
+        identityToken,
+        userIdentifier,
+        email,
+        fullName,
+        undefined,
+        undefined,
+        undefined,
+        firebaseToken,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.firebaseLinked).toBe(false);
+      expect(result.firebaseLinkError).toBe('conflict');
+    });
+
+    it('should return verification_failed if firebaseToken verification fails', async () => {
+      const decodedToken = {
+        sub: userIdentifier,
+        email,
+        email_verified: true,
+      };
+      const user = createMockUser({
+        appleUserId: userIdentifier,
+        email,
+        firebaseUid: null,
+      });
+      const firebaseToken = 'invalid-fb-token';
+
+      mockAppleTokenVerifierService.verifyIdentityToken.mockResolvedValue(
+        decodedToken,
+      );
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.user.update.mockResolvedValue(user);
+      mockFirebaseAuth.verifyIdToken.mockRejectedValue(
+        new Error('Firebase error'),
+      );
+
+      const result = await service.appleSignIn(
+        identityToken,
+        userIdentifier,
+        email,
+        fullName,
+        undefined,
+        undefined,
+        undefined,
+        firebaseToken,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.firebaseLinked).toBe(false);
+      expect(result.firebaseLinkError).toBe('verification_failed');
+    });
   });
 
   describe('verifySession', () => {

@@ -435,6 +435,7 @@ export class AuthService {
             });
           }
         } catch (e) {
+          firebaseLinkError = 'verification_failed';
           SafeLogger.warn(
             'Could not link Firebase UID during Apple sign-in',
             { service: 'AuthService' },
