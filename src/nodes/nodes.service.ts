@@ -4,21 +4,24 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { RegisterNodeDto } from './dto/register-node.dto';
 import { NodeHeartbeatDto } from './dto/node-heartbeat.dto';
-import { NodeStatus } from '@prisma/client';
+import { NodeStatus, Node } from '@prisma/client';
 import { firstValueFrom } from 'rxjs';
 
-interface GeoLocationResponse {
-  status: 'success' | 'fail';
-  message?: string;
-  country?: string;
-  countryCode?: string;
+interface GeoResponse {
+  country_name?: string;
   city?: string;
-  lat?: number;
-  lon?: number;
+  latitude?: number;
+  longitude?: number;
+  country_code?: string;
+  error?: boolean;
+  reason?: string;
 }
 
 @Injectable()
 export class NodesService {
+  private geoCache = new Map<string, { data: Partial<Node>; expiry: number }>();
+  private readonly CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     private readonly httpService: HttpService,
@@ -26,7 +29,7 @@ export class NodesService {
 
   async register(dto: RegisterNodeDto) {
     try {
-      let geoData = {};
+      let geoData: Partial<Node> = {};
       if (dto.publicIp) {
         geoData = await this.fetchGeoLocation(dto.publicIp);
       }
@@ -65,26 +68,40 @@ export class NodesService {
     }
   }
 
-  private async fetchGeoLocation(ip: string) {
+  private async fetchGeoLocation(ip: string): Promise<Partial<Node>> {
+    // 1. Check Cache
+    const cached = this.geoCache.get(ip);
+    if (cached && cached.expiry > Date.now()) {
+      return cached.data;
+    }
+
     try {
-      // Using ip-api.com (free for non-commercial use, limited rate)
+      // 2. Secure HTTPS call
+      // Switching to ipapi.co (supports HTTPS on free tier)
       const response = await firstValueFrom(
-        this.httpService.get<GeoLocationResponse>(
-          `http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,city,lat,lon`,
-        ),
+        this.httpService.get<GeoResponse>(`https://ipapi.co/${ip}/json/`, {
+          timeout: 3000,
+        }),
       );
 
-      if (response.data && response.data.status === 'success') {
-        const { country, city, countryCode, lat, lon } = response.data;
-        return {
-          country,
-          city,
-          latitude: lat,
-          longitude: lon,
-          flagUrl: countryCode
-            ? `https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`
+      if (response.data && !response.data.error) {
+        const geoData: Partial<Node> = {
+          country: response.data.country_name,
+          city: response.data.city,
+          latitude: response.data.latitude,
+          longitude: response.data.longitude,
+          flagUrl: response.data.country_code
+            ? `https://flagcdn.com/w40/${response.data.country_code.toLowerCase()}.png`
             : undefined,
         };
+
+        // 3. Update Cache
+        this.geoCache.set(ip, {
+          data: geoData,
+          expiry: Date.now() + this.CACHE_TTL,
+        });
+
+        return geoData;
       }
       return {};
     } catch (error) {
