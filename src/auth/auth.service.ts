@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { FirebaseConfig } from '../config/firebase.config';
 import { PrismaService } from '../prisma/prisma.service';
-import { SubscriptionStatus } from '@prisma/client';
+import { SubscriptionStatus, Prisma } from '@prisma/client';
 import { SafeLogger } from '../common/utils/logger.util';
 import { AppleTokenVerifierService } from './apple-token-verifier.service';
 import * as jwt from 'jsonwebtoken';
@@ -20,7 +20,7 @@ export class AuthService {
     @Inject(ConfigService) private configService: ConfigService,
     @Inject(AppleTokenVerifierService)
     private appleTokenVerifier: AppleTokenVerifierService,
-  ) { }
+  ) {}
 
   async login(idToken: string) {
     try {
@@ -114,14 +114,14 @@ export class AuthService {
         sessionToken,
         subscription: activeSubscription
           ? {
-            id: activeSubscription.id,
-            status: activeSubscription.status,
-            planName: activeSubscription.planName,
-            plan: this.resolveSubscriptionPlan(activeSubscription),
-            currentPeriodEnd: activeSubscription.currentPeriodEnd,
-            cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
-            subscriptionType: activeSubscription.subscriptionType,
-          }
+              id: activeSubscription.id,
+              status: activeSubscription.status,
+              planName: activeSubscription.planName,
+              plan: this.resolveSubscriptionPlan(activeSubscription),
+              currentPeriodEnd: activeSubscription.currentPeriodEnd,
+              cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
+              subscriptionType: activeSubscription.subscriptionType,
+            }
           : null,
       };
     } catch (error) {
@@ -435,7 +435,16 @@ export class AuthService {
             });
           }
         } catch (e) {
-          firebaseLinkError = 'verification_failed';
+          // Prisma unique-constraint violation = the Firebase UID was just linked by
+          // a concurrent request — treat it the same as the pre-flight conflict check.
+          const isPrismaUniqueViolation =
+            e instanceof Prisma.PrismaClientKnownRequestError &&
+            e.code === 'P2002';
+
+          firebaseLinkError = isPrismaUniqueViolation
+            ? 'conflict'
+            : 'verification_failed';
+
           SafeLogger.warn(
             'Could not link Firebase UID during Apple sign-in',
             { service: 'AuthService' },
@@ -549,12 +558,12 @@ export class AuthService {
             endsAt: trialEndsAt?.toISOString() || null,
             daysRemaining: trialEndsAt
               ? Math.max(
-                0,
-                Math.ceil(
-                  (trialEndsAt.getTime() - now.getTime()) /
-                  (1000 * 60 * 60 * 24),
-                ),
-              )
+                  0,
+                  Math.ceil(
+                    (trialEndsAt.getTime() - now.getTime()) /
+                      (1000 * 60 * 60 * 24),
+                  ),
+                )
               : null,
           };
         } else {
@@ -584,14 +593,14 @@ export class AuthService {
         },
         subscription: activeSubscription
           ? {
-            id: activeSubscription.id,
-            status: activeSubscription.status,
-            planName: activeSubscription.planName,
-            plan: this.resolveSubscriptionPlan(activeSubscription),
-            currentPeriodEnd: activeSubscription.currentPeriodEnd,
-            cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
-            subscriptionType: activeSubscription.subscriptionType,
-          }
+              id: activeSubscription.id,
+              status: activeSubscription.status,
+              planName: activeSubscription.planName,
+              plan: this.resolveSubscriptionPlan(activeSubscription),
+              currentPeriodEnd: activeSubscription.currentPeriodEnd,
+              cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
+              subscriptionType: activeSubscription.subscriptionType,
+            }
           : null,
         trial,
       };

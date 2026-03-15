@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { isIP } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { RegisterNodeDto } from './dto/register-node.dto';
@@ -71,11 +72,7 @@ export class NodesService {
 
   private async fetchGeoLocation(ip: string): Promise<Partial<Node>> {
     // 0. Defensive Validation: Ensure input is a valid IP format
-    const ipv4Regex =
-      /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}$/;
-    const ipv6Regex = /^(?:[a-fA-F\d]{1,4}:){7}[a-fA-F\d]{1,4}$/; // Basic IPv6 check
-
-    if (!ipv4Regex.test(ip) && !ipv6Regex.test(ip)) {
+    if (!isIP(ip)) {
       SafeLogger.warn('Invalid IP format provided for geolocation', { ip });
       return {};
     }
