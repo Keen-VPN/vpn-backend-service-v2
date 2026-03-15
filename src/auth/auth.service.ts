@@ -20,7 +20,7 @@ export class AuthService {
     @Inject(ConfigService) private configService: ConfigService,
     @Inject(AppleTokenVerifierService)
     private appleTokenVerifier: AppleTokenVerifierService,
-  ) {}
+  ) { }
 
   async login(idToken: string) {
     try {
@@ -114,14 +114,14 @@ export class AuthService {
         sessionToken,
         subscription: activeSubscription
           ? {
-              id: activeSubscription.id,
-              status: activeSubscription.status,
-              planName: activeSubscription.planName,
-              plan: this.resolveSubscriptionPlan(activeSubscription),
-              currentPeriodEnd: activeSubscription.currentPeriodEnd,
-              cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
-              subscriptionType: activeSubscription.subscriptionType,
-            }
+            id: activeSubscription.id,
+            status: activeSubscription.status,
+            planName: activeSubscription.planName,
+            plan: this.resolveSubscriptionPlan(activeSubscription),
+            currentPeriodEnd: activeSubscription.currentPeriodEnd,
+            cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
+            subscriptionType: activeSubscription.subscriptionType,
+          }
           : null,
       };
     } catch (error) {
@@ -549,12 +549,12 @@ export class AuthService {
             endsAt: trialEndsAt?.toISOString() || null,
             daysRemaining: trialEndsAt
               ? Math.max(
-                  0,
-                  Math.ceil(
-                    (trialEndsAt.getTime() - now.getTime()) /
-                      (1000 * 60 * 60 * 24),
-                  ),
-                )
+                0,
+                Math.ceil(
+                  (trialEndsAt.getTime() - now.getTime()) /
+                  (1000 * 60 * 60 * 24),
+                ),
+              )
               : null,
           };
         } else {
@@ -584,14 +584,14 @@ export class AuthService {
         },
         subscription: activeSubscription
           ? {
-              id: activeSubscription.id,
-              status: activeSubscription.status,
-              planName: activeSubscription.planName,
-              plan: this.resolveSubscriptionPlan(activeSubscription),
-              currentPeriodEnd: activeSubscription.currentPeriodEnd,
-              cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
-              subscriptionType: activeSubscription.subscriptionType,
-            }
+            id: activeSubscription.id,
+            status: activeSubscription.status,
+            planName: activeSubscription.planName,
+            plan: this.resolveSubscriptionPlan(activeSubscription),
+            currentPeriodEnd: activeSubscription.currentPeriodEnd,
+            cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
+            subscriptionType: activeSubscription.subscriptionType,
+          }
           : null,
         trial,
       };
