@@ -233,6 +233,11 @@ model Node {
   status        NodeStatus   @default(ONLINE)
   healthScore   Float        @default(100) @map("health_score")
   lastHeartbeat DateTime?    @map("last_heartbeat") @db.Timestamptz(6)
+  country       String?
+  city          String?
+  flagUrl       String?      @map("flag_url")
+  latitude      Float?
+  longitude     Float?
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
   clients       NodeClient[]

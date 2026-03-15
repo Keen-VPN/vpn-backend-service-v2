@@ -1,16 +1,36 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { RegisterNodeDto } from './dto/register-node.dto';
 import { NodeHeartbeatDto } from './dto/node-heartbeat.dto';
 import { NodeStatus } from '@prisma/client';
+import { firstValueFrom } from 'rxjs';
+
+interface GeoLocationResponse {
+  status: 'success' | 'fail';
+  message?: string;
+  country?: string;
+  countryCode?: string;
+  city?: string;
+  lat?: number;
+  lon?: number;
+}
 
 @Injectable()
 export class NodesService {
-  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private prisma: PrismaService,
+    private readonly httpService: HttpService,
+  ) {}
 
   async register(dto: RegisterNodeDto) {
     try {
+      let geoData = {};
+      if (dto.publicIp) {
+        geoData = await this.fetchGeoLocation(dto.publicIp);
+      }
+
       const node = await this.prisma.node.upsert({
         where: { publicKey: dto.publicKey },
         update: {
@@ -18,6 +38,7 @@ export class NodesService {
           ...(dto.publicIp && { ip: dto.publicIp }),
           status: dto.status as NodeStatus,
           lastHeartbeat: new Date(),
+          ...geoData,
         },
         create: {
           publicKey: dto.publicKey,
@@ -25,6 +46,7 @@ export class NodesService {
           ip: dto.publicIp || '',
           status: dto.status as NodeStatus,
           lastHeartbeat: new Date(),
+          ...geoData,
         },
       });
 
@@ -32,12 +54,42 @@ export class NodesService {
         id: node.id,
         publicKey: node.publicKey,
         region: node.region,
+        country: node.country,
+        city: node.city,
       });
 
       return node;
     } catch (error) {
       SafeLogger.error('Error registering node', error);
       throw error;
+    }
+  }
+
+  private async fetchGeoLocation(ip: string) {
+    try {
+      // Using ip-api.com (free for non-commercial use, limited rate)
+      const response = await firstValueFrom(
+        this.httpService.get<GeoLocationResponse>(
+          `http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,city,lat,lon`,
+        ),
+      );
+
+      if (response.data && response.data.status === 'success') {
+        const { country, city, countryCode, lat, lon } = response.data;
+        return {
+          country,
+          city,
+          latitude: lat,
+          longitude: lon,
+          flagUrl: countryCode
+            ? `https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`
+            : undefined,
+        };
+      }
+      return {};
+    } catch (error) {
+      SafeLogger.error(`Failed to fetch geolocation for IP ${ip}`, error);
+      return {};
     }
   }
 

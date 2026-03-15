@@ -38,3 +38,5 @@ e2e_output.txt
 # Local Netlify folder
 .netlify
 *.pem
+
+.geminiy
