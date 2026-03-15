@@ -102,4 +102,13 @@ export class AppleSignInDto {
   @IsString()
   @IsOptional()
   devicePlatform?: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    description: 'Firebase ID token for linking Firebase UID to Apple account',
+    example: 'eyJhbGciOiJ...',
+  })
+  @IsString()
+  @IsOptional()
+  firebaseToken?: string;
 }

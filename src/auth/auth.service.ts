@@ -245,6 +245,7 @@ export class AuthService {
     }>,
     deviceFingerprint?: string,
     devicePlatform?: string,
+    firebaseToken?: string,
   ) {
     try {
       // Try to verify Apple identity token using Apple's public keys
@@ -403,6 +404,24 @@ export class AuthService {
             emailVerified,
           },
         });
+      }
+
+      // Link Firebase UID so Stripe checkout can look up this user by firebaseUid
+      if (firebaseToken && !user.firebaseUid) {
+        try {
+          const fbDecoded = await this.firebaseConfig
+            .getAuth()
+            .verifyIdToken(firebaseToken);
+          user = await this.prisma.user.update({
+            where: { id: user.id },
+            data: { firebaseUid: fbDecoded.uid },
+          });
+        } catch (e) {
+          SafeLogger.warn(
+            'Could not link Firebase UID during Apple sign-in',
+            { service: 'AuthService' },
+          );
+        }
       }
 
       const sessionToken = this.generateSessionToken(user.id);
