@@ -3,11 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { StripeWebhookController } from '../../../src/payment/stripe/stripe.webhook.controller';
 import { StripeService } from '../../../src/payment/stripe/stripe.service';
 import { FirebaseConfig } from '../../../src/config/firebase.config';
+import { SessionAuthGuard } from '../../../src/auth/guards/session-auth.guard';
 import {
   createMockConfigService,
   createMockStripe,
   createMockFirebaseConfig,
-  MockStripe,
 } from '../../setup/mocks';
 import { createMockStripeEvent } from '../../setup/test-helpers';
 import Stripe from 'stripe';
@@ -51,7 +51,16 @@ describe('StripeWebhookController', () => {
           useValue: createMockFirebaseConfig(),
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(SessionAuthGuard)
+      .useValue({
+        canActivate: jest.fn((context) => {
+          const request = context.switchToHttp().getRequest();
+          request.user = { uid: 'user-123' };
+          return true;
+        }),
+      })
+      .compile();
 
     controller = module.get<StripeWebhookController>(StripeWebhookController);
     stripeService = module.get(StripeService);
