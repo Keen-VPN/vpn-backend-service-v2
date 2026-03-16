@@ -26,7 +26,7 @@ export class NodesService {
 
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
-    private readonly httpService: HttpService,
+    @Inject(HttpService) private readonly httpService: HttpService,
   ) {}
 
   async register(dto: RegisterNodeDto) {
