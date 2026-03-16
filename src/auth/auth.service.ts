@@ -315,8 +315,12 @@ export class AuthService {
             throw new UnauthorizedException('Invalid JWT: missing payload');
           }
 
+          // JWT uses base64url; Node Buffer expects standard base64
+          const payloadBase64Standard = payloadBase64
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
           const decoded = JSON.parse(
-            Buffer.from(payloadBase64, 'base64').toString(),
+            Buffer.from(payloadBase64Standard, 'base64').toString(),
           ) as AppleJwtPayload;
 
           // Validate required fields
@@ -477,6 +481,9 @@ export class AuthService {
       SafeLogger.error('Apple sign-in failed', error, {
         service: 'AuthService',
       });
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new UnauthorizedException('Authentication failed');
     }
   }
