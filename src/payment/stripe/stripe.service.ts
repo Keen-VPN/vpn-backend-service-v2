@@ -53,17 +53,23 @@ export class StripeService {
     // Get or create Stripe customer
     let customerId = user.stripeCustomerId;
 
-    if (!customerId) {
+    const ensureCustomer = async (): Promise<string> => {
+      if (customerId) {
+        return customerId;
+      }
       const customer = await this.stripe.customers.create({
         email: user.email,
         metadata: { userId },
       });
-      customerId = customer.id;
-
       await this.prisma.user.update({
         where: { id: userId },
-        data: { stripeCustomerId: customerId },
+        data: { stripeCustomerId: customer.id },
       });
+      return customer.id;
+    };
+
+    if (!customerId) {
+      customerId = await ensureCustomer();
     }
 
     // Get price ID for plan
@@ -72,23 +78,59 @@ export class StripeService {
       throw new Error(`Price ID not found for plan: ${planId}`);
     }
 
-    const session = await this.stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await this.stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: {
+          userId,
+          planId,
         },
-      ],
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      metadata: {
-        userId,
-        planId,
-      },
-    });
+      });
+    } catch (err: unknown) {
+      const stripeError = err as { code?: string; message?: string };
+      const isNoSuchCustomer =
+        stripeError?.code === 'resource_missing' ||
+        (typeof stripeError?.message === 'string' &&
+          stripeError.message.toLowerCase().includes('no such customer'));
+
+      if (isNoSuchCustomer && user.stripeCustomerId) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { stripeCustomerId: null },
+        });
+        customerId = await ensureCustomer();
+        session = await this.stripe.checkout.sessions.create({
+          customer: customerId,
+          mode: 'subscription',
+          payment_method_types: ['card'],
+          line_items: [
+            {
+              price: priceId,
+              quantity: 1,
+            },
+          ],
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+          metadata: {
+            userId,
+            planId,
+          },
+        });
+      } else {
+        throw err;
+      }
+    }
 
     SafeLogger.info('Stripe checkout session created', {
       userId,
