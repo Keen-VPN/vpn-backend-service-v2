@@ -20,8 +20,12 @@ let cachedServer: Handler;
 async function bootstrap() {
   if (!cachedServer) {
     // Fetch large secrets from Secrets Manager if not provided in environment (for Staging/Prod)
-    const env = process.env.NODE_ENV || 'development';
+    let env = process.env.NODE_ENV || 'development';
     if (['staging', 'production'].includes(env)) {
+      if (env === 'production') {
+        env = 'prod';
+      }
+
       const secretsToFetch = [
         { key: 'NODE_TOKEN', fetch: () => SecretsUtil.fetchNodeToken(env) },
         {
@@ -91,11 +95,11 @@ async function bootstrap() {
     const allowedOrigins = configService
       .get<string>('CORS_ORIGINS')
       ?.split(',') || [
-      'http://localhost:3000',
-      'http://localhost:5173',
-      'https://staging.vpnkeen.com',
-      'https://vpnkeen.com',
-    ];
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'https://staging.vpnkeen.com',
+        'https://vpnkeen.com',
+      ];
 
     app.enableCors({
       origin: (
