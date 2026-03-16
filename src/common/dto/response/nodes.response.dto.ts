@@ -46,6 +46,41 @@ export class NodeResponseDto {
     description: 'Timestamp of the last received heartbeat',
   })
   lastHeartbeat: Date;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    example: 'United States',
+    description: 'Country where the node is located',
+  })
+  country?: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    example: 'New York',
+    description: 'City where the node is located',
+  })
+  city?: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    example: 'https://flagcdn.com/w40/us.png',
+    description: 'URL to a small flag image of the country',
+  })
+  flagUrl?: string;
+
+  @ApiPropertyOptional({
+    type: 'number',
+    example: 40.7128,
+    description: 'Latitude of the node location',
+  })
+  latitude?: number;
+
+  @ApiPropertyOptional({
+    type: 'number',
+    example: -74.006,
+    description: 'Longitude of the node location',
+  })
+  longitude?: number;
 }
 
 export class NodeHeartbeatResponseDto {

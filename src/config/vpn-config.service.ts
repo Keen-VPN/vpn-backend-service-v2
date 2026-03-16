@@ -27,6 +27,11 @@ export class VPNConfigService {
       select: {
         id: true,
         region: true,
+        latitude: true,
+        longitude: true,
+        country: true,
+        city: true,
+        flagUrl: true,
       },
       orderBy: {
         healthScore: 'desc',
@@ -36,6 +41,11 @@ export class VPNConfigService {
     return nodes.map((n) => ({
       node_id: n.id,
       region: n.region,
+      latitude: n.latitude,
+      longitude: n.longitude,
+      country: n.country,
+      city: n.city,
+      flag_url: n.flagUrl,
     }));
   }
 

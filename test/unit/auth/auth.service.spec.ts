@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { AuthService } from '../../../src/auth/auth.service';
 import { FirebaseConfig } from '../../../src/config/firebase.config';
 import { PrismaService } from '../../../src/prisma/prisma.service';
@@ -292,6 +293,141 @@ describe('AuthService', () => {
 
       expect(result.user.id).toBe(newUser.id);
       expect(mockPrisma.user.create).toHaveBeenCalled();
+    });
+
+    it('should return conflict if firebaseUid is already linked to another user', async () => {
+      const decodedToken = {
+        sub: userIdentifier,
+        email,
+        email_verified: true,
+      };
+      const user = createMockUser({
+        appleUserId: userIdentifier,
+        email,
+        firebaseUid: null,
+      });
+      const existingFbUser = createMockUser({ firebaseUid: 'other-fb-uid' });
+      const firebaseToken = 'valid-fb-token';
+
+      mockAppleTokenVerifierService.verifyIdentityToken.mockResolvedValue(
+        decodedToken,
+      );
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce(user) // For finding user by appleUserId
+        .mockResolvedValueOnce(existingFbUser); // For checking if firebaseUid exists
+      mockPrisma.user.update.mockResolvedValue(user);
+      mockFirebaseAuth.verifyIdToken.mockResolvedValue({
+        uid: 'other-fb-uid',
+      } as any);
+
+      const result = await service.appleSignIn(
+        identityToken,
+        userIdentifier,
+        email,
+        fullName,
+        undefined,
+        undefined,
+        undefined,
+        firebaseToken,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.firebaseLinked).toBe(false);
+      expect(result.firebaseLinkError).toBe('conflict');
+    });
+
+    it('should return verification_failed if firebaseToken verification fails', async () => {
+      const decodedToken = {
+        sub: userIdentifier,
+        email,
+        email_verified: true,
+      };
+      const user = createMockUser({
+        appleUserId: userIdentifier,
+        email,
+        firebaseUid: null,
+      });
+      const firebaseToken = 'invalid-fb-token';
+
+      mockAppleTokenVerifierService.verifyIdentityToken.mockResolvedValue(
+        decodedToken,
+      );
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.user.update.mockResolvedValue(user);
+      mockFirebaseAuth.verifyIdToken.mockRejectedValue(
+        new Error('Firebase error'),
+      );
+
+      const result = await service.appleSignIn(
+        identityToken,
+        userIdentifier,
+        email,
+        fullName,
+        undefined,
+        undefined,
+        undefined,
+        firebaseToken,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.firebaseLinked).toBe(false);
+      expect(result.firebaseLinkError).toBe('verification_failed');
+    });
+
+    it('should return conflict if Prisma throws P2002 (unique constraint violation) during update', async () => {
+      const decodedToken = {
+        sub: userIdentifier,
+        email,
+        email_verified: true,
+      };
+      const user = createMockUser({
+        appleUserId: userIdentifier,
+        email,
+        firebaseUid: null,
+      });
+      const firebaseToken = 'valid-fb-token';
+
+      mockAppleTokenVerifierService.verifyIdentityToken.mockResolvedValue(
+        decodedToken,
+      );
+
+      // 1. First findUnique: finds the user by appleUserId
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user);
+
+      // 2. Initial info update (email, displayName, etc.)
+      mockPrisma.user.update.mockResolvedValueOnce(user);
+
+      // 3. Second findUnique (inside Firebase link block): checks if firebaseUid already exists
+      mockPrisma.user.findUnique.mockResolvedValueOnce(null);
+
+      const prismaError = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed',
+        {
+          code: 'P2002',
+          clientVersion: '6.1.0',
+          meta: { target: ['firebaseUid'] },
+        },
+      );
+      // 4. Second update (linking firebaseUid) throws the race condition error
+      mockPrisma.user.update.mockRejectedValueOnce(prismaError);
+      mockFirebaseAuth.verifyIdToken.mockResolvedValue({
+        uid: 'already-linked-uid',
+      } as any);
+
+      const result = await service.appleSignIn(
+        identityToken,
+        userIdentifier,
+        email,
+        fullName,
+        undefined,
+        undefined,
+        undefined,
+        firebaseToken,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.firebaseLinked).toBe(false);
+      expect(result.firebaseLinkError).toBe('conflict');
     });
   });
 

@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { FirebaseConfig } from '../config/firebase.config';
 import { PrismaService } from '../prisma/prisma.service';
-import { SubscriptionStatus } from '@prisma/client';
+import { SubscriptionStatus, Prisma } from '@prisma/client';
 import { SafeLogger } from '../common/utils/logger.util';
 import { AppleTokenVerifierService } from './apple-token-verifier.service';
 import * as jwt from 'jsonwebtoken';
@@ -435,6 +435,16 @@ export class AuthService {
             });
           }
         } catch (e) {
+          // Prisma unique-constraint violation = the Firebase UID was just linked by
+          // a concurrent request — treat it the same as the pre-flight conflict check.
+          const isPrismaUniqueViolation =
+            e instanceof Prisma.PrismaClientKnownRequestError &&
+            e.code === 'P2002';
+
+          firebaseLinkError = isPrismaUniqueViolation
+            ? 'conflict'
+            : 'verification_failed';
+
           SafeLogger.warn(
             'Could not link Firebase UID during Apple sign-in',
             { service: 'AuthService' },

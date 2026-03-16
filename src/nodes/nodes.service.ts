@@ -1,23 +1,49 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { isIP } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { RegisterNodeDto } from './dto/register-node.dto';
 import { NodeHeartbeatDto } from './dto/node-heartbeat.dto';
-import { NodeStatus } from '@prisma/client';
+import { NodeStatus, Node } from '@prisma/client';
+import { firstValueFrom } from 'rxjs';
+
+interface GeoResponse {
+  country_name?: string;
+  city?: string;
+  region?: string;
+  latitude?: number;
+  longitude?: number;
+  country_code?: string;
+  error?: boolean;
+  reason?: string;
+}
 
 @Injectable()
 export class NodesService {
-  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+  private geoCache = new Map<string, { data: Partial<Node>; expiry: number }>();
+  private readonly CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+  private readonly MAX_CACHE_SIZE = 1000;
+
+  constructor(
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(HttpService) private readonly httpService: HttpService,
+  ) {}
 
   async register(dto: RegisterNodeDto) {
     try {
+      let geoData: Partial<Node> = {};
+      if (dto.publicIp) {
+        geoData = await this.fetchGeoLocation(dto.publicIp);
+      }
+
       const node = await this.prisma.node.upsert({
         where: { publicKey: dto.publicKey },
         update: {
-          region: dto.region,
           ...(dto.publicIp && { ip: dto.publicIp }),
           status: dto.status as NodeStatus,
           lastHeartbeat: new Date(),
+          ...geoData,
         },
         create: {
           publicKey: dto.publicKey,
@@ -25,6 +51,7 @@ export class NodesService {
           ip: dto.publicIp || '',
           status: dto.status as NodeStatus,
           lastHeartbeat: new Date(),
+          ...geoData,
         },
       });
 
@@ -32,12 +59,81 @@ export class NodesService {
         id: node.id,
         publicKey: node.publicKey,
         region: node.region,
+        country: node.country,
+        city: node.city,
       });
 
       return node;
     } catch (error) {
       SafeLogger.error('Error registering node', error);
       throw error;
+    }
+  }
+
+  private async fetchGeoLocation(ip: string): Promise<Partial<Node>> {
+    // 0. Defensive Validation: Ensure input is a valid IP format
+    if (!isIP(ip)) {
+      SafeLogger.warn('Invalid IP format provided for geolocation', { ip });
+      return {};
+    }
+
+    // 1. Check Cache and Evict if expired
+    const cached = this.geoCache.get(ip);
+    if (cached) {
+      if (cached.expiry > Date.now()) {
+        return cached.data;
+      }
+      this.geoCache.delete(ip); // Evict expired entry
+    }
+
+    try {
+      // 2. Secure HTTPS call
+      // Switching to ipapi.co (supports HTTPS on free tier)
+      SafeLogger.info(`Fetching geolocation for IP: ${ip}`);
+      const response = await firstValueFrom(
+        this.httpService.get<GeoResponse>(`https://ipapi.co/${ip}/json/`, {
+          timeout: 3000,
+        }),
+      );
+
+      SafeLogger.info(`Geo response received for IP: ${ip}`, {
+        data: response.data,
+      });
+
+      if (response.data && !response.data.error) {
+        const geoData: Partial<Node> = {
+          country: response.data.country_name ?? null,
+          city: response.data.city ?? null,
+          region: response.data.region ?? null,
+          latitude: response.data.latitude ?? null,
+          longitude: response.data.longitude ?? null,
+          flagUrl: response.data.country_code
+            ? `https://flagcdn.com/w40/${response.data.country_code.toLowerCase()}.png`
+            : null,
+        };
+
+        // 3. Update Cache with size limit enforcement
+        if (this.geoCache.size >= this.MAX_CACHE_SIZE) {
+          // Simple FIFO eviction: delete first entry
+          const firstKey = this.geoCache.keys().next().value as
+            | string
+            | undefined;
+          if (firstKey) {
+            this.geoCache.delete(firstKey);
+          }
+        }
+
+        this.geoCache.set(ip, {
+          data: geoData,
+          expiry: Date.now() + this.CACHE_TTL,
+        });
+
+        return geoData;
+      }
+      return {};
+    } catch (error) {
+      SafeLogger.error(`Failed to fetch geolocation for IP ${ip}`, error);
+      return {};
     }
   }
 

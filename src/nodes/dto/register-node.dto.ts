@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsIP } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RegisterNodeDto {
@@ -34,7 +34,7 @@ export class RegisterNodeDto {
     description: 'The public IP address of the node',
     example: '1.2.3.4',
   })
-  @IsString()
+  @IsIP()
   @IsOptional()
   publicIp?: string;
 
