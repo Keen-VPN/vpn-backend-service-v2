@@ -11,6 +11,7 @@ import { firstValueFrom } from 'rxjs';
 interface GeoResponse {
   country_name?: string;
   city?: string;
+  region?: string;
   latitude?: number;
   longitude?: number;
   country_code?: string;
@@ -39,7 +40,6 @@ export class NodesService {
       const node = await this.prisma.node.upsert({
         where: { publicKey: dto.publicKey },
         update: {
-          region: dto.region,
           ...(dto.publicIp && { ip: dto.publicIp }),
           status: dto.status as NodeStatus,
           lastHeartbeat: new Date(),
@@ -104,6 +104,7 @@ export class NodesService {
         const geoData: Partial<Node> = {
           country: response.data.country_name ?? null,
           city: response.data.city ?? null,
+          region: response.data.region ?? null,
           latitude: response.data.latitude ?? null,
           longitude: response.data.longitude ?? null,
           flagUrl: response.data.country_code

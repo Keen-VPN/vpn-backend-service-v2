@@ -228,7 +228,7 @@ model ServerLocationPreference {
 model Node {
   id            String       @id @default(uuid())
   publicKey     String       @unique @map("public_key")
-  region        String
+  region        String?
   ip            String       @map("ip")
   status        NodeStatus   @default(ONLINE)
   healthScore   Float        @default(100) @map("health_score")
