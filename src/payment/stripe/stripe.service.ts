@@ -30,7 +30,7 @@ export class StripeService {
 
   async getCustomerIdByUserId(userId: string): Promise<string | null> {
     const user = await this.prisma.user.findUnique({
-      where: { firebaseUid: userId },
+      where: { id: userId },
       select: { stripeCustomerId: true },
     });
     return user?.stripeCustomerId || null;
@@ -43,7 +43,7 @@ export class StripeService {
     cancelUrl: string,
   ) {
     const user = await this.prisma.user.findUnique({
-      where: { firebaseUid: userId },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -61,7 +61,7 @@ export class StripeService {
       customerId = customer.id;
 
       await this.prisma.user.update({
-        where: { firebaseUid: userId },
+        where: { id: userId },
         data: { stripeCustomerId: customerId },
       });
     }
@@ -167,9 +167,14 @@ export class StripeService {
       return;
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { email: customer.email },
-    });
+    const metadataUserId =
+      typeof customer.metadata?.userId === 'string' && customer.metadata.userId
+        ? customer.metadata.userId
+        : null;
+
+    const user = metadataUserId
+      ? await this.prisma.user.findUnique({ where: { id: metadataUserId } })
+      : await this.prisma.user.findUnique({ where: { email: customer.email } });
 
     if (!user) {
       SafeLogger.error('User not found for email', undefined, {

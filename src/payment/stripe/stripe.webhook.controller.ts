@@ -14,7 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import { StripeService } from './stripe.service';
 import Stripe from 'stripe';
 import { SafeLogger } from '../../common/utils/logger.util';
-import { FirebaseAuthGuard } from '../../auth/guards/firebase-auth.guard';
+import { SessionAuthGuard } from '../../auth/guards/session-auth.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import {
   StripeCheckoutResponseDto,
@@ -105,7 +105,7 @@ export class StripeWebhookController {
 
   @Post('checkout')
   @Throttle({ default: { limit: 20, ttl: 60000 } }) // 20 requests per minute
-  @UseGuards(FirebaseAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create Stripe checkout session' })
   @ApiResponse({
@@ -152,7 +152,7 @@ export class StripeWebhookController {
 
   @Post('portal')
   @Throttle({ default: { limit: 20, ttl: 60000 } }) // 20 requests per minute
-  @UseGuards(FirebaseAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create Stripe customer portal session' })
   @ApiResponse({
