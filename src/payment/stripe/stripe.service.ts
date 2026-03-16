@@ -348,6 +348,7 @@ export class StripeService {
       'individual-annual': annualPriceId,
       'individual-monthly': monthlyPriceId,
       premium_annual: annualPriceId,
+      premium_yearly: annualPriceId,
       premium_monthly: monthlyPriceId,
     };
 
