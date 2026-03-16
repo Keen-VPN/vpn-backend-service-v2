@@ -89,11 +89,16 @@ export class NodesService {
     try {
       // 2. Secure HTTPS call
       // Switching to ipapi.co (supports HTTPS on free tier)
+      SafeLogger.info(`Fetching geolocation for IP: ${ip}`);
       const response = await firstValueFrom(
         this.httpService.get<GeoResponse>(`https://ipapi.co/${ip}/json/`, {
           timeout: 3000,
         }),
       );
+
+      SafeLogger.info(`Geo response received for IP: ${ip}`, {
+        data: response.data,
+      });
 
       if (response.data && !response.data.error) {
         const geoData: Partial<Node> = {
