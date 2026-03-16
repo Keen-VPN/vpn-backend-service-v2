@@ -10,8 +10,12 @@ import { SecretsUtil } from './common/utils/secrets.util';
 
 async function bootstrap() {
   // Fetch large secrets from Secrets Manager if not provided in environment (for Staging/Prod)
-  const env = process.env.NODE_ENV || 'development';
+  let env = process.env.NODE_ENV || 'development';
   if (['staging', 'production'].includes(env)) {
+    if (env === 'production') {
+      env = 'prod';
+    }
+
     const secretsToFetch = [
       { key: 'NODE_TOKEN', fetch: () => SecretsUtil.fetchNodeToken(env) },
       {
