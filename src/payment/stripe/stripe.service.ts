@@ -228,15 +228,37 @@ export class StripeService {
     const planInfo = this.extractPlanInfo(subscription);
     // Stripe subscription object uses snake_case properties not in TypeScript types
 
-    const currentPeriodStart = new Date(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      (subscription as any).current_period_start * 1000,
-    );
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+    const subscriptionAny = subscription as any;
+    const firstItem = subscription.items?.data?.[0] as any;
+    const periodStartTimestamp =
+      subscriptionAny.current_period_start ?? firstItem?.current_period_start;
+    const periodEndTimestamp =
+      subscriptionAny.current_period_end ?? firstItem?.current_period_end;
 
-    const currentPeriodEnd = new Date(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      (subscription as any).current_period_end * 1000,
-    );
+    // TEMPORARY - remove after confirming
+    SafeLogger.info('Stripe period timestamps', {
+      subscriptionId: subscription.id,
+      fromRoot: subscriptionAny.current_period_start,
+      fromItems: firstItem?.current_period_start,
+      periodStartTimestamp,
+      periodEndTimestamp,
+    });
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
+
+    if (!periodStartTimestamp || !periodEndTimestamp) {
+      SafeLogger.error(
+        'Missing period dates from Stripe subscription',
+        undefined,
+        {
+          subscriptionId: subscription.id,
+        },
+      );
+      return;
+    }
+
+    const currentPeriodStart = new Date(periodStartTimestamp * 1000);
+    const currentPeriodEnd = new Date(periodEndTimestamp * 1000);
 
     // Check for existing subscription with same period
     const existing = await this.prisma.subscription.findFirst({
@@ -245,7 +267,7 @@ export class StripeService {
         currentPeriodStart,
       },
     });
-
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
     if (existing) {
       // Update existing
       await this.prisma.subscription.update({
@@ -323,14 +345,12 @@ export class StripeService {
     // Update subscription status if needed
     // Stripe Invoice subscription property can be string or object
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const subscriptionRef = (invoice as any).subscription;
     if (subscriptionRef) {
       const subscriptionId: string =
         typeof subscriptionRef === 'string'
           ? subscriptionRef
-          : // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-            (subscriptionRef.id as string);
+          : (subscriptionRef.id as string);
 
       const subscription =
         await this.stripe.subscriptions.retrieve(subscriptionId);
