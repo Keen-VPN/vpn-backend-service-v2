@@ -6,6 +6,8 @@ import {
   HttpStatus,
   Inject,
   UseGuards,
+  BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
@@ -74,10 +76,14 @@ export class AppleIAPController {
       SafeLogger.error('Error capturing Apple IAP purchase', error);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to capture purchase';
-      return {
-        success: false,
-        error: errorMessage,
-      };
+      const msg = errorMessage.toLowerCase();
+      if (
+        msg.includes('invalid receipt') ||
+        msg.includes('receiptdata is required')
+      ) {
+        throw new BadRequestException(errorMessage);
+      }
+      throw new InternalServerErrorException(errorMessage);
     }
   }
 

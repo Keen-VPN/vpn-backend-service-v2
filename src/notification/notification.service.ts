@@ -48,6 +48,45 @@ export class NotificationService {
     return nodeEnv === 'development';
   }
 
+  private getRuntimeEnvironment(): string {
+    return (
+      this.configService.get<string>('APP_ENV') ||
+      this.configService.get<string>('ENVIRONMENT') ||
+      this.configService.get<string>('NODE_ENV') ||
+      process.env.APP_ENV ||
+      process.env.ENVIRONMENT ||
+      process.env.NODE_ENV ||
+      'unknown'
+    );
+  }
+
+  private getFullEndpointUrl(request?: Request): string | null {
+    if (!request) return null;
+    const forwardedProto =
+      (request.headers['x-forwarded-proto'] as string) || '';
+    const forwardedHost = (request.headers['x-forwarded-host'] as string) || '';
+    const hostHeader = request.get('host') || '';
+    const proto =
+      forwardedProto.split(',')[0]?.trim() ||
+      (request.secure ? 'https' : 'http');
+    const host = forwardedHost.split(',')[0]?.trim() || hostHeader;
+    const path = request.originalUrl || request.url || '';
+
+    if (host) {
+      return `${proto}://${host}${path}`;
+    }
+
+    // Fallback for environments where Host headers aren't reliable (some serverless/proxy setups).
+    const baseUrl =
+      this.configService.get<string>('PUBLIC_BASE_URL') ||
+      this.configService.get<string>('API_BASE_URL') ||
+      process.env.PUBLIC_BASE_URL ||
+      process.env.API_BASE_URL ||
+      '';
+    if (!baseUrl) return null;
+    return `${baseUrl.replace(/\/+$/, '')}${path}`;
+  }
+
   async sendSlackAlert(alert: Alert): Promise<void> {
     if (this.isDevelopment()) return;
 
@@ -59,7 +98,19 @@ export class NotificationService {
     }
 
     const emoji = this.getSeverityEmoji(alert.severity);
-    const formattedMessage = `${emoji} *${alert.type.toUpperCase()}*\n${alert.message}`;
+    const env = this.getRuntimeEnvironment();
+    const endpointUrl =
+      typeof alert.metadata?.endpointUrl === 'string'
+        ? alert.metadata.endpointUrl
+        : null;
+    const formattedMessage = [
+      `${emoji} *${alert.type.toUpperCase()}*`,
+      `*Environment:* ${env}`,
+      endpointUrl ? `*Endpoint:* ${endpointUrl}` : null,
+      alert.message,
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     try {
       await firstValueFrom(
@@ -148,16 +199,22 @@ export class NotificationService {
       exception instanceof Error ? exception : new Error(String(exception));
     const location = parseErrorLocation(err.stack);
     const fileLine = location ? `${location.file}:${location.line}` : 'unknown';
+    const env = this.getRuntimeEnvironment();
+    const endpointUrl = this.getFullEndpointUrl(request);
 
     const severity = statusCode >= 500 ? 'critical' : 'warning';
     const emoji = severity === 'critical' ? '🔴' : '⚠️';
     const text = [
       `${emoji} *API Error* (${statusCode})`,
+      `*Environment:* ${env}`,
+      endpointUrl ? `*Endpoint:* ${endpointUrl}` : null,
       `*Message:* ${err.message}`,
       `*Location:* \`${fileLine}\``,
       `*Path:* ${request.method} ${request.url}`,
       `*Request ID:* ${requestId}`,
-    ].join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     try {
       await firstValueFrom(this.httpService.post(webhookUrl, { text }));
