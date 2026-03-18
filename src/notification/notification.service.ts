@@ -60,23 +60,56 @@ export class NotificationService {
     );
   }
 
+  private sanitizeForSlackUrl(url: string): string {
+    // Strip Slack mrkdwn control characters that could be used to spoof links.
+    // Normal URLs never require these, so removing them is safe.
+    return url.replace(/[<>*_|~]/g, '');
+  }
+
   private getFullEndpointUrl(request?: Request): string | null {
     if (!request) return null;
+    const hostHeader = request.get('host') || '';
     const forwardedProto =
       (request.headers['x-forwarded-proto'] as string) || '';
-    const forwardedHost = (request.headers['x-forwarded-host'] as string) || '';
-    const hostHeader = request.get('host') || '';
+    const forwardedHostHeader =
+      (request.headers['x-forwarded-host'] as string) || '';
     const proto =
       forwardedProto.split(',')[0]?.trim() ||
       (request.secure ? 'https' : 'http');
-    const host = forwardedHost.split(',')[0]?.trim() || hostHeader;
     const path = request.originalUrl || request.url || '';
 
-    if (host) {
-      return `${proto}://${host}${path}`;
+    // Prefer the actual Host header first.
+    if (hostHeader) {
+      return this.sanitizeForSlackUrl(`${proto}://${hostHeader}${path}`);
     }
 
-    // Fallback for environments where Host headers aren't reliable (some serverless/proxy setups).
+    // Optionally trust X-Forwarded-Host, but only when explicitly allowed.
+    const trustForwardedHost =
+      this.configService.get<boolean>('TRUST_FORWARDED_HOST') === true ||
+      process.env.TRUST_FORWARDED_HOST === 'true';
+    if (trustForwardedHost && forwardedHostHeader) {
+      const forwardedHost = forwardedHostHeader.split(',')[0]?.trim();
+      // Basic allowlist support via ALLOWED_HOSTS (comma-separated).
+      const allowed =
+        this.configService.get<string>('ALLOWED_HOSTS') ||
+        process.env.ALLOWED_HOSTS ||
+        '';
+      const allowedHosts = allowed
+        .split(',')
+        .map((h) => h.trim())
+        .filter(Boolean);
+      if (
+        forwardedHost &&
+        (allowedHosts.length === 0 ||
+          allowedHosts.some(
+            (h) => forwardedHost === h || forwardedHost.endsWith(`.${h}`),
+          ))
+      ) {
+        return this.sanitizeForSlackUrl(`${proto}://${forwardedHost}${path}`);
+      }
+    }
+
+    // Fallback for environments where Host headers aren't reliable (serverless/proxy setups).
     const baseUrl =
       this.configService.get<string>('PUBLIC_BASE_URL') ||
       this.configService.get<string>('API_BASE_URL') ||
@@ -84,7 +117,7 @@ export class NotificationService {
       process.env.API_BASE_URL ||
       '';
     if (!baseUrl) return null;
-    return `${baseUrl.replace(/\/+$/, '')}${path}`;
+    return this.sanitizeForSlackUrl(`${baseUrl.replace(/\/+$/, '')}${path}`);
   }
 
   async sendSlackAlert(alert: Alert): Promise<void> {
