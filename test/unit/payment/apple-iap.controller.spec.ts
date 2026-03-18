@@ -89,7 +89,7 @@ describe('AppleIAPController', () => {
       );
     });
 
-    it('should handle capture errors', async () => {
+    it('should throw on capture errors', async () => {
       const captureDto = {
         transactionId: 'txn_123',
         originalTransactionId: 'orig_txn_123',
@@ -104,10 +104,9 @@ describe('AppleIAPController', () => {
         new Error('Purchase already exists'),
       );
 
-      const result = await controller.capturePurchase(captureDto);
-
-      expect(result.success).toBe(false);
-      expect((result as any).error).toBeDefined();
+      await expect(
+        controller.capturePurchase(captureDto),
+      ).rejects.toBeDefined();
     });
   });
 

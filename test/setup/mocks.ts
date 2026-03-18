@@ -102,6 +102,6 @@ export function createMockCrypto(): typeof crypto {
 export function createMockFetch(): jest.Mock {
   return jest.fn().mockResolvedValue({
     ok: true,
-    json: jest.fn().mockResolvedValue({ status: 0 }),
+    text: jest.fn().mockResolvedValue(JSON.stringify({ status: 0 })),
   });
 }
