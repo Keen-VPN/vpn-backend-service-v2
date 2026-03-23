@@ -321,20 +321,29 @@ export class SubscriptionService {
       dateTo?: string;
     },
   ) {
-    const secret =
-      this.configService?.get<string>('JWT_SECRET') ||
-      process.env.JWT_SECRET ||
-      'default-secret-change-in-production';
-    const decoded = jwt.verify(sessionToken, secret) as {
-      userId: string;
-      type: string;
-    };
+    try {
+      const secret =
+        this.configService?.get<string>('JWT_SECRET') ||
+        process.env.JWT_SECRET ||
+        'default-secret-change-in-production';
+      const decoded = jwt.verify(sessionToken, secret) as {
+        userId: string;
+        type: string;
+      };
 
-    if (decoded.type !== 'session') {
-      throw new UnauthorizedException('Invalid token type');
+      if (decoded.type !== 'session') {
+        throw new UnauthorizedException('Invalid token type');
+      }
+
+      return this.getHistory(decoded.userId, filters);
+    } catch (error) {
+      SafeLogger.error(
+        'Subscription history session validation failed',
+        error instanceof Error ? error : new Error(String(error)),
+        { service: 'SubscriptionService' },
+      );
+      throw new UnauthorizedException('Invalid session token');
     }
-
-    return this.getHistory(decoded.userId, filters);
   }
 
   async getHistoryEventDetails(userId: string, eventId: string) {
@@ -421,7 +430,9 @@ export class SubscriptionService {
     if (status === SubscriptionStatus.CANCELLED) return 'cancellation';
     if (status === SubscriptionStatus.ACTIVE) return 'purchase';
     if (status === SubscriptionStatus.TRIALING) return 'trial_start';
-    if (status === SubscriptionStatus.EXPIRED) return 'trial_end';
+    // EXPIRED is not trial-specific; map to cancellation to avoid
+    // mislabeling expired paid subscriptions as "trial ended".
+    if (status === SubscriptionStatus.EXPIRED) return 'cancellation';
     return 'renewal';
   }
 
