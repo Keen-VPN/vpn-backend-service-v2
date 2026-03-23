@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   NotFoundException,
+  BadRequestException,
   Inject,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -269,8 +270,20 @@ export class SubscriptionService {
 
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
-      if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
-      if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+      if (filters.dateFrom) {
+        const from = new Date(filters.dateFrom);
+        if (isNaN(from.getTime())) {
+          throw new BadRequestException('Invalid dateFrom');
+        }
+        where.createdAt.gte = from;
+      }
+      if (filters.dateTo) {
+        const to = new Date(filters.dateTo);
+        if (isNaN(to.getTime())) {
+          throw new BadRequestException('Invalid dateTo');
+        }
+        where.createdAt.lte = to;
+      }
     }
 
     const [total, subscriptions] = await Promise.all([
@@ -321,6 +334,8 @@ export class SubscriptionService {
       dateTo?: string;
     },
   ) {
+    let userId: string;
+
     try {
       const secret =
         this.configService?.get<string>('JWT_SECRET') ||
@@ -334,8 +349,7 @@ export class SubscriptionService {
       if (decoded.type !== 'session') {
         throw new UnauthorizedException('Invalid token type');
       }
-
-      return this.getHistory(decoded.userId, filters);
+      userId = decoded.userId;
     } catch (error) {
       SafeLogger.error(
         'Subscription history session validation failed',
@@ -344,6 +358,8 @@ export class SubscriptionService {
       );
       throw new UnauthorizedException('Invalid session token');
     }
+
+    return this.getHistory(userId, filters);
   }
 
   async getHistoryEventDetails(userId: string, eventId: string) {
