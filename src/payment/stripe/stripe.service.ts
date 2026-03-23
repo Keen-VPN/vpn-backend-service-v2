@@ -1,4 +1,9 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  forwardRef,
+  ConflictException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -48,6 +53,27 @@ export class StripeService {
 
     if (!user) {
       throw new Error('User not found');
+    }
+
+    // Server-side guard: never allow checkout when an active subscription exists.
+    const existingSubscription = await this.prisma.subscription.findFirst({
+      where: {
+        userId,
+        status: {
+          in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING],
+        },
+        OR: [
+          { currentPeriodEnd: null },
+          { currentPeriodEnd: { gte: new Date() } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingSubscription) {
+      throw new ConflictException(
+        'User already has an active subscription. Checkout is not allowed.',
+      );
     }
 
     // Get or create Stripe customer
