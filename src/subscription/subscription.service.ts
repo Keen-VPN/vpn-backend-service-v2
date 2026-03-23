@@ -1,4 +1,10 @@
-import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  NotFoundException,
+  BadRequestException,
+  Inject,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
@@ -238,6 +244,172 @@ export class SubscriptionService {
     };
   }
 
+  async getHistory(
+    userId: string,
+    filters: {
+      page?: string | number;
+      limit?: string | number;
+      provider?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+  ) {
+    const page = Math.max(1, Number(filters.page || 1));
+    const limit = Math.min(100, Math.max(1, Number(filters.limit || 25)));
+    const skip = (page - 1) * limit;
+
+    const where: {
+      userId: string;
+      subscriptionType?: string;
+      createdAt?: { gte?: Date; lte?: Date };
+    } = { userId };
+
+    if (filters.provider === 'stripe' || filters.provider === 'apple_iap') {
+      where.subscriptionType = filters.provider;
+    }
+
+    if (filters.dateFrom || filters.dateTo) {
+      where.createdAt = {};
+      if (filters.dateFrom) {
+        const from = new Date(filters.dateFrom);
+        if (isNaN(from.getTime())) {
+          throw new BadRequestException('Invalid dateFrom');
+        }
+        where.createdAt.gte = from;
+      }
+      if (filters.dateTo) {
+        const to = new Date(filters.dateTo);
+        if (isNaN(to.getTime())) {
+          throw new BadRequestException('Invalid dateTo');
+        }
+        where.createdAt.lte = to;
+      }
+    }
+
+    const [total, subscriptions] = await Promise.all([
+      this.prisma.subscription.count({ where }),
+      this.prisma.subscription.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        events: subscriptions.map((sub) => ({
+          id: sub.id,
+          eventDate: sub.createdAt.toISOString(),
+          eventType: this.resolveEventType(sub.status),
+          provider:
+            sub.subscriptionType === 'apple_iap' ? 'apple_iap' : 'stripe',
+          planName: this.resolveApplePlanName(sub) || 'Premium VPN',
+          amount: sub.priceAmount ? Number(sub.priceAmount) : undefined,
+          currency: sub.priceCurrency || 'USD',
+          status: sub.status.toLowerCase(),
+          periodStart: sub.currentPeriodStart?.toISOString(),
+          periodEnd: sub.currentPeriodEnd?.toISOString(),
+          description: this.describeSubscriptionEvent(sub.status),
+        })),
+        pagination: {
+          page,
+          limit,
+          total,
+          hasNextPage: skip + subscriptions.length < total,
+          hasPreviousPage: page > 1,
+        },
+      },
+    };
+  }
+
+  async getHistoryWithSession(
+    sessionToken: string,
+    filters: {
+      page?: string | number;
+      limit?: string | number;
+      provider?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+  ) {
+    let userId: string;
+
+    try {
+      const secret =
+        this.configService?.get<string>('JWT_SECRET') ||
+        process.env.JWT_SECRET ||
+        'default-secret-change-in-production';
+      const decoded = jwt.verify(sessionToken, secret) as {
+        userId: string;
+        type: string;
+      };
+
+      if (decoded.type !== 'session') {
+        throw new UnauthorizedException('Invalid token type');
+      }
+      userId = decoded.userId;
+    } catch (error) {
+      SafeLogger.error(
+        'Subscription history session validation failed',
+        error instanceof Error ? error : new Error(String(error)),
+        { service: 'SubscriptionService' },
+      );
+      throw new UnauthorizedException('Invalid session token');
+    }
+
+    return this.getHistory(userId, filters);
+  }
+
+  async getHistoryEventDetails(userId: string, eventId: string) {
+    const sub = await this.prisma.subscription.findFirst({
+      where: { id: eventId, userId },
+    });
+
+    if (!sub) {
+      throw new NotFoundException('Subscription history event not found');
+    }
+
+    return {
+      success: true,
+      data: {
+        event: {
+          id: sub.id,
+          eventDate: sub.createdAt.toISOString(),
+          eventType: this.resolveEventType(sub.status),
+          provider:
+            sub.subscriptionType === 'apple_iap' ? 'apple_iap' : 'stripe',
+          planName: this.resolveApplePlanName(sub) || 'Premium VPN',
+          amount: sub.priceAmount ? Number(sub.priceAmount) : undefined,
+          currency: sub.priceCurrency || 'USD',
+          status: sub.status.toLowerCase(),
+          periodStart: sub.currentPeriodStart?.toISOString(),
+          periodEnd: sub.currentPeriodEnd?.toISOString(),
+          description: this.describeSubscriptionEvent(sub.status),
+          providerActions: {
+            appStoreManage: sub.subscriptionType === 'apple_iap',
+            manageSubscription:
+              sub.subscriptionType === 'stripe'
+                ? '/account/payments'
+                : undefined,
+          },
+          additionalDetails: {
+            stripeSubscriptionId: sub.stripeSubscriptionId || undefined,
+            stripeCustomerId: sub.stripeCustomerId || undefined,
+            cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+            currentPeriodStart: sub.currentPeriodStart?.toISOString(),
+            currentPeriodEnd: sub.currentPeriodEnd?.toISOString(),
+            transactionId: sub.appleTransactionId || undefined,
+            originalTransactionId: sub.appleOriginalTransactionId || undefined,
+            productId: sub.appleProductId || undefined,
+            environment: sub.appleEnvironment || undefined,
+          },
+        },
+      },
+    };
+  }
+
   /**
    * Derives the correct plan name from appleProductId when the stored planName
    * is generic (e.g. "Premium VPN" without Monthly/Annual qualifier).
@@ -268,5 +440,31 @@ export class SubscriptionService {
     }
 
     return planName;
+  }
+
+  private resolveEventType(status: SubscriptionStatus) {
+    if (status === SubscriptionStatus.CANCELLED) return 'cancellation';
+    if (status === SubscriptionStatus.ACTIVE) return 'purchase';
+    if (status === SubscriptionStatus.TRIALING) return 'trial_start';
+    // EXPIRED is not trial-specific; map to cancellation to avoid
+    // mislabeling expired paid subscriptions as "trial ended".
+    if (status === SubscriptionStatus.EXPIRED) return 'cancellation';
+    return 'renewal';
+  }
+
+  private describeSubscriptionEvent(status: SubscriptionStatus): string {
+    if (status === SubscriptionStatus.CANCELLED) {
+      return 'Subscription cancelled';
+    }
+    if (status === SubscriptionStatus.ACTIVE) {
+      return 'Subscription active';
+    }
+    if (status === SubscriptionStatus.TRIALING) {
+      return 'Trial active';
+    }
+    if (status === SubscriptionStatus.EXPIRED) {
+      return 'Subscription expired';
+    }
+    return 'Subscription updated';
   }
 }

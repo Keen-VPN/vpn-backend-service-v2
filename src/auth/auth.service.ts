@@ -208,6 +208,87 @@ export class AuthService {
         });
       }
 
+      const prioritizedSubscription = await this.prisma.subscription.findFirst({
+        where: {
+          userId: user.id,
+          status: {
+            in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING],
+          },
+          OR: [
+            { currentPeriodEnd: null },
+            { currentPeriodEnd: { gte: new Date() } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const latestSubscription =
+        prioritizedSubscription ??
+        (await this.prisma.subscription.findFirst({
+          where: { userId: user.id },
+          orderBy: { createdAt: 'desc' },
+        }));
+
+      let subscriptionForResponse = latestSubscription;
+
+      // Fallback for Apple users whose Apple purchase exists but has not yet
+      // been materialized into the subscriptions table.
+      if (!subscriptionForResponse) {
+        const activeApplePurchase =
+          await this.prisma.appleIAPPurchase.findFirst({
+            where: {
+              OR: [{ linkedUserId: user.id }, { linkedEmail: user.email }],
+              expiresDate: { gte: new Date() },
+            },
+            orderBy: { expiresDate: 'desc' },
+          });
+
+        if (activeApplePurchase) {
+          const matchedSubscription = await this.prisma.subscription.findFirst({
+            where: {
+              userId: user.id,
+              OR: [
+                { appleTransactionId: activeApplePurchase.transactionId },
+                {
+                  appleOriginalTransactionId:
+                    activeApplePurchase.originalTransactionId,
+                },
+              ],
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (matchedSubscription) {
+            subscriptionForResponse = await this.prisma.subscription.update({
+              where: { id: matchedSubscription.id },
+              data: {
+                userId: user.id,
+                status: SubscriptionStatus.ACTIVE,
+                currentPeriodEnd: activeApplePurchase.expiresDate,
+                appleTransactionId: activeApplePurchase.transactionId,
+                appleOriginalTransactionId:
+                  activeApplePurchase.originalTransactionId,
+                appleProductId: activeApplePurchase.productId,
+              },
+            });
+          } else {
+            subscriptionForResponse = await this.prisma.subscription.create({
+              data: {
+                userId: user.id,
+                status: SubscriptionStatus.ACTIVE,
+                subscriptionType: 'apple_iap',
+                currentPeriodEnd: activeApplePurchase.expiresDate,
+                appleTransactionId: activeApplePurchase.transactionId,
+                appleOriginalTransactionId:
+                  activeApplePurchase.originalTransactionId,
+                appleProductId: activeApplePurchase.productId,
+                planName: 'Premium VPN',
+              },
+            });
+          }
+        }
+      }
+
       const sessionToken = this.generateSessionToken(user.id);
 
       SafeLogger.info('Google sign-in completed successfully', {
@@ -221,8 +302,22 @@ export class AuthService {
           id: user.id,
           email: user.email,
           name: user.displayName || '',
+          displayName: user.displayName || '',
+          emailVerified: user.emailVerified,
+          provider: user.provider,
         },
         sessionToken,
+        subscription: subscriptionForResponse
+          ? {
+              id: subscriptionForResponse.id,
+              status: subscriptionForResponse.status,
+              planName: subscriptionForResponse.planName,
+              plan: this.resolveSubscriptionPlan(subscriptionForResponse),
+              currentPeriodEnd: subscriptionForResponse.currentPeriodEnd,
+              cancelAtPeriodEnd: subscriptionForResponse.cancelAtPeriodEnd,
+              subscriptionType: subscriptionForResponse.subscriptionType,
+            }
+          : null,
         authMethod: 'google',
       };
     } catch (error) {

@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -89,5 +90,70 @@ export class SubscriptionController {
   async cancel(@CurrentUser() user: { uid: string }) {
     const userId = user.uid; // SessionAuthGuard sets uid
     return this.subscriptionService.cancel(userId);
+  }
+
+  @Get('history')
+  @UseGuards(SessionAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get subscription history (paginated)' })
+  @ApiResponse({ status: 200, description: 'Subscription history returned' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  async getHistory(
+    @CurrentUser() user: { uid: string },
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('provider') provider?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    const userId = user.uid;
+    return this.subscriptionService.getHistory(userId, {
+      page,
+      limit,
+      provider,
+      dateFrom,
+      dateTo,
+    });
+  }
+
+  @Post('history')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get subscription history via session token' })
+  @ApiResponse({ status: 200, description: 'Subscription history returned' })
+  @ApiBody({ type: SessionTokenDto })
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  async getHistoryWithSession(
+    @Body()
+    body: SessionTokenDto & {
+      page?: number;
+      limit?: number;
+      provider?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+  ) {
+    return this.subscriptionService.getHistoryWithSession(
+      body.sessionToken,
+      body,
+    );
+  }
+
+  @Get('history/:id/details')
+  @UseGuards(SessionAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get subscription history event details' })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription history event details returned',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  async getHistoryEventDetails(
+    @CurrentUser() user: { uid: string },
+    @Param('id') eventId: string,
+  ) {
+    const userId = user.uid;
+    return this.subscriptionService.getHistoryEventDetails(userId, eventId);
   }
 }
