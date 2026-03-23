@@ -246,6 +246,7 @@ export class AuthService {
         if (activeApplePurchase) {
           const matchedSubscription = await this.prisma.subscription.findFirst({
             where: {
+              userId: user.id,
               OR: [
                 { appleTransactionId: activeApplePurchase.transactionId },
                 {
