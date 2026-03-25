@@ -63,7 +63,13 @@ export class AuthService {
           // Update existing user with Firebase UID
           user = await this.prisma.user.update({
             where: { id: user.id },
-            data: { firebaseUid },
+            data: {
+              firebaseUid,
+              email,
+              displayName,
+              emailVerified,
+              provider,
+            },
           });
         } else {
           // Create new user
@@ -438,8 +444,7 @@ export class AuthService {
           emailFromToken = decoded.email || email;
           emailVerified =
             decoded.email_verified === 'true' ||
-            decoded.email_verified === true ||
-            true;
+            decoded.email_verified === true;
 
           SafeLogger.debug(
             'Apple token decoded without signature verification (Non-Production)',
@@ -601,14 +606,6 @@ export class AuthService {
           path: '/auth/verify',
         });
         throw new BadRequestException('Request body is missing');
-      }
-
-      if (!sessionToken) {
-        SafeLogger.warn('sessionToken is missing from body', {
-          service: 'AuthController',
-          body: sessionToken,
-        });
-        throw new BadRequestException('sessionToken is required');
       }
 
       const secret =
