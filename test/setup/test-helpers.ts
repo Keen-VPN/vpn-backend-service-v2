@@ -19,6 +19,7 @@ export function createMockUser(overrides?: Partial<User>): User {
     trialStartsAt: null,
     trialEndsAt: null,
     trialTier: null,
+    mergedIntoUserId: null,
     ...overrides,
   };
 }
@@ -173,5 +174,22 @@ export function createMockStripeSubscription(): any {
         },
       ],
     },
+  };
+}
+
+export function createMockSubscriptionUser(
+  overrides?: Partial<{
+    id: string;
+    subscriptionId: string;
+    userId: string;
+    createdAt: Date;
+  }>,
+) {
+  return {
+    id: faker.string.uuid(),
+    subscriptionId: faker.string.uuid(),
+    userId: faker.string.uuid(),
+    createdAt: new Date(),
+    ...overrides,
   };
 }

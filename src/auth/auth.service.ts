@@ -208,6 +208,16 @@ export class AuthService {
         });
       }
 
+      // Handle merged users — redirect to primary
+      if (user.mergedIntoUserId) {
+        const primaryUser = await this.prisma.user.findUnique({
+          where: { id: user.mergedIntoUserId },
+        });
+        if (primaryUser) {
+          user = primaryUser;
+        }
+      }
+
       const prioritizedSubscription = await this.prisma.subscription.findFirst({
         where: {
           userId: user.id,
@@ -503,6 +513,16 @@ export class AuthService {
             emailVerified,
           },
         });
+      }
+
+      // Handle merged users — redirect to primary
+      if (user.mergedIntoUserId) {
+        const primaryUser = await this.prisma.user.findUnique({
+          where: { id: user.mergedIntoUserId },
+        });
+        if (primaryUser) {
+          user = primaryUser;
+        }
       }
 
       // Link Firebase UID so Stripe checkout can look up this user by firebaseUid

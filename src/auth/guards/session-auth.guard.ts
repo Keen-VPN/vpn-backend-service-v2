@@ -60,6 +60,22 @@ export class SessionAuthGuard implements CanActivate {
         throw new UnauthorizedException('User not found');
       }
 
+      // Handle merged users — redirect to primary
+      if (user.mergedIntoUserId) {
+        const primaryUser = await this.prisma.user.findUnique({
+          where: { id: user.mergedIntoUserId },
+        });
+        if (!primaryUser) {
+          throw new UnauthorizedException('Merged account target not found');
+        }
+        (request as unknown as { user: any }).user = {
+          uid: primaryUser.id,
+          userId: primaryUser.id,
+          email: primaryUser.email,
+        };
+        return true;
+      }
+
       // Attach user to request (using uid for consistency with FirebaseAuthGuard)
       (request as unknown as { user: any }).user = {
         uid: user.id,

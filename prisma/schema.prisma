@@ -28,6 +28,8 @@ model User {
   subscriptions           Subscription[]
   deviceTrialFingerprints DeviceTrialFingerprint[]
   trialGrant              TrialGrant?
+  mergedIntoUserId        String?                  @map("merged_into_user_id")
+  subscriptionUsers       SubscriptionUser[]
 
   @@index([provider])
   @@map("users")
@@ -56,6 +58,7 @@ model Subscription {
   appleTransactionId         String?            @unique @map("apple_transaction_id")
   subscriptionType           String             @default("stripe") @map("subscription_type")
   user                       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionUsers          SubscriptionUser[]
 
   @@unique([stripeSubscriptionId, currentPeriodStart], map: "subscription_period_unique")
   @@index([userId])
@@ -66,6 +69,20 @@ model Subscription {
   @@index([status])
   @@index([currentPeriodEnd])
   @@map("subscriptions")
+}
+
+model SubscriptionUser {
+  id             String       @id @default(uuid())
+  subscriptionId String       @map("subscription_id")
+  userId         String       @map("user_id")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, userId])
+  @@index([userId])
+  @@index([subscriptionId])
+  @@map("subscription_users")
 }
 
 model AppleIAPPurchase {
