@@ -34,6 +34,11 @@ describe('AppleService', () => {
       getTrialStatus: jest.fn(),
     } as any;
 
+    // AppleService uses Prisma transactions; run callback against the same mock client.
+    (mockPrisma.$transaction as unknown as jest.Mock).mockImplementation(
+      async (fn: any) => fn(mockPrisma),
+    );
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AppleService,
@@ -66,7 +71,7 @@ describe('AppleService', () => {
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValue(receiptResult),
+        text: jest.fn().mockResolvedValue(JSON.stringify(receiptResult)),
       });
 
       const result = await service.verifyReceipt(receiptData);
@@ -82,11 +87,11 @@ describe('AppleService', () => {
       (global.fetch as jest.Mock)
         .mockResolvedValueOnce({
           ok: true,
-          json: jest.fn().mockResolvedValue({ status: 21007 }),
+          text: jest.fn().mockResolvedValue(JSON.stringify({ status: 21007 })),
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: jest.fn().mockResolvedValue(sandboxResult),
+          text: jest.fn().mockResolvedValue(JSON.stringify(sandboxResult)),
         });
 
       const result = await service.verifyReceipt(receiptData);
@@ -272,9 +277,50 @@ describe('AppleService', () => {
   });
 
   describe('capturePurchase', () => {
-    it('should create new purchase if not exists', async () => {
+    it('should capture purchase without receiptData (unverified)', async () => {
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
+      mockPrisma.appleIAPPurchase.create.mockResolvedValue(
+        createMockAppleIAPPurchase(),
+      );
+
+      const result = await service.capturePurchase(
+        'trans-123',
+        'orig-123',
+        'prod-123',
+        Date.now().toString(),
+        undefined,
+        undefined,
+        'Production',
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.appleIAPPurchase.create).toHaveBeenCalled();
+    });
+
+    it('should create new purchase from verified receipt if not exists', async () => {
       const transactionId = 'trans-123';
       const productId = 'prod-123';
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
+
+      // Mock receipt verification success (production)
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: transactionId,
+                original_transaction_id: 'orig-123',
+                product_id: productId,
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+              },
+            ],
+          }),
+        ),
+      });
 
       mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
       mockPrisma.appleIAPPurchase.create.mockResolvedValue(
@@ -287,7 +333,7 @@ describe('AppleService', () => {
         productId,
         Date.now().toString(),
         undefined,
-        undefined,
+        receiptData,
         'Production',
       );
 
@@ -295,8 +341,29 @@ describe('AppleService', () => {
       expect(mockPrisma.appleIAPPurchase.create).toHaveBeenCalled();
     });
 
-    it('should update existing purchase', async () => {
+    it('should update existing purchase from verified receipt', async () => {
       const existing = createMockAppleIAPPurchase();
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: existing.transactionId,
+                original_transaction_id: existing.originalTransactionId,
+                product_id: existing.productId,
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+              },
+            ],
+          }),
+        ),
+      });
+
       mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(existing);
       mockPrisma.appleIAPPurchase.update.mockResolvedValue(existing);
 
@@ -306,7 +373,7 @@ describe('AppleService', () => {
         existing.productId,
         Date.now().toString(),
         undefined,
-        undefined,
+        receiptData,
         'Production',
       );
 
@@ -318,6 +385,26 @@ describe('AppleService', () => {
       const existing = createMockAppleIAPPurchase();
       existing.linkedUserId = 'user-123';
       existing.linkedEmail = 'test@example.com';
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: existing.transactionId,
+                original_transaction_id: existing.originalTransactionId,
+                product_id: existing.productId,
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+              },
+            ],
+          }),
+        ),
+      });
 
       mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(existing);
       mockPrisma.appleIAPPurchase.update.mockResolvedValue(existing);
@@ -328,7 +415,7 @@ describe('AppleService', () => {
         existing.productId,
         Date.now().toString(),
         undefined,
-        undefined,
+        receiptData,
         'Production',
         'different-device-fingerprint',
       );
@@ -337,6 +424,25 @@ describe('AppleService', () => {
     });
 
     it('should not warn if capturing from different device but no existing purchase', async () => {
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: 'tx-new',
+                original_transaction_id: 'orig-new',
+                product_id: 'prod-new',
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+              },
+            ],
+          }),
+        ),
+      });
       mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
       mockPrisma.appleIAPPurchase.create.mockResolvedValue(
         createMockAppleIAPPurchase(),
@@ -349,7 +455,7 @@ describe('AppleService', () => {
         'prod-new',
         Date.now().toString(),
         undefined,
-        undefined,
+        receiptData,
         undefined,
         'new-device-fp',
       );
@@ -366,6 +472,26 @@ describe('AppleService', () => {
       mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(purchase);
       mockPrisma.appleIAPPurchase.update.mockResolvedValue(purchase);
       const loggerSpy = jest.spyOn(SafeLogger, 'warn');
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: 'tx-unlinked',
+                original_transaction_id: 'orig-unlinked',
+                product_id: 'prod-unlinked',
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+              },
+            ],
+          }),
+        ),
+      });
 
       await service.capturePurchase(
         'tx-unlinked',
@@ -373,7 +499,7 @@ describe('AppleService', () => {
         'prod-unlinked',
         Date.now().toString(),
         undefined,
-        undefined,
+        receiptData,
         undefined,
         'new-device-fp',
       );
@@ -386,17 +512,26 @@ describe('AppleService', () => {
 
     it('should capture purchase with receipt validation', async () => {
       const txnId = 'txn-valid';
-      const receiptData = 'valid-receipt';
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
 
       // Mock receipt verification success
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValue({
-          status: 0,
-          latest_receipt_info: [
-            { expires_date_ms: (Date.now() + 10000).toString() },
-          ],
-        }),
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: txnId,
+                original_transaction_id: 'orig',
+                product_id: 'prod',
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+              },
+            ],
+          }),
+        ),
       });
 
       mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
@@ -417,26 +552,32 @@ describe('AppleService', () => {
       expect(global.fetch).toHaveBeenCalled();
     });
 
-    it('should throw if receipt is invalid', async () => {
+    it('should capture purchase even if receipt is invalid (unverified fallback)', async () => {
       const txnId = 'txn-invalid';
-      const receiptData = 'invalid-receipt';
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValue({ status: 21000 }), // Non-zero status
+        text: jest.fn().mockResolvedValue(JSON.stringify({ status: 21000 })), // Non-zero status
       });
 
-      await expect(
-        service.capturePurchase(
-          txnId,
-          'orig',
-          'prod',
-          Date.now().toString(),
-          undefined,
-          receiptData,
-          'Production',
-        ),
-      ).rejects.toThrow('Invalid receipt data');
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
+      mockPrisma.appleIAPPurchase.create.mockResolvedValue(
+        createMockAppleIAPPurchase(),
+      );
+
+      const result = await service.capturePurchase(
+        txnId,
+        'orig',
+        'prod',
+        Date.now().toString(),
+        undefined,
+        receiptData,
+        'Production',
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.appleIAPPurchase.create).toHaveBeenCalled();
     });
   });
 
@@ -445,10 +586,30 @@ describe('AppleService', () => {
       const user = createMockUser();
       const purchase = createMockAppleIAPPurchase();
       purchase.linkedUserId = null;
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
 
-      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(purchase);
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: purchase.transactionId,
+                original_transaction_id: purchase.originalTransactionId,
+                product_id: purchase.productId,
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+              },
+            ],
+          }),
+        ),
+      });
+
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
       mockPrisma.user.findUnique.mockResolvedValue(user);
-      mockPrisma.appleIAPPurchase.update.mockResolvedValue({
+      mockPrisma.appleIAPPurchase.create.mockResolvedValue({
         ...purchase,
         linkedUserId: user.id,
       } as any);
@@ -463,43 +624,85 @@ describe('AppleService', () => {
         purchase.transactionId,
         purchase.originalTransactionId,
         purchase.productId,
-        'receipt-data',
+        receiptData,
       );
 
       expect(result.success).toBe(true);
-      expect(mockPrisma.appleIAPPurchase.update).toHaveBeenCalled();
+      expect(mockPrisma.appleIAPPurchase.create).toHaveBeenCalled();
       expect(mockPrisma.subscription.create).toHaveBeenCalled();
     });
 
-    it('should throw error if purchase not found', async () => {
-      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
+    it('should link purchase even if receipt is invalid (fallback)', async () => {
+      const user = createMockUser();
+      const purchase = createMockAppleIAPPurchase();
+      purchase.linkedUserId = null;
+      purchase.expiresDate = new Date(Date.now() + 10000);
 
-      await expect(
-        service.linkPurchase(
-          'user-id',
-          'token',
-          'tx-id',
-          'orig-id',
-          'prod-id',
-          'data',
-        ),
-      ).rejects.toThrow('Purchase not found');
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ status: 21004 })),
+      });
+
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValueOnce(purchase);
+      mockPrisma.appleIAPPurchase.update.mockResolvedValue({
+        ...purchase,
+        linkedUserId: user.id,
+      } as any);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      mockPrisma.subscription.create.mockResolvedValue(
+        createMockSubscription(),
+      );
+
+      const result = await service.linkPurchase(
+        user.id,
+        'token',
+        purchase.transactionId,
+        purchase.originalTransactionId,
+        purchase.productId,
+        'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=',
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.subscription.create).toHaveBeenCalled();
     });
 
     it('should throw error if already linked to another user', async () => {
+      const user = createMockUser();
       const purchase = createMockAppleIAPPurchase();
       purchase.linkedUserId = 'other-user';
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: purchase.transactionId,
+                original_transaction_id: purchase.originalTransactionId,
+                product_id: purchase.productId,
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+              },
+            ],
+          }),
+        ),
+      });
 
       mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(purchase);
+      mockPrisma.user.findUnique.mockResolvedValue(user);
 
       await expect(
         service.linkPurchase(
-          'user-id',
+          user.id,
           'token',
           purchase.transactionId,
           purchase.originalTransactionId,
           purchase.productId,
-          'data',
+          receiptData,
         ),
       ).rejects.toThrow('already linked');
     });
@@ -508,11 +711,31 @@ describe('AppleService', () => {
       const user = createMockUser();
       const purchase = createMockAppleIAPPurchase();
       const subscription = createMockSubscription();
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
 
       purchase.linkedUserId = user.id;
       // Ensure purchase is active but subscription is inactive to trigger update
       purchase.expiresDate = new Date(Date.now() + 10000); // Active
       subscription.status = 'inactive';
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: purchase.transactionId,
+                original_transaction_id: purchase.originalTransactionId,
+                product_id: purchase.productId,
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+              },
+            ],
+          }),
+        ),
+      });
 
       mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(purchase);
       mockPrisma.user.findUnique.mockResolvedValue(user);
@@ -525,7 +748,7 @@ describe('AppleService', () => {
         purchase.transactionId,
         purchase.originalTransactionId,
         purchase.productId,
-        'data',
+        receiptData,
       );
 
       expect(mockPrisma.subscription.create).not.toHaveBeenCalled();
@@ -537,10 +760,30 @@ describe('AppleService', () => {
       const purchase = createMockAppleIAPPurchase();
       purchase.productId = 'com.keenvpn.premium.annual';
       purchase.linkedUserId = null;
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
 
-      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(purchase);
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: purchase.transactionId,
+                original_transaction_id: purchase.originalTransactionId,
+                product_id: purchase.productId,
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+              },
+            ],
+          }),
+        ),
+      });
+
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
       mockPrisma.user.findUnique.mockResolvedValue(user);
-      mockPrisma.appleIAPPurchase.update.mockResolvedValue({
+      mockPrisma.appleIAPPurchase.create.mockResolvedValue({
         ...purchase,
         linkedUserId: user.id,
       } as any);
@@ -555,7 +798,7 @@ describe('AppleService', () => {
         purchase.transactionId,
         purchase.originalTransactionId,
         purchase.productId,
-        'data',
+        receiptData,
       );
 
       expect(mockPrisma.subscription.create).toHaveBeenCalledWith(
@@ -573,10 +816,30 @@ describe('AppleService', () => {
       const purchase = createMockAppleIAPPurchase();
       purchase.productId = 'com.keenvpn.premium.monthly';
       purchase.linkedUserId = null;
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
 
-      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(purchase);
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: purchase.transactionId,
+                original_transaction_id: purchase.originalTransactionId,
+                product_id: purchase.productId,
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+              },
+            ],
+          }),
+        ),
+      });
+
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
       mockPrisma.user.findUnique.mockResolvedValue(user);
-      mockPrisma.appleIAPPurchase.update.mockResolvedValue({
+      mockPrisma.appleIAPPurchase.create.mockResolvedValue({
         ...purchase,
         linkedUserId: user.id,
       } as any);
@@ -591,14 +854,14 @@ describe('AppleService', () => {
         purchase.transactionId,
         purchase.originalTransactionId,
         purchase.productId,
-        'data',
+        receiptData,
       );
 
       expect(mockPrisma.subscription.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             planName: 'Premium VPN - Monthly',
-            priceAmount: 0,
+            priceAmount: 12.99,
           }),
         }),
       );
@@ -633,7 +896,7 @@ describe('AppleService', () => {
       expect(result.linkedCount).toBe(1);
     });
 
-    it('should auto-capture if purchase not found', async () => {
+    it('should return an error if purchase not found (no auto-capture)', async () => {
       const user = createMockUser();
       const txInfo = {
         transactionId: 'tx-1',
@@ -642,21 +905,16 @@ describe('AppleService', () => {
       };
 
       mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
-      const createdPurchase = createMockAppleIAPPurchase();
-      createdPurchase.linkedUserId = null; // Fix: Ensure created purchase is not linked
-      mockPrisma.appleIAPPurchase.create.mockResolvedValue(createdPurchase);
       mockPrisma.user.findUnique.mockResolvedValue(user);
-      mockPrisma.subscription.findFirst.mockResolvedValue(null);
-      mockPrisma.subscription.create.mockResolvedValue(
-        createMockSubscription(),
-      );
 
       const result = await service.linkWithTransactionIds(user.id, 'token', [
         txInfo,
       ]);
 
-      expect(result.success).toBe(true);
-      expect(mockPrisma.appleIAPPurchase.create).toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.linkedCount).toBe(0);
+      expect(result.errors?.length).toBe(1);
+      expect(result.errors?.[0].error).toContain('Purchase not found');
     });
 
     it('should handle invalid "0" transaction IDs', async () => {
@@ -766,9 +1024,6 @@ describe('AppleService', () => {
       };
 
       mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
-      mockPrisma.appleIAPPurchase.create.mockRejectedValue(
-        new Error('Capture failed'),
-      );
       mockPrisma.user.findUnique.mockResolvedValue(user);
 
       const result = await service.linkWithTransactionIds(user.id, 'token', [
@@ -777,7 +1032,7 @@ describe('AppleService', () => {
 
       expect(result.linkedCount).toBe(0);
       expect(result.errors?.length).toBe(1);
-      expect(result.errors?.[0].error).toContain('Capture failed');
+      expect(result.errors?.[0].error).toContain('Purchase not found');
     });
 
     it('should handle nil return from capture in bulk link', async () => {
@@ -789,7 +1044,6 @@ describe('AppleService', () => {
       };
 
       mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
-      mockPrisma.appleIAPPurchase.create.mockResolvedValue(null as any);
       mockPrisma.user.findUnique.mockResolvedValue(user);
 
       const result = await service.linkWithTransactionIds(user.id, 'token', [
@@ -798,9 +1052,7 @@ describe('AppleService', () => {
 
       expect(result.linkedCount).toBe(0);
       expect(result.errors?.length).toBe(1);
-      expect(result.errors?.[0].error).toContain(
-        'Could not find or capture purchase',
-      );
+      expect(result.errors?.[0].error).toContain('Purchase not found');
     });
 
     it('should handle purchase already linked to current user', async () => {

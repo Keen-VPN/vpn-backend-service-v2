@@ -112,7 +112,7 @@ describe('Payment (e2e)', () => {
 
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
-        json: jest.fn().mockResolvedValue(receiptResult),
+        text: jest.fn().mockResolvedValue(JSON.stringify(receiptResult)),
       });
 
       const response = await request(app.getHttpServer())

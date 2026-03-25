@@ -4,6 +4,7 @@ import { StripeService } from '../../../src/payment/stripe/stripe.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { TrialService } from '../../../src/subscription/trial.service';
 import { SubscriptionStatus } from '@prisma/client';
+import { ConflictException } from '@nestjs/common';
 import {
   createMockPrismaClient,
   createMockConfigService,
@@ -72,6 +73,7 @@ describe('StripeService', () => {
       };
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
       (mockStripeInstance.customers.create as jest.Mock).mockResolvedValue(
         customer,
       );
@@ -99,6 +101,7 @@ describe('StripeService', () => {
       };
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
       (mockStripeInstance.customers.create as jest.Mock).mockResolvedValue(
         customer,
       );
@@ -119,6 +122,30 @@ describe('StripeService', () => {
 
       expect(mockStripeInstance.customers.create).toHaveBeenCalled();
       expect(mockPrisma.user.update).toHaveBeenCalled();
+    });
+
+    it('should block checkout when user already has active subscription', async () => {
+      const user = createMockUser();
+      const activeSubscription = createMockSubscription({
+        userId: user.id,
+        status: SubscriptionStatus.ACTIVE,
+      });
+
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.subscription.findFirst.mockResolvedValue(activeSubscription);
+
+      await expect(
+        service.createCheckoutSession(
+          user.id,
+          'individual-annual',
+          'https://success.com',
+          'https://cancel.com',
+        ),
+      ).rejects.toThrow(ConflictException);
+
+      expect(
+        mockStripeInstance.checkout.sessions.create,
+      ).not.toHaveBeenCalled();
     });
   });
 

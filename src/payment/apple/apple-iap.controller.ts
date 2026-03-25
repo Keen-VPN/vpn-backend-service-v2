@@ -6,6 +6,8 @@ import {
   HttpStatus,
   Inject,
   UseGuards,
+  BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
@@ -27,11 +29,19 @@ import {
   AppleBulkLinkResponseDto,
 } from '../../common/dto/response/apple.response.dto';
 import { SuccessResponseDto } from '../../common/dto/response/success.response.dto';
+import {
+  AlertType,
+  NotificationService,
+} from '../../notification/notification.service';
 
 @ApiTags('Apple IAP')
 @Controller('apple-iap')
 export class AppleIAPController {
-  constructor(@Inject(AppleService) private appleService: AppleService) {}
+  constructor(
+    @Inject(AppleService) private appleService: AppleService,
+    @Inject(NotificationService)
+    private readonly notificationService: NotificationService,
+  ) {}
 
   @Post('capture-purchase')
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
@@ -74,10 +84,30 @@ export class AppleIAPController {
       SafeLogger.error('Error capturing Apple IAP purchase', error);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to capture purchase';
-      return {
-        success: false,
-        error: errorMessage,
-      };
+
+      // Best-effort Slack notification (never blocks the response)
+      void this.notificationService.sendSlackAlert({
+        type: AlertType.API_ERROR,
+        severity: 'critical',
+        message: `Apple IAP capture failed: ${errorMessage}`,
+        metadata: {
+          endpointUrl: '/api/apple-iap/capture-purchase',
+          transactionId: captureDto.transactionId,
+          originalTransactionId: captureDto.originalTransactionId,
+          productId: captureDto.productId,
+          environment: captureDto.environment,
+          devicePlatform: captureDto.devicePlatform,
+        },
+      });
+
+      const msg = errorMessage.toLowerCase();
+      if (
+        msg.includes('invalid receipt') ||
+        msg.includes('receiptdata is required')
+      ) {
+        throw new BadRequestException(errorMessage);
+      }
+      throw new InternalServerErrorException(errorMessage);
     }
   }
 

@@ -48,6 +48,78 @@ export class NotificationService {
     return nodeEnv === 'development';
   }
 
+  private getRuntimeEnvironment(): string {
+    return (
+      this.configService.get<string>('APP_ENV') ||
+      this.configService.get<string>('ENVIRONMENT') ||
+      this.configService.get<string>('NODE_ENV') ||
+      process.env.APP_ENV ||
+      process.env.ENVIRONMENT ||
+      process.env.NODE_ENV ||
+      'unknown'
+    );
+  }
+
+  private sanitizeForSlackUrl(url: string): string {
+    // Strip Slack mrkdwn control characters that could be used to spoof links.
+    // Normal URLs never require these, so removing them is safe.
+    return url.replace(/[<>*_|~]/g, '');
+  }
+
+  private getFullEndpointUrl(request?: Request): string | null {
+    if (!request) return null;
+    const hostHeader = request.get('host') || '';
+    const forwardedProto =
+      (request.headers['x-forwarded-proto'] as string) || '';
+    const forwardedHostHeader =
+      (request.headers['x-forwarded-host'] as string) || '';
+    const proto =
+      forwardedProto.split(',')[0]?.trim() ||
+      (request.secure ? 'https' : 'http');
+    const path = request.originalUrl || request.url || '';
+
+    // Prefer the actual Host header first.
+    if (hostHeader) {
+      return this.sanitizeForSlackUrl(`${proto}://${hostHeader}${path}`);
+    }
+
+    // Optionally trust X-Forwarded-Host, but only when explicitly allowed.
+    const trustForwardedHost =
+      this.configService.get<boolean>('TRUST_FORWARDED_HOST') === true ||
+      process.env.TRUST_FORWARDED_HOST === 'true';
+    if (trustForwardedHost && forwardedHostHeader) {
+      const forwardedHost = forwardedHostHeader.split(',')[0]?.trim();
+      // Basic allowlist support via ALLOWED_HOSTS (comma-separated).
+      const allowed =
+        this.configService.get<string>('ALLOWED_HOSTS') ||
+        process.env.ALLOWED_HOSTS ||
+        '';
+      const allowedHosts = allowed
+        .split(',')
+        .map((h) => h.trim())
+        .filter(Boolean);
+      if (
+        forwardedHost &&
+        (allowedHosts.length === 0 ||
+          allowedHosts.some(
+            (h) => forwardedHost === h || forwardedHost.endsWith(`.${h}`),
+          ))
+      ) {
+        return this.sanitizeForSlackUrl(`${proto}://${forwardedHost}${path}`);
+      }
+    }
+
+    // Fallback for environments where Host headers aren't reliable (serverless/proxy setups).
+    const baseUrl =
+      this.configService.get<string>('PUBLIC_BASE_URL') ||
+      this.configService.get<string>('API_BASE_URL') ||
+      process.env.PUBLIC_BASE_URL ||
+      process.env.API_BASE_URL ||
+      '';
+    if (!baseUrl) return null;
+    return this.sanitizeForSlackUrl(`${baseUrl.replace(/\/+$/, '')}${path}`);
+  }
+
   async sendSlackAlert(alert: Alert): Promise<void> {
     if (this.isDevelopment()) return;
 
@@ -59,7 +131,19 @@ export class NotificationService {
     }
 
     const emoji = this.getSeverityEmoji(alert.severity);
-    const formattedMessage = `${emoji} *${alert.type.toUpperCase()}*\n${alert.message}`;
+    const env = this.getRuntimeEnvironment();
+    const endpointUrl =
+      typeof alert.metadata?.endpointUrl === 'string'
+        ? alert.metadata.endpointUrl
+        : null;
+    const formattedMessage = [
+      `${emoji} *${alert.type.toUpperCase()}*`,
+      `*Environment:* ${env}`,
+      endpointUrl ? `*Endpoint:* ${endpointUrl}` : null,
+      alert.message,
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     try {
       await firstValueFrom(
@@ -148,16 +232,22 @@ export class NotificationService {
       exception instanceof Error ? exception : new Error(String(exception));
     const location = parseErrorLocation(err.stack);
     const fileLine = location ? `${location.file}:${location.line}` : 'unknown';
+    const env = this.getRuntimeEnvironment();
+    const endpointUrl = this.getFullEndpointUrl(request);
 
     const severity = statusCode >= 500 ? 'critical' : 'warning';
     const emoji = severity === 'critical' ? '🔴' : '⚠️';
     const text = [
       `${emoji} *API Error* (${statusCode})`,
+      `*Environment:* ${env}`,
+      endpointUrl ? `*Endpoint:* ${endpointUrl}` : null,
       `*Message:* ${err.message}`,
       `*Location:* \`${fileLine}\``,
       `*Path:* ${request.method} ${request.url}`,
       `*Request ID:* ${requestId}`,
-    ].join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     try {
       await firstValueFrom(this.httpService.post(webhookUrl, { text }));

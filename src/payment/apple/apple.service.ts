@@ -1,7 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -15,6 +12,53 @@ const APPLE_RECEIPT_URLS = {
   production: 'https://buy.itunes.apple.com/verifyReceipt',
 };
 
+type AppleEnvironment = 'Sandbox' | 'Production';
+
+interface AppleReceiptItem {
+  transaction_id: string;
+  original_transaction_id: string;
+  product_id: string;
+  purchase_date_ms: string;
+  expires_date_ms?: string;
+}
+
+interface AppleVerifyReceiptResponse {
+  status: number;
+  // Apple may return arbitrary environment strings; we normalise to AppleEnvironment where needed.
+  environment?: string;
+  // Subscription receipts use latest_receipt_info
+  latest_receipt_info?: AppleReceiptItem[];
+  // Some receipts provide receipt.in_app
+  receipt?: {
+    in_app?: AppleReceiptItem[];
+  };
+  // Present for subscription receipts
+  latest_receipt?: string;
+}
+
+type AppleWebhookNotificationType =
+  | 'REFUND'
+  | 'DID_RENEW'
+  | 'DID_CHANGE_RENEWAL_STATUS';
+
+interface AppleWebhookEvent {
+  notification_type?: AppleWebhookNotificationType;
+  auto_renew_status?: boolean;
+  unified_receipt?: {
+    environment?: AppleEnvironment;
+    latest_receipt_info?: AppleReceiptItem[];
+  };
+}
+
+type BillingPeriod = 'month' | 'year' | 'unknown';
+
+interface PlanMetadata {
+  planName: string;
+  priceAmount: number | null;
+  priceCurrency: 'USD';
+  billingPeriod: BillingPeriod;
+}
+
 @Injectable()
 export class AppleService {
   constructor(
@@ -24,24 +68,28 @@ export class AppleService {
     private trialService: TrialService,
   ) {}
 
-  async verifyReceipt(receiptData: string) {
+  async verifyReceipt(
+    receiptData: string,
+  ): Promise<AppleVerifyReceiptResponse> {
     const sharedSecret =
       this.configService?.get<string>('APPLE_SHARED_SECRET') ||
       process.env.APPLE_SHARED_SECRET;
 
     try {
+      const body = JSON.stringify({
+        'receipt-data': receiptData,
+        password: sharedSecret || '',
+        'exclude-old-transactions': true,
+      });
+
       // Try production first
       let response = await fetch(APPLE_RECEIPT_URLS.production, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          'receipt-data': receiptData,
-          password: sharedSecret || '',
-          'exclude-old-transactions': true,
-        }),
+        body,
       });
 
-      let result = await response.json();
+      let result = await this.safeParseAppleJSON(response);
 
       // If production returns sandbox error, try sandbox
       if (result.status === 21007) {
@@ -49,13 +97,9 @@ export class AppleService {
         response = await fetch(APPLE_RECEIPT_URLS.sandbox, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            'receipt-data': receiptData,
-            password: sharedSecret || '',
-            'exclude-old-transactions': true,
-          }),
+          body,
         });
-        result = await response.json();
+        result = await this.safeParseAppleJSON(response);
       }
 
       return result;
@@ -65,7 +109,7 @@ export class AppleService {
     }
   }
 
-  async handleWebhookEvent(event: any) {
+  async handleWebhookEvent(event: AppleWebhookEvent) {
     SafeLogger.info('Processing Apple webhook', {
       notificationType: event.notification_type,
       unifiedReceipt: !!event.unified_receipt,
@@ -89,11 +133,13 @@ export class AppleService {
     }
   }
 
-  private async handleRefund(event: any) {
+  private async handleRefund(event: AppleWebhookEvent) {
     // Handle refund - mark subscription as cancelled
     const unifiedReceipt = event.unified_receipt;
-    if (unifiedReceipt?.latest_receipt_info) {
-      const latestReceipt = unifiedReceipt.latest_receipt_info[0];
+    const latestReceipt = this.findLatestReceiptItem(
+      unifiedReceipt?.latest_receipt_info,
+    );
+    if (latestReceipt) {
       const originalTransactionId = latestReceipt.original_transaction_id;
 
       const subscription = await this.prisma.subscription.findFirst({
@@ -112,20 +158,23 @@ export class AppleService {
     }
   }
 
-  private async handleRenewal(event: any) {
+  private async handleRenewal(event: AppleWebhookEvent) {
     // Handle subscription renewal
     const unifiedReceipt = event.unified_receipt;
-    if (unifiedReceipt?.latest_receipt_info) {
-      const latestReceipt = unifiedReceipt.latest_receipt_info[0];
-      await this.processAppleReceipt(latestReceipt, unifiedReceipt.environment);
-    }
+    const latestReceipt = this.findLatestReceiptItem(
+      unifiedReceipt?.latest_receipt_info,
+    );
+    if (!latestReceipt) return;
+    await this.processAppleReceipt(latestReceipt, unifiedReceipt?.environment);
   }
 
-  private async handleRenewalStatusChange(event: any) {
+  private async handleRenewalStatusChange(event: AppleWebhookEvent) {
     // Handle auto-renewal status change
     const unifiedReceipt = event.unified_receipt;
-    if (unifiedReceipt?.latest_receipt_info) {
-      const latestReceipt = unifiedReceipt.latest_receipt_info[0];
+    const latestReceipt = this.findLatestReceiptItem(
+      unifiedReceipt?.latest_receipt_info,
+    );
+    if (latestReceipt) {
       const originalTransactionId = latestReceipt.original_transaction_id;
 
       const subscription = await this.prisma.subscription.findFirst({
@@ -145,7 +194,10 @@ export class AppleService {
     }
   }
 
-  private async processAppleReceipt(receipt: any, environment: string) {
+  private async processAppleReceipt(
+    receipt: AppleReceiptItem,
+    environment?: AppleEnvironment,
+  ) {
     const originalTransactionId = receipt.original_transaction_id;
     const transactionId = receipt.transaction_id;
     const productId = receipt.product_id;
@@ -169,102 +221,237 @@ export class AppleService {
       ? new Date(parseInt(receipt.expires_date_ms))
       : null;
 
-    // Check if subscription exists
-    const existing = await this.prisma.subscription.findFirst({
-      where: { appleTransactionId: transactionId },
-    });
+    const plan = this.resolvePlanMetadata(productId);
+    const nextStatus = this.getExpectedSubscriptionStatus(expiresDate);
 
-    if (!existing) {
-      await this.prisma.subscription.create({
-        data: {
-          userId,
-          subscriptionType: 'apple_iap',
-          appleTransactionId: transactionId,
-          appleOriginalTransactionId: originalTransactionId,
-          appleProductId: productId,
-          appleEnvironment: environment,
-          status:
-            expiresDate && expiresDate > new Date()
-              ? SubscriptionStatus.ACTIVE
-              : SubscriptionStatus.INACTIVE,
-          planId: productId,
-          planName: this.getPlanName(productId),
-          priceAmount: this.getPlanPrice(productId),
-          priceCurrency: 'USD',
-          billingPeriod: 'year',
-          currentPeriodStart: purchaseDate,
-          currentPeriodEnd: expiresDate || undefined,
-          cancelAtPeriodEnd: false,
-        },
-      });
+    // Renewals share originalTransactionId; prefer that for lineage.
+    await this.prisma.$transaction(async (tx) => {
+      const existing =
+        (await tx.subscription.findFirst({
+          where: { appleOriginalTransactionId: originalTransactionId },
+        })) ??
+        (await tx.subscription.findFirst({
+          where: { appleTransactionId: transactionId },
+        }));
 
-      // Grant trial if eligible (after subscription is created)
-      try {
-        const fullUser = await this.prisma.user.findUnique({
-          where: { id: userId },
-        });
-        if (fullUser) {
-          const trialResult = await this.trialService.grantIfEligible(
-            fullUser,
-            null,
-          );
-          if (trialResult.granted) {
-            SafeLogger.info('Trial granted on subscription', {
-              userId: trialResult.userId,
-              trialEndsAt: trialResult.trialEndsAt?.toISOString(),
-            });
-          }
-        }
-      } catch (trialError) {
-        // Don't fail subscription creation if trial grant fails
-        SafeLogger.warn(
-          'Failed to grant trial on subscription (non-fatal)',
-          trialError,
-        );
-      }
-    } else {
-      // Update existing subscription
-      if (
-        existing.status !==
-          (expiresDate && expiresDate > new Date()
-            ? SubscriptionStatus.ACTIVE
-            : SubscriptionStatus.INACTIVE) ||
-        (expiresDate &&
-          existing.currentPeriodEnd?.getTime() !== expiresDate.getTime())
-      ) {
-        await this.prisma.subscription.update({
-          where: { id: existing.id },
+      if (!existing) {
+        await tx.subscription.create({
           data: {
-            status:
-              expiresDate && expiresDate > new Date()
-                ? SubscriptionStatus.ACTIVE
-                : SubscriptionStatus.INACTIVE,
+            userId,
+            subscriptionType: 'apple_iap',
+            appleTransactionId: transactionId,
+            appleOriginalTransactionId: originalTransactionId,
+            appleProductId: productId,
+            appleEnvironment: environment ?? purchase.environment ?? null,
+            status: nextStatus,
+            planId: productId,
+            planName: plan.planName,
+            priceAmount: plan.priceAmount ?? 0,
+            priceCurrency: plan.priceCurrency,
+            billingPeriod: plan.billingPeriod,
+            currentPeriodStart: purchaseDate,
             currentPeriodEnd: expiresDate || undefined,
+            cancelAtPeriodEnd: false,
           },
         });
-        SafeLogger.info('Subscription updated from Apple receipt', {
-          subscriptionId: existing.id,
-          appleTransactionId: transactionId,
-        });
+        return;
       }
+
+      const needsUpdate =
+        existing.status !== nextStatus ||
+        existing.appleTransactionId !== transactionId ||
+        existing.appleProductId !== productId ||
+        (expiresDate &&
+          existing.currentPeriodEnd?.getTime() !== expiresDate.getTime());
+
+      if (!needsUpdate) return;
+
+      await tx.subscription.update({
+        where: { id: existing.id },
+        data: {
+          appleTransactionId: transactionId,
+          appleProductId: productId,
+          appleEnvironment:
+            environment ?? purchase.environment ?? existing.appleEnvironment,
+          status: nextStatus,
+          planId: productId,
+          planName: plan.planName,
+          priceAmount: plan.priceAmount ?? existing.priceAmount,
+          priceCurrency: plan.priceCurrency,
+          billingPeriod: plan.billingPeriod,
+          currentPeriodEnd: expiresDate || undefined,
+        },
+      });
+    });
+  }
+
+  private resolvePlanMetadata(productId: string): PlanMetadata {
+    const id = productId.toLowerCase();
+    if (id.includes('monthly') || id.includes('.month')) {
+      return {
+        planName: 'Premium VPN - Monthly',
+        priceAmount: 12.99,
+        priceCurrency: 'USD',
+        billingPeriod: 'month',
+      };
+    }
+    if (
+      id.includes('annual') ||
+      id.includes('yearly') ||
+      id.includes('.year')
+    ) {
+      return {
+        planName: 'Premium VPN - Annual',
+        priceAmount: 130.99,
+        priceCurrency: 'USD',
+        billingPeriod: 'year',
+      };
+    }
+    // Unknown product; keep explicit "unknown" so we don't silently store wrong billingPeriod.
+    return {
+      planName: 'Premium VPN',
+      priceAmount: null,
+      priceCurrency: 'USD',
+      billingPeriod: 'unknown',
+    };
+  }
+
+  private getExpectedSubscriptionStatus(
+    expiresDate: Date | null,
+  ): SubscriptionStatus {
+    return expiresDate && expiresDate > new Date()
+      ? SubscriptionStatus.ACTIVE
+      : SubscriptionStatus.INACTIVE;
+  }
+
+  private findLatestReceiptItem(
+    items?: AppleReceiptItem[],
+  ): AppleReceiptItem | null {
+    if (!items || items.length === 0) return null;
+    // Choose the item with the latest expiration if present, otherwise latest purchase date.
+    return [...items].sort((a, b) => {
+      const aExp = a.expires_date_ms ? parseInt(a.expires_date_ms) : -1;
+      const bExp = b.expires_date_ms ? parseInt(b.expires_date_ms) : -1;
+      if (aExp !== bExp) return bExp - aExp;
+      return parseInt(b.purchase_date_ms) - parseInt(a.purchase_date_ms);
+    })[0];
+  }
+
+  private extractVerifiedReceiptItem(
+    verify: AppleVerifyReceiptResponse,
+  ): AppleReceiptItem {
+    const item =
+      this.findLatestReceiptItem(verify.latest_receipt_info) ??
+      this.findLatestReceiptItem(verify.receipt?.in_app);
+    if (!item) {
+      throw new Error(
+        'Apple receipt verification succeeded but contained no transactions.',
+      );
+    }
+    return item;
+  }
+
+  private assertVerifiedTransactionMatchesInput(params: {
+    inputTransactionId?: string;
+    inputOriginalTransactionId?: string;
+    inputProductId?: string;
+    verified: AppleReceiptItem;
+  }): void {
+    const {
+      inputTransactionId,
+      inputOriginalTransactionId,
+      inputProductId,
+      verified,
+    } = params;
+    if (inputTransactionId && inputTransactionId !== verified.transaction_id) {
+      throw new Error('Transaction ID does not match verified receipt.');
+    }
+    if (
+      inputOriginalTransactionId &&
+      inputOriginalTransactionId !== verified.original_transaction_id
+    ) {
+      throw new Error(
+        'Original transaction ID does not match verified receipt.',
+      );
+    }
+    if (inputProductId && inputProductId !== verified.product_id) {
+      throw new Error('Product ID does not match verified receipt.');
     }
   }
 
-  private getPlanName(productId: string): string {
-    if (productId.includes('annual') || productId.includes('yearly')) {
-      return 'Premium VPN - Annual';
+  private async safeParseAppleJSON(
+    response: Response,
+  ): Promise<AppleVerifyReceiptResponse> {
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(
+        `Apple verifyReceipt HTTP ${response.status}${text ? `: ${text.slice(0, 300)}` : ''}`,
+      );
     }
-    if (productId.includes('monthly')) {
-      return 'Premium VPN - Monthly';
+    const text = await response.text();
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (
+        !parsed ||
+        typeof parsed !== 'object' ||
+        typeof (parsed as any).status !== 'number'
+      ) {
+        throw new Error('Invalid verifyReceipt response shape');
+      }
+      return parsed as AppleVerifyReceiptResponse;
+    } catch (e) {
+      throw new Error(
+        `Failed to parse verifyReceipt response JSON: ${e instanceof Error ? e.message : 'unknown error'}`,
+      );
     }
-    return 'Premium VPN';
   }
 
-  private getPlanPrice(productId: string): number {
-    if (productId.includes('annual') || productId.includes('yearly')) {
-      return 130.99;
+  private normalizeReceiptData(receiptData: string): string {
+    const trimmed = receiptData.trim();
+    const compact = trimmed.replace(/\s+/g, '');
+
+    // StoreKit 2 transactions are JWS strings like: <header>.<payload>.<signature>
+    // Apple's /verifyReceipt expects the base64-encoded app receipt, not a JWS.
+    const jwsLike = compact.split('.').length === 3 && compact.length > 0;
+    if (jwsLike) {
+      throw new Error(
+        'Invalid receipt data: looks like a StoreKit 2 signed transaction (JWS). Send the base64-encoded app receipt instead.',
+      );
     }
-    return 0;
+
+    // Basic sanity check: verifyReceipt expects base64 (not base64url).
+    // Allow "=" padding; reject other characters.
+    if (!/^[A-Za-z0-9+/=]+$/.test(compact) || compact.length < 20) {
+      throw new Error(
+        'Invalid receipt data: must be base64-encoded app receipt (from appStoreReceiptURL).',
+      );
+    }
+
+    return compact;
+  }
+
+  private describeAppleVerifyReceiptStatus(status: number): string {
+    // https://developer.apple.com/documentation/appstorereceipts/status
+    switch (status) {
+      case 21000:
+        return 'The App Store could not read the JSON object you provided.';
+      case 21002:
+        return 'The data in the receipt-data property was malformed or missing.';
+      case 21003:
+        return 'The receipt could not be authenticated.';
+      case 21004:
+        return 'The shared secret you provided does not match the shared secret on file for your account.';
+      case 21005:
+        return 'The receipt server is not currently available.';
+      case 21006:
+        return 'This receipt is valid but the subscription has expired.';
+      case 21007:
+        return 'This receipt is from the test environment, but it was sent to the production environment.';
+      case 21008:
+        return 'This receipt is from the production environment, but it was sent to the test environment.';
+      default:
+        return 'Receipt verification failed with a non-zero status.';
+    }
   }
 
   async capturePurchase(
@@ -274,7 +461,7 @@ export class AppleService {
     purchaseDateMs: string,
     expiresDateMs: string | undefined,
     receiptData: string | undefined,
-    environment: string | undefined,
+    _environment: string | undefined,
     deviceFingerprint?: string,
     _devicePlatform?: string, // eslint-disable-line @typescript-eslint/no-unused-vars
   ) {
@@ -298,62 +485,131 @@ export class AppleService {
         }
       }
 
-      // Verify receipt if provided
-      if (receiptData) {
-        const receiptResponse = await this.verifyReceipt(receiptData);
-        if (receiptResponse.status !== 0) {
-          SafeLogger.warn('Invalid receipt data provided to capturePurchase', {
-            status: receiptResponse.status,
-            transactionId,
-          });
-          throw new Error('Invalid receipt data');
-        }
-      }
-
-      const purchaseDate = new Date(parseInt(purchaseDateMs));
-      const expiresDate = expiresDateMs
-        ? new Date(parseInt(expiresDateMs))
+      // Prefer verified receipt data when available, but do not block capture on verification failure.
+      const normalizedReceipt = receiptData
+        ? this.normalizeReceiptData(receiptData)
         : null;
 
-      // Check if purchase already exists
-      const existing = await this.prisma.appleIAPPurchase.findUnique({
-        where: { transactionId },
-      });
+      let verifiedTransactionId = transactionId;
+      let verifiedOriginalTransactionId = originalTransactionId;
+      let verifiedProductId = productId;
+      let verifiedPurchaseDate = new Date(parseInt(purchaseDateMs));
+      let verifiedExpiresDate =
+        expiresDateMs && expiresDateMs.trim().length > 0
+          ? new Date(parseInt(expiresDateMs))
+          : null;
+      let verifiedEnv: string | null = _environment ?? null;
 
-      if (existing) {
-        // Update existing purchase
-        await this.prisma.appleIAPPurchase.update({
-          where: { transactionId },
-          data: {
-            expiresDate,
-            receiptData: receiptData || existing.receiptData,
-            environment: environment || existing.environment,
-          },
-        });
+      if (normalizedReceipt) {
+        try {
+          const receiptResponse = await this.verifyReceipt(normalizedReceipt);
+          if (receiptResponse.status === 0) {
+            const verifiedItem =
+              this.extractVerifiedReceiptItem(receiptResponse);
+            this.assertVerifiedTransactionMatchesInput({
+              inputTransactionId: transactionId,
+              inputOriginalTransactionId: originalTransactionId,
+              inputProductId: productId,
+              verified: verifiedItem,
+            });
 
-        SafeLogger.info('Apple IAP purchase updated', {
-          transactionId,
-        });
+            verifiedPurchaseDate = new Date(
+              parseInt(verifiedItem.purchase_date_ms),
+            );
+            verifiedExpiresDate = verifiedItem.expires_date_ms
+              ? new Date(parseInt(verifiedItem.expires_date_ms))
+              : null;
+            verifiedEnv = receiptResponse.environment ?? verifiedEnv;
 
-        return { success: true, message: 'Purchase updated' };
+            verifiedTransactionId = verifiedItem.transaction_id;
+            verifiedOriginalTransactionId =
+              verifiedItem.original_transaction_id;
+            verifiedProductId = verifiedItem.product_id;
+          } else {
+            SafeLogger.warn(
+              'Apple receipt verification failed during capturePurchase; capturing unverified purchase',
+              {
+                status: receiptResponse.status,
+                environment: receiptResponse.environment,
+                transactionId,
+              },
+            );
+          }
+        } catch (verifyError) {
+          SafeLogger.warn(
+            'Apple receipt verification threw during capturePurchase; capturing unverified purchase',
+            {
+              transactionId,
+              error:
+                verifyError instanceof Error
+                  ? verifyError.message
+                  : String(verifyError),
+            },
+          );
+        }
+      } else {
+        SafeLogger.warn(
+          'No receiptData provided to capturePurchase; capturing unverified purchase',
+          { transactionId },
+        );
       }
 
-      // Create new purchase record
-      await this.prisma.appleIAPPurchase.create({
-        data: {
-          transactionId,
-          originalTransactionId,
-          productId,
-          environment: environment || 'Production',
-          purchaseDate,
-          expiresDate,
-          receiptData: receiptData || null,
-        },
+      await this.prisma.$transaction(async (tx) => {
+        // Upsert by transactionId (unique) and ensure originalTransactionId is consistent.
+        const existing = await tx.appleIAPPurchase.findUnique({
+          where: { transactionId: verifiedTransactionId },
+        });
+
+        if (existing) {
+          await tx.appleIAPPurchase.update({
+            where: { transactionId: verifiedTransactionId },
+            data: {
+              originalTransactionId: verifiedOriginalTransactionId,
+              productId: verifiedProductId,
+              purchaseDate: verifiedPurchaseDate,
+              expiresDate: verifiedExpiresDate,
+              receiptData: normalizedReceipt ?? existing.receiptData,
+              environment: verifiedEnv,
+            },
+          });
+          return;
+        }
+
+        // If a row exists under originalTransactionId (renewals), update it to latest transactionId.
+        const existingByOriginal = await tx.appleIAPPurchase.findUnique({
+          where: { originalTransactionId: verifiedOriginalTransactionId },
+        });
+        if (existingByOriginal) {
+          await tx.appleIAPPurchase.update({
+            where: { originalTransactionId: verifiedOriginalTransactionId },
+            data: {
+              transactionId: verifiedTransactionId,
+              productId: verifiedProductId,
+              purchaseDate: verifiedPurchaseDate,
+              expiresDate: verifiedExpiresDate,
+              receiptData: normalizedReceipt ?? existingByOriginal.receiptData,
+              environment: verifiedEnv,
+            },
+          });
+          return;
+        }
+
+        await tx.appleIAPPurchase.create({
+          data: {
+            transactionId: verifiedTransactionId,
+            originalTransactionId: verifiedOriginalTransactionId,
+            productId: verifiedProductId,
+            environment: verifiedEnv,
+            purchaseDate: verifiedPurchaseDate,
+            expiresDate: verifiedExpiresDate,
+            receiptData: normalizedReceipt ?? undefined,
+          },
+        });
       });
 
       SafeLogger.info('Apple IAP purchase captured', {
-        transactionId,
-        productId,
+        transactionId: verifiedTransactionId,
+        productId: verifiedProductId,
       });
 
       return { success: true, message: 'Purchase captured successfully' };
@@ -365,7 +621,7 @@ export class AppleService {
 
   async linkPurchase(
     userId: string,
-    sessionToken: string,
+    _sessionToken: string,
     transactionId: string,
     originalTransactionId: string,
     productId: string,
@@ -382,139 +638,199 @@ export class AppleService {
         });
       }
 
-      // Find the captured purchase
-      const purchase = await this.prisma.appleIAPPurchase.findUnique({
-        where: { transactionId },
-        include: { linkedUser: true },
-      });
+      const normalizedReceipt = this.normalizeReceiptData(receiptData);
 
-      if (!purchase) {
-        throw new Error(
-          'Purchase not found. Please complete the purchase first.',
-        );
-      }
+      let verifiedItem: AppleReceiptItem | null = null;
+      let verifiedTransactionId = transactionId;
+      let verifiedOriginalTransactionId = originalTransactionId;
+      let verifiedProductId = productId;
+      let verifiedPurchaseDate: Date | null = null;
+      let verifiedExpiresDate: Date | null = null;
+      let verifiedEnv: string | null = null;
 
-      // Check if already linked to a different user
-      if (purchase.linkedUserId && purchase.linkedUserId !== userId) {
-        throw new Error(
-          'This purchase is already linked to another account. Each purchase can only be linked to one account.',
-        );
-      }
-
-      // Get user
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
-
-      if (!user) {
-        throw new Error('User not found');
-      }
-
-      // Link purchase to user
-      await this.prisma.appleIAPPurchase.update({
-        where: { transactionId },
-        data: {
-          linkedUserId: userId,
-          linkedEmail: user.email,
-          linkedAt: new Date(),
-        },
-      });
-
-      // Create or update subscription
-      const purchaseDate = purchase.purchaseDate;
-      const expiresDate = purchase.expiresDate;
-      const isActive = expiresDate ? expiresDate > new Date() : false;
-
-      const existingSubscription = await this.prisma.subscription.findFirst({
-        where: { appleTransactionId: transactionId },
-      });
-
-      if (!existingSubscription) {
-        await this.prisma.subscription.create({
-          data: {
-            userId,
-            subscriptionType: 'apple_iap',
-            appleTransactionId: transactionId,
-            appleOriginalTransactionId: originalTransactionId,
-            appleProductId: productId,
-            appleEnvironment: purchase.environment,
-            status: isActive
-              ? SubscriptionStatus.ACTIVE
-              : SubscriptionStatus.INACTIVE,
-            planId: productId,
-            planName: this.getPlanName(productId),
-            priceAmount: this.getPlanPrice(productId),
-            priceCurrency: 'USD',
-            billingPeriod: 'year',
-            currentPeriodStart: purchaseDate,
-            currentPeriodEnd: expiresDate || undefined,
-            cancelAtPeriodEnd: false,
-          },
-        });
-
-        // Grant trial if eligible (after subscription is created)
-        try {
-          const fullUser = await this.prisma.user.findUnique({
-            where: { id: userId },
+      try {
+        const verify = await this.verifyReceipt(normalizedReceipt);
+        if (verify.status === 0) {
+          verifiedItem = this.extractVerifiedReceiptItem(verify);
+          this.assertVerifiedTransactionMatchesInput({
+            inputTransactionId: transactionId,
+            inputOriginalTransactionId: originalTransactionId,
+            inputProductId: productId,
+            verified: verifiedItem,
           });
-          if (fullUser) {
-            const trialResult = await this.trialService.grantIfEligible(
-              fullUser,
-              null,
-            );
-            if (trialResult.granted) {
-              SafeLogger.info('Trial granted on subscription', {
-                userId: trialResult.userId,
-                trialEndsAt: trialResult.trialEndsAt?.toISOString(),
-              });
-            }
-          }
-        } catch (trialError) {
-          // Don't fail subscription creation if trial grant fails
+
+          verifiedTransactionId = verifiedItem.transaction_id;
+          verifiedOriginalTransactionId = verifiedItem.original_transaction_id;
+          verifiedProductId = verifiedItem.product_id;
+          verifiedPurchaseDate = new Date(
+            parseInt(verifiedItem.purchase_date_ms),
+          );
+          verifiedExpiresDate = verifiedItem.expires_date_ms
+            ? new Date(parseInt(verifiedItem.expires_date_ms))
+            : null;
+          verifiedEnv = verify.environment ?? null;
+        } else {
           SafeLogger.warn(
-            'Failed to grant trial on subscription (non-fatal)',
-            trialError,
+            'Apple receipt verification failed during linkPurchase; linking anyway using captured data',
+            { status: verify.status, transactionId },
           );
         }
-      } else {
-        // Update existing subscription if status changed
-        if (
-          existingSubscription.status !==
-          (isActive ? SubscriptionStatus.ACTIVE : SubscriptionStatus.INACTIVE)
-        ) {
-          await this.prisma.subscription.update({
-            where: { id: existingSubscription.id },
-            data: {
-              status: isActive
-                ? SubscriptionStatus.ACTIVE
-                : SubscriptionStatus.INACTIVE,
-              currentPeriodEnd: expiresDate || undefined,
-            },
-          });
-          SafeLogger.info('Subscription status updated for linked purchase', {
-            subscriptionId: existingSubscription.id,
+      } catch (verifyError) {
+        SafeLogger.warn(
+          'Apple receipt verification threw during linkPurchase; linking anyway using captured data',
+          {
             transactionId,
-            newStatus: isActive
-              ? SubscriptionStatus.ACTIVE
-              : SubscriptionStatus.INACTIVE,
-          });
-        }
+            error:
+              verifyError instanceof Error
+                ? verifyError.message
+                : String(verifyError),
+          },
+        );
       }
+
+      const plan = this.resolvePlanMetadata(verifiedProductId);
+      const nextStatus =
+        this.getExpectedSubscriptionStatus(verifiedExpiresDate);
+
+      const result = await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.findUnique({ where: { id: userId } });
+        if (!user) throw new Error('User not found');
+
+        // Upsert purchase from verified receipt (authoritative).
+        const existingPurchase =
+          (await tx.appleIAPPurchase.findUnique({
+            where: { transactionId: verifiedTransactionId },
+          })) ??
+          (await tx.appleIAPPurchase.findUnique({
+            where: { originalTransactionId: verifiedOriginalTransactionId },
+          }));
+
+        if (
+          existingPurchase?.linkedUserId &&
+          existingPurchase.linkedUserId !== userId
+        ) {
+          throw new Error(
+            'This purchase is already linked to another account. Each purchase can only be linked to one account.',
+          );
+        }
+
+        const now = new Date();
+        const effectivePurchaseDate =
+          verifiedPurchaseDate ?? existingPurchase?.purchaseDate ?? now;
+        const effectiveExpiresDate =
+          verifiedExpiresDate ?? existingPurchase?.expiresDate ?? null;
+        const effectiveEnv =
+          verifiedEnv ?? existingPurchase?.environment ?? null;
+
+        const purchase = existingPurchase
+          ? await tx.appleIAPPurchase.update({
+              where: existingPurchase.transactionId
+                ? { transactionId: existingPurchase.transactionId }
+                : { originalTransactionId: verifiedOriginalTransactionId },
+              data: {
+                transactionId: verifiedTransactionId,
+                originalTransactionId: verifiedOriginalTransactionId,
+                productId: verifiedProductId,
+                purchaseDate: effectivePurchaseDate,
+                expiresDate: effectiveExpiresDate,
+                receiptData: normalizedReceipt,
+                environment: effectiveEnv,
+                linkedUserId: userId,
+                linkedEmail: user.email,
+                linkedAt: now,
+              },
+            })
+          : await tx.appleIAPPurchase.create({
+              data: {
+                transactionId: verifiedTransactionId,
+                originalTransactionId: verifiedOriginalTransactionId,
+                productId: verifiedProductId,
+                purchaseDate: effectivePurchaseDate,
+                expiresDate: effectiveExpiresDate,
+                receiptData: normalizedReceipt,
+                environment: effectiveEnv,
+                linkedUserId: userId,
+                linkedEmail: user.email,
+                linkedAt: now,
+              },
+            });
+
+        // Idempotent subscription upsert: prefer originalTransactionId lineage.
+        const existingSubscription =
+          (await tx.subscription.findFirst({
+            where: {
+              appleOriginalTransactionId: verifiedOriginalTransactionId,
+            },
+          })) ??
+          (await tx.subscription.findFirst({
+            where: { appleTransactionId: verifiedTransactionId },
+          }));
+
+        const statusFromPurchase = this.getExpectedSubscriptionStatus(
+          purchase.expiresDate ?? null,
+        );
+
+        const subscription = existingSubscription
+          ? await tx.subscription.update({
+              where: { id: existingSubscription.id },
+              data: {
+                userId,
+                appleTransactionId: verifiedTransactionId,
+                appleOriginalTransactionId: verifiedOriginalTransactionId,
+                appleProductId: verifiedProductId,
+                appleEnvironment:
+                  purchase.environment ?? existingSubscription.appleEnvironment,
+                status: statusFromPurchase ?? nextStatus,
+                planId: verifiedProductId,
+                planName: plan.planName,
+                priceAmount:
+                  plan.priceAmount ?? existingSubscription.priceAmount,
+                priceCurrency: plan.priceCurrency,
+                billingPeriod: plan.billingPeriod,
+                currentPeriodStart: purchase.purchaseDate,
+                currentPeriodEnd: purchase.expiresDate || undefined,
+                cancelAtPeriodEnd: false,
+              },
+            })
+          : await tx.subscription.create({
+              data: {
+                userId,
+                subscriptionType: 'apple_iap',
+                appleTransactionId: verifiedTransactionId,
+                appleOriginalTransactionId: verifiedOriginalTransactionId,
+                appleProductId: verifiedProductId,
+                appleEnvironment: purchase.environment ?? verifiedEnv,
+                status: statusFromPurchase ?? nextStatus,
+                planId: verifiedProductId,
+                planName: plan.planName,
+                priceAmount: plan.priceAmount ?? 0,
+                priceCurrency: plan.priceCurrency,
+                billingPeriod: plan.billingPeriod,
+                currentPeriodStart: purchase.purchaseDate,
+                currentPeriodEnd: purchase.expiresDate || undefined,
+                cancelAtPeriodEnd: false,
+              },
+            });
+
+        // Paid Apple subscriptions should not automatically grant trials unless explicitly required.
+        // If business rules change, implement a dedicated guard method here.
+        void purchase;
+
+        return { subscription };
+      });
 
       SafeLogger.info('Apple IAP purchase linked to user', {
         userId,
-        transactionId,
+        transactionId: verifiedTransactionId,
       });
 
       return {
         success: true,
         message: 'Purchase linked successfully',
         subscription: {
-          status: isActive
-            ? SubscriptionStatus.ACTIVE
-            : SubscriptionStatus.INACTIVE,
-          planName: this.getPlanName(productId),
-          currentPeriodEnd: expiresDate,
+          status: result.subscription.status,
+          planName: this.resolvePlanMetadata(verifiedProductId).planName,
+          currentPeriodEnd: result.subscription.currentPeriodEnd ?? null,
         },
       };
     } catch (error) {
@@ -525,7 +841,7 @@ export class AppleService {
 
   async linkWithTransactionIds(
     userId: string,
-    sessionToken: string,
+    _sessionToken: string,
     transactionIds: Array<{
       transactionId: string;
       originalTransactionId: string;
@@ -632,46 +948,20 @@ export class AppleService {
             });
           }
 
-          // If still not found, auto-capture the purchase (like vpn-backend-service)
+          // If still not found, do NOT auto-capture.
+          // We never create ledger rows from unverified client transaction IDs.
           if (!purchase) {
-            SafeLogger.info('Purchase not found in ledger, auto-capturing', {
+            SafeLogger.warn('Purchase not found in ledger; cannot link', {
               transactionId: txInfo.transactionId,
               originalTransactionId: txInfo.originalTransactionId,
               productId: txInfo.productId,
             });
-
-            try {
-              // Auto-capture the purchase
-              purchase = await this.prisma.appleIAPPurchase.create({
-                data: {
-                  transactionId: txInfo.transactionId,
-                  originalTransactionId: txInfo.originalTransactionId,
-                  productId: txInfo.productId,
-                  purchaseDate: new Date(), // Use current date as fallback
-                  expiresDate: null, // Will be updated when receipt is verified
-                  environment: null,
-                  receiptData: null,
-                },
-              });
-              SafeLogger.info('Purchase auto-captured successfully', {
-                transactionId: txInfo.transactionId,
-                originalTransactionId: txInfo.originalTransactionId,
-              });
-            } catch (captureError) {
-              SafeLogger.error(
-                'Failed to auto-capture purchase',
-                captureError,
-                {
-                  transactionId: txInfo.transactionId,
-                  originalTransactionId: txInfo.originalTransactionId,
-                },
-              );
-              errors.push({
-                transaction: txInfo,
-                error: `Failed to capture purchase: ${captureError instanceof Error ? captureError.message : 'Unknown error'}`,
-              });
-              continue;
-            }
+            errors.push({
+              transaction: txInfo,
+              error:
+                'Purchase not found. Capture the purchase with a verified receipt before linking.',
+            });
+            continue;
           }
 
           // At this point, purchase should not be null, but TypeScript needs explicit check
@@ -700,129 +990,94 @@ export class AppleService {
             });
           }
 
-          // Link purchase to user (update by originalTransactionId to handle renewals)
-          await this.prisma.appleIAPPurchase.update({
-            where: { originalTransactionId: txInfo.originalTransactionId },
-            data: {
-              linkedUserId: userId,
-              linkedEmail:
-                (await this.prisma.user.findUnique({ where: { id: userId } }))
-                  ?.email || null,
-              linkedAt: new Date(),
-            },
-          });
+          const plan = this.resolvePlanMetadata(purchase.productId);
+          const nextStatus = this.getExpectedSubscriptionStatus(
+            purchase.expiresDate,
+          );
 
-          // Create or update subscription
-          const isActive = purchase.expiresDate
-            ? purchase.expiresDate > new Date()
-            : false;
+          const { subscriptionId, status } = await this.prisma.$transaction(
+            async (tx) => {
+              const user = await tx.user.findUnique({ where: { id: userId } });
+              if (!user) throw new Error('User not found');
 
-          // Check for existing subscription by transactionId first
-          let existingSubscription = await this.prisma.subscription.findFirst({
-            where: { appleTransactionId: txInfo.transactionId },
-          });
-
-          // If not found, check by originalTransactionId (for renewals)
-          if (!existingSubscription) {
-            existingSubscription = await this.prisma.subscription.findFirst({
-              where: {
-                appleOriginalTransactionId: txInfo.originalTransactionId,
-              },
-            });
-          }
-
-          let subscriptionId: string;
-          if (!existingSubscription) {
-            const newSubscription = await this.prisma.subscription.create({
-              data: {
-                userId,
-                subscriptionType: 'apple_iap',
-                appleTransactionId: txInfo.transactionId,
-                appleOriginalTransactionId: txInfo.originalTransactionId,
-                appleProductId: txInfo.productId,
-                appleEnvironment: purchase.environment,
-                status: isActive
-                  ? SubscriptionStatus.ACTIVE
-                  : SubscriptionStatus.INACTIVE,
-                planId: txInfo.productId,
-                planName: this.getPlanName(txInfo.productId),
-                priceAmount: this.getPlanPrice(txInfo.productId),
-                priceCurrency: 'USD',
-                billingPeriod: 'year',
-                currentPeriodStart: purchase.purchaseDate,
-                currentPeriodEnd: purchase.expiresDate || undefined,
-                cancelAtPeriodEnd: false,
-              },
-            });
-            subscriptionId = newSubscription.id;
-            SafeLogger.info('Subscription created for linked purchase', {
-              subscriptionId,
-              transactionId: txInfo.transactionId,
-              userId,
-              status: isActive
-                ? SubscriptionStatus.ACTIVE
-                : SubscriptionStatus.INACTIVE,
-            });
-
-            // Grant trial if eligible (after subscription is created)
-            try {
-              const fullUser = await this.prisma.user.findUnique({
-                where: { id: userId },
-              });
-              if (fullUser) {
-                const trialResult = await this.trialService.grantIfEligible(
-                  fullUser,
-                  null,
-                );
-                if (trialResult.granted) {
-                  SafeLogger.info('Trial granted on subscription', {
-                    userId: trialResult.userId,
-                    trialEndsAt: trialResult.trialEndsAt?.toISOString(),
-                  });
-                }
-              }
-            } catch (trialError) {
-              // Don't fail subscription creation if trial grant fails
-              SafeLogger.warn(
-                'Failed to grant trial on subscription (non-fatal)',
-                trialError,
-              );
-            }
-          } else {
-            subscriptionId = existingSubscription.id;
-            // Update subscription status if needed
-            if (
-              existingSubscription.status !==
-              (isActive
-                ? SubscriptionStatus.ACTIVE
-                : SubscriptionStatus.INACTIVE)
-            ) {
-              await this.prisma.subscription.update({
-                where: { id: existingSubscription.id },
+              // Link purchase to user (update by originalTransactionId to handle renewals)
+              await tx.appleIAPPurchase.update({
+                where: {
+                  originalTransactionId: purchase.originalTransactionId,
+                },
                 data: {
-                  status: isActive
-                    ? SubscriptionStatus.ACTIVE
-                    : SubscriptionStatus.INACTIVE,
-                  currentPeriodEnd: purchase.expiresDate || undefined,
+                  linkedUserId: userId,
+                  linkedEmail: user.email,
+                  linkedAt: new Date(),
                 },
               });
-              SafeLogger.info('Subscription status updated', {
-                subscriptionId,
-                transactionId: txInfo.transactionId,
-                newStatus: isActive
-                  ? SubscriptionStatus.ACTIVE
-                  : SubscriptionStatus.INACTIVE,
-              });
-            }
-          }
+
+              // Idempotent subscription upsert by lineage.
+              const existingSubscription =
+                (await tx.subscription.findFirst({
+                  where: {
+                    appleOriginalTransactionId: purchase.originalTransactionId,
+                  },
+                })) ??
+                (await tx.subscription.findFirst({
+                  where: { appleTransactionId: purchase.transactionId },
+                }));
+
+              const subscription = existingSubscription
+                ? await tx.subscription.update({
+                    where: { id: existingSubscription.id },
+                    data: {
+                      userId,
+                      appleTransactionId: purchase.transactionId,
+                      appleOriginalTransactionId:
+                        purchase.originalTransactionId,
+                      appleProductId: purchase.productId,
+                      appleEnvironment: purchase.environment,
+                      status: nextStatus,
+                      planId: purchase.productId,
+                      planName: plan.planName,
+                      priceAmount:
+                        plan.priceAmount ?? existingSubscription.priceAmount,
+                      priceCurrency: plan.priceCurrency,
+                      billingPeriod: plan.billingPeriod,
+                      currentPeriodStart: purchase.purchaseDate,
+                      currentPeriodEnd: purchase.expiresDate || undefined,
+                      cancelAtPeriodEnd: false,
+                    },
+                  })
+                : await tx.subscription.create({
+                    data: {
+                      userId,
+                      subscriptionType: 'apple_iap',
+                      appleTransactionId: purchase.transactionId,
+                      appleOriginalTransactionId:
+                        purchase.originalTransactionId,
+                      appleProductId: purchase.productId,
+                      appleEnvironment: purchase.environment,
+                      status: nextStatus,
+                      planId: purchase.productId,
+                      planName: plan.planName,
+                      priceAmount: plan.priceAmount ?? 0,
+                      priceCurrency: plan.priceCurrency,
+                      billingPeriod: plan.billingPeriod,
+                      currentPeriodStart: purchase.purchaseDate,
+                      currentPeriodEnd: purchase.expiresDate || undefined,
+                      cancelAtPeriodEnd: false,
+                    },
+                  });
+
+              return {
+                subscriptionId: subscription.id,
+                status: subscription.status,
+              };
+            },
+          );
 
           linkedPurchases.push({
-            transactionId: txInfo.transactionId,
-            originalTransactionId: txInfo.originalTransactionId,
-            productId: txInfo.productId,
-            status: isActive
-              ? SubscriptionStatus.ACTIVE
-              : SubscriptionStatus.INACTIVE,
+            transactionId: purchase.transactionId,
+            originalTransactionId: purchase.originalTransactionId,
+            productId: purchase.productId,
+            status,
             subscriptionId,
           });
         } catch (error) {

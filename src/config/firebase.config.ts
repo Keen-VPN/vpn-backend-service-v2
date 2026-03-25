@@ -1,10 +1,11 @@
 import { Injectable, OnModuleInit, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as admin from 'firebase-admin';
+import { App, cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
+import { Auth, getAuth } from 'firebase-admin/auth';
 
 @Injectable()
 export class FirebaseConfig implements OnModuleInit {
-  private app: admin.app.App;
+  private app: App;
 
   constructor(@Inject(ConfigService) private configService: ConfigService) {}
 
@@ -44,19 +45,18 @@ export class FirebaseConfig implements OnModuleInit {
         process.env.FIREBASE_CLIENT_X509_CERT_URL,
     };
 
-    if (!admin.apps.length) {
-      this.app = admin.initializeApp({
-        credential: admin.credential.cert(
-          serviceAccount as admin.ServiceAccount,
-        ),
+    if (!getApps().length) {
+      this.app = initializeApp({
+        credential: cert(serviceAccount as Parameters<typeof cert>[0]),
         databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`,
       });
-    } else {
-      this.app = admin.app();
+      return;
     }
+
+    this.app = getApp();
   }
 
-  getAuth(): admin.auth.Auth {
-    return admin.auth();
+  getAuth(): Auth {
+    return getAuth(this.app);
   }
 }

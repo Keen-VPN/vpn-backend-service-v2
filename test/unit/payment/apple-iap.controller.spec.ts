@@ -4,6 +4,7 @@ import { AppleService } from '../../../src/payment/apple/apple.service';
 import { SessionAuthGuard } from '../../../src/auth/guards/session-auth.guard';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { NotificationService } from '../../../src/notification/notification.service';
 import {
   createMockConfigService,
   createMockPrismaClient,
@@ -19,6 +20,9 @@ describe('AppleIAPController', () => {
       linkPurchase: jest.fn(),
       linkWithTransactionIds: jest.fn(),
     };
+    const mockNotificationService = {
+      sendSlackAlert: jest.fn().mockResolvedValue(undefined),
+    };
     const mockConfigService = createMockConfigService();
     const mockPrismaService = createMockPrismaClient();
 
@@ -28,6 +32,10 @@ describe('AppleIAPController', () => {
         {
           provide: AppleService,
           useValue: mockAppleService,
+        },
+        {
+          provide: NotificationService,
+          useValue: mockNotificationService,
         },
         {
           provide: ConfigService,
@@ -89,7 +97,7 @@ describe('AppleIAPController', () => {
       );
     });
 
-    it('should handle capture errors', async () => {
+    it('should throw on capture errors', async () => {
       const captureDto = {
         transactionId: 'txn_123',
         originalTransactionId: 'orig_txn_123',
@@ -104,10 +112,9 @@ describe('AppleIAPController', () => {
         new Error('Purchase already exists'),
       );
 
-      const result = await controller.capturePurchase(captureDto);
-
-      expect(result.success).toBe(false);
-      expect((result as any).error).toBeDefined();
+      await expect(
+        controller.capturePurchase(captureDto),
+      ).rejects.toBeDefined();
     });
   });
 

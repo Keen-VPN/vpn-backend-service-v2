@@ -22,7 +22,14 @@ export class AuthService {
     private appleTokenVerifier: AppleTokenVerifierService,
   ) {}
 
-  async login(idToken: string) {
+  private normalizeProvider(provider?: string | null): 'google' | 'apple' {
+    const value = (provider || '').toLowerCase();
+    if (value === 'apple' || value === 'apple.com') return 'apple';
+    if (value === 'google' || value === 'google.com') return 'google';
+    return 'google';
+  }
+
+  async login(idToken: string, providerOverride?: 'google' | 'apple') {
     try {
       // Verify Firebase ID token
       const decodedToken = await this.firebaseConfig
@@ -33,7 +40,9 @@ export class AuthService {
       const email = decodedToken.email;
       const displayName = (decodedToken.name as string) || '';
       const emailVerified = decodedToken.email_verified || false;
-      const provider = decodedToken.firebase?.sign_in_provider || 'google';
+      const provider = providerOverride
+        ? this.normalizeProvider(providerOverride)
+        : this.normalizeProvider(decodedToken.firebase?.sign_in_provider);
 
       if (!email) {
         throw new UnauthorizedException('Email not found in token');
@@ -54,7 +63,13 @@ export class AuthService {
           // Update existing user with Firebase UID
           user = await this.prisma.user.update({
             where: { id: user.id },
-            data: { firebaseUid },
+            data: {
+              firebaseUid,
+              email,
+              displayName,
+              emailVerified,
+              provider,
+            },
           });
         } else {
           // Create new user
@@ -76,6 +91,7 @@ export class AuthService {
             email,
             displayName,
             emailVerified,
+            provider,
           },
         });
       }
@@ -208,6 +224,87 @@ export class AuthService {
         });
       }
 
+      const prioritizedSubscription = await this.prisma.subscription.findFirst({
+        where: {
+          userId: user.id,
+          status: {
+            in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING],
+          },
+          OR: [
+            { currentPeriodEnd: null },
+            { currentPeriodEnd: { gte: new Date() } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const latestSubscription =
+        prioritizedSubscription ??
+        (await this.prisma.subscription.findFirst({
+          where: { userId: user.id },
+          orderBy: { createdAt: 'desc' },
+        }));
+
+      let subscriptionForResponse = latestSubscription;
+
+      // Fallback for Apple users whose Apple purchase exists but has not yet
+      // been materialized into the subscriptions table.
+      if (!subscriptionForResponse) {
+        const activeApplePurchase =
+          await this.prisma.appleIAPPurchase.findFirst({
+            where: {
+              OR: [{ linkedUserId: user.id }, { linkedEmail: user.email }],
+              expiresDate: { gte: new Date() },
+            },
+            orderBy: { expiresDate: 'desc' },
+          });
+
+        if (activeApplePurchase) {
+          const matchedSubscription = await this.prisma.subscription.findFirst({
+            where: {
+              userId: user.id,
+              OR: [
+                { appleTransactionId: activeApplePurchase.transactionId },
+                {
+                  appleOriginalTransactionId:
+                    activeApplePurchase.originalTransactionId,
+                },
+              ],
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (matchedSubscription) {
+            subscriptionForResponse = await this.prisma.subscription.update({
+              where: { id: matchedSubscription.id },
+              data: {
+                userId: user.id,
+                status: SubscriptionStatus.ACTIVE,
+                currentPeriodEnd: activeApplePurchase.expiresDate,
+                appleTransactionId: activeApplePurchase.transactionId,
+                appleOriginalTransactionId:
+                  activeApplePurchase.originalTransactionId,
+                appleProductId: activeApplePurchase.productId,
+              },
+            });
+          } else {
+            subscriptionForResponse = await this.prisma.subscription.create({
+              data: {
+                userId: user.id,
+                status: SubscriptionStatus.ACTIVE,
+                subscriptionType: 'apple_iap',
+                currentPeriodEnd: activeApplePurchase.expiresDate,
+                appleTransactionId: activeApplePurchase.transactionId,
+                appleOriginalTransactionId:
+                  activeApplePurchase.originalTransactionId,
+                appleProductId: activeApplePurchase.productId,
+                planName: 'Premium VPN',
+              },
+            });
+          }
+        }
+      }
+
       const sessionToken = this.generateSessionToken(user.id);
 
       SafeLogger.info('Google sign-in completed successfully', {
@@ -221,8 +318,22 @@ export class AuthService {
           id: user.id,
           email: user.email,
           name: user.displayName || '',
+          displayName: user.displayName || '',
+          emailVerified: user.emailVerified,
+          provider: user.provider,
         },
         sessionToken,
+        subscription: subscriptionForResponse
+          ? {
+              id: subscriptionForResponse.id,
+              status: subscriptionForResponse.status,
+              planName: subscriptionForResponse.planName,
+              plan: this.resolveSubscriptionPlan(subscriptionForResponse),
+              currentPeriodEnd: subscriptionForResponse.currentPeriodEnd,
+              cancelAtPeriodEnd: subscriptionForResponse.cancelAtPeriodEnd,
+              subscriptionType: subscriptionForResponse.subscriptionType,
+            }
+          : null,
         authMethod: 'google',
       };
     } catch (error) {
@@ -333,8 +444,7 @@ export class AuthService {
           emailFromToken = decoded.email || email;
           emailVerified =
             decoded.email_verified === 'true' ||
-            decoded.email_verified === true ||
-            true;
+            decoded.email_verified === true;
 
           SafeLogger.debug(
             'Apple token decoded without signature verification (Non-Production)',
@@ -496,14 +606,6 @@ export class AuthService {
           path: '/auth/verify',
         });
         throw new BadRequestException('Request body is missing');
-      }
-
-      if (!sessionToken) {
-        SafeLogger.warn('sessionToken is missing from body', {
-          service: 'AuthController',
-          body: sessionToken,
-        });
-        throw new BadRequestException('sessionToken is required');
       }
 
       const secret =

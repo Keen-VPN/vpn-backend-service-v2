@@ -7,9 +7,15 @@ import { AppleIAPController } from './apple/apple-iap.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { SubscriptionModule } from '../subscription/subscription.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, forwardRef(() => SubscriptionModule)],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    NotificationModule,
+    forwardRef(() => SubscriptionModule),
+  ],
   controllers: [
     StripeWebhookController,
     AppleWebhookController,
