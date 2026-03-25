@@ -4,6 +4,7 @@ import { AppleService } from '../../../src/payment/apple/apple.service';
 import { SessionAuthGuard } from '../../../src/auth/guards/session-auth.guard';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { NotificationService } from '../../../src/notification/notification.service';
 import {
   createMockConfigService,
   createMockPrismaClient,
@@ -19,6 +20,9 @@ describe('AppleIAPController', () => {
       linkPurchase: jest.fn(),
       linkWithTransactionIds: jest.fn(),
     };
+    const mockNotificationService = {
+      sendSlackAlert: jest.fn().mockResolvedValue(undefined),
+    };
     const mockConfigService = createMockConfigService();
     const mockPrismaService = createMockPrismaClient();
 
@@ -28,6 +32,10 @@ describe('AppleIAPController', () => {
         {
           provide: AppleService,
           useValue: mockAppleService,
+        },
+        {
+          provide: NotificationService,
+          useValue: mockNotificationService,
         },
         {
           provide: ConfigService,
