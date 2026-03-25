@@ -1,11 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
-import {
-  Injectable,
-  Inject,
-  forwardRef,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SubscriptionStatus } from '@prisma/client';
@@ -490,50 +485,74 @@ export class AppleService {
         }
       }
 
-      // Receipt is required to capture a purchase in a trustworthy way.
-      // Client-supplied transaction/product fields are not authoritative until verified with Apple.
-      if (!receiptData) {
-        throw new Error(
-          'receiptData is required to capture an Apple purchase.',
-        );
-      }
-
-      const normalizedReceipt = this.normalizeReceiptData(receiptData);
-      const receiptResponse = await this.verifyReceipt(normalizedReceipt);
-      if (receiptResponse.status !== 0) {
-        SafeLogger.warn('Invalid receipt data provided to capturePurchase', {
-          status: receiptResponse.status,
-          environment: receiptResponse.environment,
-          transactionId,
-        });
-        const details = this.describeAppleVerifyReceiptStatus(
-          receiptResponse.status,
-        );
-        throw new BadRequestException(
-          `Invalid receipt data (Apple status ${receiptResponse.status}): ${details}`,
-        );
-      }
-
-      const verifiedItem = this.extractVerifiedReceiptItem(receiptResponse);
-      this.assertVerifiedTransactionMatchesInput({
-        inputTransactionId: transactionId,
-        inputOriginalTransactionId: originalTransactionId,
-        inputProductId: productId,
-        verified: verifiedItem,
-      });
-
-      const verifiedPurchaseDate = new Date(
-        parseInt(verifiedItem.purchase_date_ms),
-      );
-      const verifiedExpiresDate = verifiedItem.expires_date_ms
-        ? new Date(parseInt(verifiedItem.expires_date_ms))
+      // Prefer verified receipt data when available, but do not block capture on verification failure.
+      const normalizedReceipt = receiptData
+        ? this.normalizeReceiptData(receiptData)
         : null;
-      const verifiedEnv = receiptResponse.environment ?? null;
 
-      const verifiedTransactionId = verifiedItem.transaction_id;
-      const verifiedOriginalTransactionId =
-        verifiedItem.original_transaction_id;
-      const verifiedProductId = verifiedItem.product_id;
+      let verifiedTransactionId = transactionId;
+      let verifiedOriginalTransactionId = originalTransactionId;
+      let verifiedProductId = productId;
+      let verifiedPurchaseDate = new Date(parseInt(purchaseDateMs));
+      let verifiedExpiresDate =
+        expiresDateMs && expiresDateMs.trim().length > 0
+          ? new Date(parseInt(expiresDateMs))
+          : null;
+      let verifiedEnv: string | null = _environment ?? null;
+
+      if (normalizedReceipt) {
+        try {
+          const receiptResponse = await this.verifyReceipt(normalizedReceipt);
+          if (receiptResponse.status === 0) {
+            const verifiedItem =
+              this.extractVerifiedReceiptItem(receiptResponse);
+            this.assertVerifiedTransactionMatchesInput({
+              inputTransactionId: transactionId,
+              inputOriginalTransactionId: originalTransactionId,
+              inputProductId: productId,
+              verified: verifiedItem,
+            });
+
+            verifiedPurchaseDate = new Date(
+              parseInt(verifiedItem.purchase_date_ms),
+            );
+            verifiedExpiresDate = verifiedItem.expires_date_ms
+              ? new Date(parseInt(verifiedItem.expires_date_ms))
+              : null;
+            verifiedEnv = receiptResponse.environment ?? verifiedEnv;
+
+            verifiedTransactionId = verifiedItem.transaction_id;
+            verifiedOriginalTransactionId =
+              verifiedItem.original_transaction_id;
+            verifiedProductId = verifiedItem.product_id;
+          } else {
+            SafeLogger.warn(
+              'Apple receipt verification failed during capturePurchase; capturing unverified purchase',
+              {
+                status: receiptResponse.status,
+                environment: receiptResponse.environment,
+                transactionId,
+              },
+            );
+          }
+        } catch (verifyError) {
+          SafeLogger.warn(
+            'Apple receipt verification threw during capturePurchase; capturing unverified purchase',
+            {
+              transactionId,
+              error:
+                verifyError instanceof Error
+                  ? verifyError.message
+                  : String(verifyError),
+            },
+          );
+        }
+      } else {
+        SafeLogger.warn(
+          'No receiptData provided to capturePurchase; capturing unverified purchase',
+          { transactionId },
+        );
+      }
 
       await this.prisma.$transaction(async (tx) => {
         // Upsert by transactionId (unique) and ensure originalTransactionId is consistent.
@@ -549,7 +568,7 @@ export class AppleService {
               productId: verifiedProductId,
               purchaseDate: verifiedPurchaseDate,
               expiresDate: verifiedExpiresDate,
-              receiptData: normalizedReceipt,
+              receiptData: normalizedReceipt ?? existing.receiptData,
               environment: verifiedEnv,
             },
           });
@@ -568,7 +587,7 @@ export class AppleService {
               productId: verifiedProductId,
               purchaseDate: verifiedPurchaseDate,
               expiresDate: verifiedExpiresDate,
-              receiptData: normalizedReceipt,
+              receiptData: normalizedReceipt ?? existingByOriginal.receiptData,
               environment: verifiedEnv,
             },
           });
@@ -583,14 +602,14 @@ export class AppleService {
             environment: verifiedEnv,
             purchaseDate: verifiedPurchaseDate,
             expiresDate: verifiedExpiresDate,
-            receiptData: normalizedReceipt,
+            receiptData: normalizedReceipt ?? undefined,
           },
         });
       });
 
       SafeLogger.info('Apple IAP purchase captured', {
-        transactionId: verifiedItem.transaction_id,
-        productId: verifiedItem.product_id,
+        transactionId: verifiedTransactionId,
+        productId: verifiedProductId,
       });
 
       return { success: true, message: 'Purchase captured successfully' };
@@ -620,34 +639,54 @@ export class AppleService {
       }
 
       const normalizedReceipt = this.normalizeReceiptData(receiptData);
-      const verify = await this.verifyReceipt(normalizedReceipt);
-      if (verify.status !== 0) {
-        SafeLogger.warn('Invalid receipt data provided to linkPurchase', {
-          status: verify.status,
-          transactionId,
-        });
-        throw new Error('Invalid receipt data');
+
+      let verifiedItem: AppleReceiptItem | null = null;
+      let verifiedTransactionId = transactionId;
+      let verifiedOriginalTransactionId = originalTransactionId;
+      let verifiedProductId = productId;
+      let verifiedPurchaseDate: Date | null = null;
+      let verifiedExpiresDate: Date | null = null;
+      let verifiedEnv: string | null = null;
+
+      try {
+        const verify = await this.verifyReceipt(normalizedReceipt);
+        if (verify.status === 0) {
+          verifiedItem = this.extractVerifiedReceiptItem(verify);
+          this.assertVerifiedTransactionMatchesInput({
+            inputTransactionId: transactionId,
+            inputOriginalTransactionId: originalTransactionId,
+            inputProductId: productId,
+            verified: verifiedItem,
+          });
+
+          verifiedTransactionId = verifiedItem.transaction_id;
+          verifiedOriginalTransactionId = verifiedItem.original_transaction_id;
+          verifiedProductId = verifiedItem.product_id;
+          verifiedPurchaseDate = new Date(
+            parseInt(verifiedItem.purchase_date_ms),
+          );
+          verifiedExpiresDate = verifiedItem.expires_date_ms
+            ? new Date(parseInt(verifiedItem.expires_date_ms))
+            : null;
+          verifiedEnv = verify.environment ?? null;
+        } else {
+          SafeLogger.warn(
+            'Apple receipt verification failed during linkPurchase; linking anyway using captured data',
+            { status: verify.status, transactionId },
+          );
+        }
+      } catch (verifyError) {
+        SafeLogger.warn(
+          'Apple receipt verification threw during linkPurchase; linking anyway using captured data',
+          {
+            transactionId,
+            error:
+              verifyError instanceof Error
+                ? verifyError.message
+                : String(verifyError),
+          },
+        );
       }
-
-      const verifiedItem = this.extractVerifiedReceiptItem(verify);
-      this.assertVerifiedTransactionMatchesInput({
-        inputTransactionId: transactionId,
-        inputOriginalTransactionId: originalTransactionId,
-        inputProductId: productId,
-        verified: verifiedItem,
-      });
-
-      const verifiedTransactionId = verifiedItem.transaction_id;
-      const verifiedOriginalTransactionId =
-        verifiedItem.original_transaction_id;
-      const verifiedProductId = verifiedItem.product_id;
-      const verifiedPurchaseDate = new Date(
-        parseInt(verifiedItem.purchase_date_ms),
-      );
-      const verifiedExpiresDate = verifiedItem.expires_date_ms
-        ? new Date(parseInt(verifiedItem.expires_date_ms))
-        : null;
-      const verifiedEnv = verify.environment ?? null;
 
       const plan = this.resolvePlanMetadata(verifiedProductId);
       const nextStatus =
@@ -675,6 +714,14 @@ export class AppleService {
           );
         }
 
+        const now = new Date();
+        const effectivePurchaseDate =
+          verifiedPurchaseDate ?? existingPurchase?.purchaseDate ?? now;
+        const effectiveExpiresDate =
+          verifiedExpiresDate ?? existingPurchase?.expiresDate ?? null;
+        const effectiveEnv =
+          verifiedEnv ?? existingPurchase?.environment ?? null;
+
         const purchase = existingPurchase
           ? await tx.appleIAPPurchase.update({
               where: existingPurchase.transactionId
@@ -684,13 +731,13 @@ export class AppleService {
                 transactionId: verifiedTransactionId,
                 originalTransactionId: verifiedOriginalTransactionId,
                 productId: verifiedProductId,
-                purchaseDate: verifiedPurchaseDate,
-                expiresDate: verifiedExpiresDate,
+                purchaseDate: effectivePurchaseDate,
+                expiresDate: effectiveExpiresDate,
                 receiptData: normalizedReceipt,
-                environment: verifiedEnv,
+                environment: effectiveEnv,
                 linkedUserId: userId,
                 linkedEmail: user.email,
-                linkedAt: new Date(),
+                linkedAt: now,
               },
             })
           : await tx.appleIAPPurchase.create({
@@ -698,13 +745,13 @@ export class AppleService {
                 transactionId: verifiedTransactionId,
                 originalTransactionId: verifiedOriginalTransactionId,
                 productId: verifiedProductId,
-                purchaseDate: verifiedPurchaseDate,
-                expiresDate: verifiedExpiresDate,
+                purchaseDate: effectivePurchaseDate,
+                expiresDate: effectiveExpiresDate,
                 receiptData: normalizedReceipt,
-                environment: verifiedEnv,
+                environment: effectiveEnv,
                 linkedUserId: userId,
                 linkedEmail: user.email,
-                linkedAt: new Date(),
+                linkedAt: now,
               },
             });
 
@@ -719,6 +766,10 @@ export class AppleService {
             where: { appleTransactionId: verifiedTransactionId },
           }));
 
+        const statusFromPurchase = this.getExpectedSubscriptionStatus(
+          purchase.expiresDate ?? null,
+        );
+
         const subscription = existingSubscription
           ? await tx.subscription.update({
               where: { id: existingSubscription.id },
@@ -728,16 +779,16 @@ export class AppleService {
                 appleOriginalTransactionId: verifiedOriginalTransactionId,
                 appleProductId: verifiedProductId,
                 appleEnvironment:
-                  verifiedEnv ?? existingSubscription.appleEnvironment,
-                status: nextStatus,
+                  purchase.environment ?? existingSubscription.appleEnvironment,
+                status: statusFromPurchase ?? nextStatus,
                 planId: verifiedProductId,
                 planName: plan.planName,
                 priceAmount:
                   plan.priceAmount ?? existingSubscription.priceAmount,
                 priceCurrency: plan.priceCurrency,
                 billingPeriod: plan.billingPeriod,
-                currentPeriodStart: verifiedPurchaseDate,
-                currentPeriodEnd: verifiedExpiresDate || undefined,
+                currentPeriodStart: purchase.purchaseDate,
+                currentPeriodEnd: purchase.expiresDate || undefined,
                 cancelAtPeriodEnd: false,
               },
             })
@@ -748,15 +799,15 @@ export class AppleService {
                 appleTransactionId: verifiedTransactionId,
                 appleOriginalTransactionId: verifiedOriginalTransactionId,
                 appleProductId: verifiedProductId,
-                appleEnvironment: verifiedEnv,
-                status: nextStatus,
+                appleEnvironment: purchase.environment ?? verifiedEnv,
+                status: statusFromPurchase ?? nextStatus,
                 planId: verifiedProductId,
                 planName: plan.planName,
                 priceAmount: plan.priceAmount ?? 0,
                 priceCurrency: plan.priceCurrency,
                 billingPeriod: plan.billingPeriod,
-                currentPeriodStart: verifiedPurchaseDate,
-                currentPeriodEnd: verifiedExpiresDate || undefined,
+                currentPeriodStart: purchase.purchaseDate,
+                currentPeriodEnd: purchase.expiresDate || undefined,
                 cancelAtPeriodEnd: false,
               },
             });
@@ -770,7 +821,7 @@ export class AppleService {
 
       SafeLogger.info('Apple IAP purchase linked to user', {
         userId,
-        transactionId: verifiedItem.transaction_id,
+        transactionId: verifiedTransactionId,
       });
 
       return {
@@ -778,8 +829,8 @@ export class AppleService {
         message: 'Purchase linked successfully',
         subscription: {
           status: result.subscription.status,
-          planName: this.resolvePlanMetadata(verifiedItem.product_id).planName,
-          currentPeriodEnd: verifiedExpiresDate,
+          planName: this.resolvePlanMetadata(verifiedProductId).planName,
+          currentPeriodEnd: result.subscription.currentPeriodEnd ?? null,
         },
       };
     } catch (error) {
