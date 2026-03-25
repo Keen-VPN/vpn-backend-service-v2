@@ -1,5 +1,11 @@
-import { IsString, IsNotEmpty, Length } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsString,
+  IsNotEmpty,
+  Length,
+  IsOptional,
+  IsIn,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class LoginDto {
   @ApiProperty({
@@ -12,4 +18,16 @@ export class LoginDto {
   @IsNotEmpty()
   @Length(100, 2000) // Firebase tokens are ~1000+ chars
   idToken: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    required: false,
+    enum: ['google', 'apple'],
+    description:
+      'Optional provider hint. Useful when Firebase sign_in_provider is missing/incorrect (e.g. Apple).',
+    example: 'apple',
+  })
+  @IsOptional()
+  @IsIn(['google', 'apple'])
+  provider?: 'google' | 'apple';
 }

@@ -22,7 +22,14 @@ export class AuthService {
     private appleTokenVerifier: AppleTokenVerifierService,
   ) {}
 
-  async login(idToken: string) {
+  private normalizeProvider(provider?: string | null): 'google' | 'apple' {
+    const value = (provider || '').toLowerCase();
+    if (value === 'apple' || value === 'apple.com') return 'apple';
+    if (value === 'google' || value === 'google.com') return 'google';
+    return 'google';
+  }
+
+  async login(idToken: string, providerOverride?: 'google' | 'apple') {
     try {
       // Verify Firebase ID token
       const decodedToken = await this.firebaseConfig
@@ -33,7 +40,9 @@ export class AuthService {
       const email = decodedToken.email;
       const displayName = (decodedToken.name as string) || '';
       const emailVerified = decodedToken.email_verified || false;
-      const provider = decodedToken.firebase?.sign_in_provider || 'google';
+      const provider = providerOverride
+        ? this.normalizeProvider(providerOverride)
+        : this.normalizeProvider(decodedToken.firebase?.sign_in_provider);
 
       if (!email) {
         throw new UnauthorizedException('Email not found in token');
@@ -76,6 +85,7 @@ export class AuthService {
             email,
             displayName,
             emailVerified,
+            provider,
           },
         });
       }
