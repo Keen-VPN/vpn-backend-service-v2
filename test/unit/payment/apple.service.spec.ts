@@ -277,18 +277,24 @@ describe('AppleService', () => {
   });
 
   describe('capturePurchase', () => {
-    it('should reject capture without receiptData', async () => {
-      await expect(
-        service.capturePurchase(
-          'trans-123',
-          'orig-123',
-          'prod-123',
-          Date.now().toString(),
-          undefined,
-          undefined,
-          'Production',
-        ),
-      ).rejects.toThrow('receiptData is required');
+    it('should capture purchase without receiptData (unverified)', async () => {
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
+      mockPrisma.appleIAPPurchase.create.mockResolvedValue(
+        createMockAppleIAPPurchase(),
+      );
+
+      const result = await service.capturePurchase(
+        'trans-123',
+        'orig-123',
+        'prod-123',
+        Date.now().toString(),
+        undefined,
+        undefined,
+        'Production',
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.appleIAPPurchase.create).toHaveBeenCalled();
     });
 
     it('should create new purchase from verified receipt if not exists', async () => {
@@ -546,7 +552,7 @@ describe('AppleService', () => {
       expect(global.fetch).toHaveBeenCalled();
     });
 
-    it('should throw if receipt is invalid', async () => {
+    it('should capture purchase even if receipt is invalid (unverified fallback)', async () => {
       const txnId = 'txn-invalid';
       const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
 
@@ -555,17 +561,23 @@ describe('AppleService', () => {
         text: jest.fn().mockResolvedValue(JSON.stringify({ status: 21000 })), // Non-zero status
       });
 
-      await expect(
-        service.capturePurchase(
-          txnId,
-          'orig',
-          'prod',
-          Date.now().toString(),
-          undefined,
-          receiptData,
-          'Production',
-        ),
-      ).rejects.toThrow('Invalid receipt data');
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
+      mockPrisma.appleIAPPurchase.create.mockResolvedValue(
+        createMockAppleIAPPurchase(),
+      );
+
+      const result = await service.capturePurchase(
+        txnId,
+        'orig',
+        'prod',
+        Date.now().toString(),
+        undefined,
+        receiptData,
+        'Production',
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.appleIAPPurchase.create).toHaveBeenCalled();
     });
   });
 
@@ -620,22 +632,39 @@ describe('AppleService', () => {
       expect(mockPrisma.subscription.create).toHaveBeenCalled();
     });
 
-    it('should throw error if receipt is invalid', async () => {
+    it('should link purchase even if receipt is invalid (fallback)', async () => {
+      const user = createMockUser();
+      const purchase = createMockAppleIAPPurchase();
+      purchase.linkedUserId = null;
+      purchase.expiresDate = new Date(Date.now() + 10000);
+
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         text: jest.fn().mockResolvedValue(JSON.stringify({ status: 21004 })),
       });
 
-      await expect(
-        service.linkPurchase(
-          'user-id',
-          'token',
-          'tx-id',
-          'orig-id',
-          'prod-id',
-          'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=',
-        ),
-      ).rejects.toThrow('Invalid receipt data');
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValueOnce(purchase);
+      mockPrisma.appleIAPPurchase.update.mockResolvedValue({
+        ...purchase,
+        linkedUserId: user.id,
+      } as any);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      mockPrisma.subscription.create.mockResolvedValue(
+        createMockSubscription(),
+      );
+
+      const result = await service.linkPurchase(
+        user.id,
+        'token',
+        purchase.transactionId,
+        purchase.originalTransactionId,
+        purchase.productId,
+        'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=',
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.subscription.create).toHaveBeenCalled();
     });
 
     it('should throw error if already linked to another user', async () => {

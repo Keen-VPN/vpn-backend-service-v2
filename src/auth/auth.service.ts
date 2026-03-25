@@ -22,7 +22,14 @@ export class AuthService {
     private appleTokenVerifier: AppleTokenVerifierService,
   ) {}
 
-  async login(idToken: string) {
+  private normalizeProvider(provider?: string | null): 'google' | 'apple' {
+    const value = (provider || '').toLowerCase();
+    if (value === 'apple' || value === 'apple.com') return 'apple';
+    if (value === 'google' || value === 'google.com') return 'google';
+    return 'google';
+  }
+
+  async login(idToken: string, providerOverride?: 'google' | 'apple') {
     try {
       // Verify Firebase ID token
       const decodedToken = await this.firebaseConfig
@@ -33,7 +40,9 @@ export class AuthService {
       const email = decodedToken.email;
       const displayName = (decodedToken.name as string) || '';
       const emailVerified = decodedToken.email_verified || false;
-      const provider = decodedToken.firebase?.sign_in_provider || 'google';
+      const provider = providerOverride
+        ? this.normalizeProvider(providerOverride)
+        : this.normalizeProvider(decodedToken.firebase?.sign_in_provider);
 
       if (!email) {
         throw new UnauthorizedException('Email not found in token');
@@ -54,7 +63,13 @@ export class AuthService {
           // Update existing user with Firebase UID
           user = await this.prisma.user.update({
             where: { id: user.id },
-            data: { firebaseUid },
+            data: {
+              firebaseUid,
+              email,
+              displayName,
+              emailVerified,
+              provider,
+            },
           });
         } else {
           // Create new user
@@ -76,6 +91,7 @@ export class AuthService {
             email,
             displayName,
             emailVerified,
+            provider,
           },
         });
       }
@@ -428,8 +444,7 @@ export class AuthService {
           emailFromToken = decoded.email || email;
           emailVerified =
             decoded.email_verified === 'true' ||
-            decoded.email_verified === true ||
-            true;
+            decoded.email_verified === true;
 
           SafeLogger.debug(
             'Apple token decoded without signature verification (Non-Production)',
@@ -591,14 +606,6 @@ export class AuthService {
           path: '/auth/verify',
         });
         throw new BadRequestException('Request body is missing');
-      }
-
-      if (!sessionToken) {
-        SafeLogger.warn('sessionToken is missing from body', {
-          service: 'AuthController',
-          body: sessionToken,
-        });
-        throw new BadRequestException('sessionToken is required');
       }
 
       const secret =

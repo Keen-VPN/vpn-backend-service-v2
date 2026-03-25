@@ -54,7 +54,7 @@ export class AuthController {
   @ApiBody({ type: LoginDto })
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
   async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto.idToken);
+    return this.authService.login(loginDto.idToken, loginDto.provider);
   }
 
   @Post('google/signin')

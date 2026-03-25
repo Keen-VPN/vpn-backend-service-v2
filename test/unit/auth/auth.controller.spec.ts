@@ -103,7 +103,10 @@ describe('AuthController', () => {
       const result = await controller.login(loginDto);
 
       expect(result.user.id).toBe(user.id);
-      expect(authService.login).toHaveBeenCalledWith(loginDto.idToken);
+      expect(authService.login).toHaveBeenCalledWith(
+        loginDto.idToken,
+        undefined,
+      );
     });
 
     it('should throw error for invalid token format', async () => {
