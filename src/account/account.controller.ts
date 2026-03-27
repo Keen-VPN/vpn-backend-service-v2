@@ -24,7 +24,9 @@ import {
 import type { Response } from 'express';
 import { AccountService } from './account.service';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
+import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { SessionUserPayload } from '../auth/interfaces/auth-user.interface';
 import { Throttle } from '@nestjs/throttler';
 import {
   UserProfileResponseDto,
@@ -73,6 +75,14 @@ export class AccountController {
           }
         : null,
     };
+  }
+
+  @Get('linked-providers')
+  @UseGuards(SessionAuthGuard)
+  @ApiOperation({ summary: 'Get linked auth providers for current user' })
+  @ApiBearerAuth()
+  async getLinkedProviders(@CurrentUser() user: SessionUserPayload) {
+    return this.accountService.getLinkedProviders(user.uid);
   }
 
   @Delete('account')

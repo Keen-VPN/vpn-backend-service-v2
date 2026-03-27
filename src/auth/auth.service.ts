@@ -3,11 +3,17 @@ import {
   UnauthorizedException,
   Inject,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FirebaseConfig } from '../config/firebase.config';
 import { PrismaService } from '../prisma/prisma.service';
-import { SubscriptionStatus, Prisma } from '@prisma/client';
+import {
+  SubscriptionStatus,
+  Prisma,
+  SubscriptionUserRole,
+} from '@prisma/client';
+import { getActiveSubscriptionForUser } from '../subscription/subscription-lookup.util';
 import { SafeLogger } from '../common/utils/logger.util';
 import { AppleTokenVerifierService } from './apple-token-verifier.service';
 import * as jwt from 'jsonwebtoken';
@@ -48,6 +54,13 @@ export class AuthService {
         throw new UnauthorizedException('Email not found in token');
       }
 
+      // Extract Apple user ID from Firebase token identities (for linked account lookup)
+      const firebaseClaim = decodedToken.firebase as
+        | { identities?: Record<string, string[]>; sign_in_provider?: string }
+        | undefined;
+      const appleUserIdFromToken =
+        firebaseClaim?.identities?.['apple.com']?.[0];
+
       // Find or create user
       let user = await this.prisma.user.findUnique({
         where: { firebaseUid },
@@ -58,40 +71,41 @@ export class AuthService {
         user = await this.prisma.user.findUnique({
           where: { email },
         });
+      }
 
-        if (user) {
-          // Update existing user with Firebase UID
-          user = await this.prisma.user.update({
-            where: { id: user.id },
-            data: {
-              firebaseUid,
-              email,
-              displayName,
-              emailVerified,
-              provider,
-            },
-          });
-        } else {
-          // Create new user
-          user = await this.prisma.user.create({
-            data: {
-              firebaseUid,
-              email,
-              displayName,
-              provider,
-              emailVerified,
-            },
-          });
-        }
+      // For Apple sign-in via Firebase: also check by appleUserId
+      // This finds the linked account when a Google user linked their Apple identity
+      if (!user && appleUserIdFromToken) {
+        user = await this.prisma.user.findUnique({
+          where: { appleUserId: appleUserIdFromToken },
+        });
+      }
+
+      if (!user) {
+        // No existing user found — create new
+        user = await this.prisma.user.create({
+          data: {
+            firebaseUid,
+            email,
+            displayName,
+            provider,
+            emailVerified,
+          },
+        });
       } else {
-        // Update user info
+        // Update user info — but preserve email if user has a linked Google account
+        // and this is an Apple sign-in (prevents Apple relay email from overwriting Google email)
+        const isAppleLogin = provider === 'apple';
+        const hasGoogleLinked =
+          !!user.firebaseUid && user.provider === 'google';
+        const shouldPreserveEmail = isAppleLogin && hasGoogleLinked;
+
         user = await this.prisma.user.update({
           where: { id: user.id },
           data: {
-            email,
-            displayName,
+            ...(shouldPreserveEmail ? {} : { email }),
+            displayName: displayName || user.displayName,
             emailVerified,
-            provider,
           },
         });
       }
@@ -100,17 +114,10 @@ export class AuthService {
       const userId = user.id;
 
       // Get active subscription
-      const activeSubscription = await this.prisma.subscription.findFirst({
-        where: {
-          userId,
-          status: SubscriptionStatus.ACTIVE,
-          OR: [
-            { currentPeriodEnd: null },
-            { currentPeriodEnd: { gte: new Date() } },
-          ],
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+      const activeSubscription = await getActiveSubscriptionForUser(
+        this.prisma,
+        userId,
+      );
 
       SafeLogger.info(
         'User logged in successfully',
@@ -183,42 +190,55 @@ export class AuthService {
         throw new UnauthorizedException('Email not found in token');
       }
 
-      // Find or create user
+      // Extract Apple user ID from Firebase token identities (for linked account lookup)
+      const firebaseClaimG = decodedToken.firebase as
+        | { identities?: Record<string, string[]> }
+        | undefined;
+      const appleUserIdFromTokenG =
+        firebaseClaimG?.identities?.['apple.com']?.[0];
+
+      // Find or create user — check firebaseUid, then email, then appleUserId (for linked accounts)
       let user = await this.prisma.user.findUnique({
         where: { firebaseUid },
       });
 
       if (!user) {
-        // Check if user exists by email
         user = await this.prisma.user.findUnique({
           where: { email },
         });
+      }
 
-        if (user) {
-          // Update existing user with Firebase UID
-          user = await this.prisma.user.update({
-            where: { id: user.id },
-            data: { firebaseUid, displayName, emailVerified },
-          });
-        } else {
-          // Create new user
-          user = await this.prisma.user.create({
-            data: {
-              firebaseUid,
-              email,
-              displayName,
-              provider,
-              emailVerified,
-            },
-          });
-        }
+      // Fallback: check by appleUserId from token identities
+      // This finds linked accounts when onAuthStateChanged calls googleSignIn for an Apple user
+      if (!user && appleUserIdFromTokenG) {
+        user = await this.prisma.user.findUnique({
+          where: { appleUserId: appleUserIdFromTokenG },
+        });
+      }
+
+      if (!user) {
+        // Create new user
+        user = await this.prisma.user.create({
+          data: {
+            firebaseUid,
+            email,
+            displayName,
+            provider,
+            emailVerified,
+          },
+        });
       } else {
-        // Update user info
+        // Update user info — but preserve email if user has a linked account
+        const hasLinkedApple = !!user.appleUserId;
+        const isAppleToken = !!appleUserIdFromTokenG;
+        const shouldPreserveEmail =
+          isAppleToken && hasLinkedApple && user.email !== email;
+
         user = await this.prisma.user.update({
           where: { id: user.id },
           data: {
-            email,
-            displayName,
+            ...(shouldPreserveEmail ? {} : { email }),
+            displayName: displayName || user.displayName,
             emailVerified,
           },
         });
@@ -301,6 +321,23 @@ export class AuthService {
                 planName: 'Premium VPN',
               },
             });
+            try {
+              await this.prisma.subscriptionUser.create({
+                data: {
+                  subscriptionId: subscriptionForResponse.id,
+                  userId: user.id,
+                  role: SubscriptionUserRole.OWNER,
+                },
+              });
+            } catch (e: unknown) {
+              if (
+                !(
+                  e instanceof Prisma.PrismaClientKnownRequestError &&
+                  e.code === 'P2002'
+                )
+              )
+                throw e;
+            }
           }
         }
       }
@@ -487,17 +524,23 @@ export class AuthService {
 
         if (user) {
           // Update existing user with Apple user ID
+          // Only set email if user doesn't already have a Google-linked email
+          // (prevents Apple relay email from overwriting the original Google email)
+          const updateData: Record<string, unknown> = {
+            appleUserId,
+            displayName: fullName || user.displayName,
+            emailVerified,
+          };
+          if (!user.firebaseUid) {
+            // No Google account linked — safe to update email
+            updateData.email = emailFromToken || user.email;
+          }
           user = await this.prisma.user.update({
             where: { id: user.id },
-            data: {
-              appleUserId,
-              email: emailFromToken || user.email,
-              displayName: fullName || user.displayName,
-              emailVerified,
-            },
+            data: updateData,
           });
         } else {
-          // Create new user
+          // Create new user — brand new Apple account, no existing user
           user = await this.prisma.user.create({
             data: {
               appleUserId,
@@ -509,14 +552,20 @@ export class AuthService {
           });
         }
       } else {
-        // Update user info
+        // User found by appleUserId — returning Apple user
+        // Only update email if this user doesn't have a linked Google account
+        // (prevents Apple relay email from overwriting the original Google email)
+        const updateData: Record<string, unknown> = {
+          displayName: fullName || user.displayName,
+          emailVerified,
+        };
+        if (!user.firebaseUid) {
+          // No Google account linked — safe to update email
+          updateData.email = emailFromToken || user.email;
+        }
         user = await this.prisma.user.update({
           where: { id: user.id },
-          data: {
-            email: emailFromToken || user.email,
-            displayName: fullName || user.displayName,
-            emailVerified,
-          },
+          data: updateData,
         });
       }
 
@@ -630,17 +679,10 @@ export class AuthService {
       }
 
       // Get active subscription
-      const activeSubscription = await this.prisma.subscription.findFirst({
-        where: {
-          userId: user.id,
-          status: SubscriptionStatus.ACTIVE,
-          OR: [
-            { currentPeriodEnd: null },
-            { currentPeriodEnd: { gte: new Date() } },
-          ],
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+      const activeSubscription = await getActiveSubscriptionForUser(
+        this.prisma,
+        user.id,
+      );
 
       // Check trial status
       let trial: {
@@ -752,5 +794,190 @@ export class AuthService {
     }
 
     return planName;
+  }
+
+  async linkProvider(
+    userId: string,
+    provider: 'google' | 'apple',
+    firebaseIdToken: string,
+  ) {
+    const primaryUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!primaryUser) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (
+      provider === 'google' &&
+      (primaryUser.googleUserId ||
+        primaryUser.firebaseUid ||
+        primaryUser.provider === 'google')
+    ) {
+      throw new ConflictException('Google account is already linked');
+    }
+    if (
+      provider === 'apple' &&
+      (primaryUser.appleUserId || primaryUser.provider === 'apple')
+    ) {
+      throw new ConflictException('Apple account is already linked');
+    }
+
+    const decodedToken = await this.firebaseConfig
+      .getAuth()
+      .verifyIdToken(firebaseIdToken);
+    const firebaseUid = decodedToken.uid;
+    const emailFromToken = decodedToken.email;
+
+    // Extract provider-specific identifiers from Firebase token identities
+    const firebaseClaim = decodedToken.firebase as
+      | { identities?: Record<string, string[]> }
+      | undefined;
+    const appleIdentities = firebaseClaim?.identities?.['apple.com'];
+    const appleUserIdFromToken = appleIdentities?.[0] || undefined;
+
+    let secondaryUser = await this.prisma.user.findUnique({
+      where: { firebaseUid },
+    });
+
+    if (!secondaryUser && provider === 'apple' && appleUserIdFromToken) {
+      secondaryUser = await this.prisma.user.findUnique({
+        where: { appleUserId: appleUserIdFromToken },
+      });
+    }
+
+    if (!secondaryUser && emailFromToken) {
+      const emailUser = await this.prisma.user.findUnique({
+        where: { email: emailFromToken },
+      });
+      if (emailUser && emailUser.id !== primaryUser.id) {
+        secondaryUser = emailUser;
+      }
+    }
+
+    if (!secondaryUser || secondaryUser.id === primaryUser.id) {
+      const updateData: Record<string, any> = {};
+      if (provider === 'google') {
+        updateData.firebaseUid = firebaseUid;
+      }
+      if (provider === 'apple') {
+        if (appleUserIdFromToken) updateData.appleUserId = appleUserIdFromToken;
+        if (!primaryUser.firebaseUid) updateData.firebaseUid = firebaseUid;
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: updateData,
+        });
+      }
+
+      SafeLogger.info(
+        'Provider linked to existing user (no secondary)',
+        { service: 'AuthService', userId },
+        { provider },
+      );
+
+      return {
+        success: true,
+        linkedProviders: {
+          google: provider === 'google' || !!primaryUser.googleUserId,
+          apple:
+            provider === 'apple' ||
+            !!primaryUser.appleUserId ||
+            !!appleUserIdFromToken,
+        },
+      };
+    }
+
+    // Check if the secondary user is already linked to a different account
+    // This covers both cases: linked via linked_accounts table, or linked by having
+    // both provider IDs on the same user record (no secondary user path)
+    const existingLink = await this.prisma.linkedAccount.findFirst({
+      where: {
+        OR: [
+          { primaryUserId: secondaryUser.id },
+          { linkedUserId: secondaryUser.id },
+        ],
+      },
+    });
+
+    // Also check if the secondary user already has both providers set (linked on same record)
+    const secondaryHasBothProviders =
+      (!!secondaryUser.appleUserId || secondaryUser.provider === 'apple') &&
+      (!!secondaryUser.firebaseUid || secondaryUser.provider === 'google');
+
+    if (existingLink || secondaryHasBothProviders) {
+      throw new ConflictException(
+        'This account is already linked to another user.',
+      );
+    }
+
+    const primarySub = await getActiveSubscriptionForUser(
+      this.prisma,
+      primaryUser.id,
+    );
+    const secondarySub = await getActiveSubscriptionForUser(
+      this.prisma,
+      secondaryUser.id,
+    );
+
+    if (primarySub && secondarySub) {
+      throw new ConflictException(
+        'Both accounts have active subscriptions. Please cancel one subscription before linking.',
+      );
+    }
+
+    try {
+      await this.prisma.linkedAccount.create({
+        data: { primaryUserId: primaryUser.id, linkedUserId: secondaryUser.id },
+      });
+    } catch (e: unknown) {
+      if (
+        !(
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === 'P2002'
+        )
+      )
+        throw e;
+    }
+
+    const activeSub = primarySub || secondarySub;
+    if (activeSub) {
+      const linkedUserId =
+        activeSub.userId === primaryUser.id ? secondaryUser.id : primaryUser.id;
+
+      try {
+        await this.prisma.subscriptionUser.create({
+          data: {
+            subscriptionId: activeSub.id,
+            userId: linkedUserId,
+            role: SubscriptionUserRole.LINKED,
+          },
+        });
+      } catch (e: unknown) {
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === 'P2002'
+        ) {
+          throw new ConflictException('Accounts are already linked');
+        }
+        throw e;
+      }
+    }
+
+    SafeLogger.info(
+      'Accounts linked via subscription_users',
+      { service: 'AuthService', userId },
+      { secondaryUserId: secondaryUser.id, provider },
+    );
+
+    return {
+      success: true,
+      linkedProviders: {
+        google: !!primaryUser.googleUserId || provider === 'google',
+        apple: !!primaryUser.appleUserId || provider === 'apple',
+      },
+    };
   }
 }

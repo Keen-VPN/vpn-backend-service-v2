@@ -13,6 +13,7 @@ import { PlansConfigService } from './config/plans.config';
 import { serializeTrialStatus } from './trial.util';
 import * as jwt from 'jsonwebtoken';
 import { SubscriptionStatus } from '@prisma/client';
+import { getActiveSubscriptionForUser } from './subscription-lookup.util';
 
 @Injectable()
 export class SubscriptionService {
@@ -102,19 +103,10 @@ export class SubscriptionService {
       }
 
       // Get active subscription (includes both "active" and "trialing" status)
-      const activeSubscription = await this.prisma.subscription.findFirst({
-        where: {
-          userId: user.id,
-          status: {
-            in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING], // Include both active and trialing subscriptions
-          },
-          OR: [
-            { currentPeriodEnd: null },
-            { currentPeriodEnd: { gte: new Date() } },
-          ],
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+      const activeSubscription = await getActiveSubscriptionForUser(
+        this.prisma,
+        user.id,
+      );
 
       // Check if subscription is active (DB subscription or linked Apple IAP)
       let hasActiveSubscription =
@@ -192,7 +184,7 @@ export class SubscriptionService {
 
   async cancel(userId: string) {
     const user = await this.prisma.user.findUnique({
-      where: { firebaseUid: userId },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -200,19 +192,10 @@ export class SubscriptionService {
     }
 
     // Find active subscription (includes both "active" and "trialing" status)
-    const activeSubscription = await this.prisma.subscription.findFirst({
-      where: {
-        userId: user.id,
-        status: {
-          in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING], // Include both active and trialing subscriptions
-        },
-        OR: [
-          { currentPeriodEnd: null },
-          { currentPeriodEnd: { gte: new Date() } },
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const activeSubscription = await getActiveSubscriptionForUser(
+      this.prisma,
+      user.id,
+    );
 
     if (!activeSubscription) {
       return {

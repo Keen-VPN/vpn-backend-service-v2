@@ -83,6 +83,7 @@ describe('AccountService', () => {
         ...user,
         subscriptions,
       } as any);
+      mockPrisma.subscriptionUser.findMany.mockResolvedValue([]);
       mockPrisma.user.delete.mockResolvedValue(user);
 
       const result = await service.deleteAccount(user.id);
@@ -161,6 +162,7 @@ describe('AccountService', () => {
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
       mockPrisma.subscription.findUnique.mockResolvedValue(subscription);
+      mockPrisma.subscriptionUser.findFirst.mockResolvedValue(null);
 
       await expect(
         service.getInvoicePdf(user.id, subscription.id),

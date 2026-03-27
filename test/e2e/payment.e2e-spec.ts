@@ -80,6 +80,8 @@ describe('Payment (e2e)', () => {
       mockPrisma.subscription.create.mockResolvedValue(
         createMockSubscription(),
       );
+      mockPrisma.subscriptionUser.create.mockResolvedValue({} as any);
+      mockPrisma.linkedAccount.findMany.mockResolvedValue([]);
 
       const response = await request(app.getHttpServer())
         .post('/payment/stripe/webhook')
