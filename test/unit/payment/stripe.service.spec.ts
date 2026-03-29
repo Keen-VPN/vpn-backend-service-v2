@@ -173,6 +173,8 @@ describe('StripeService', () => {
       mockPrisma.subscription.create.mockResolvedValue(
         createMockSubscription(),
       );
+      mockPrisma.subscriptionUser.create.mockResolvedValue({} as any);
+      mockPrisma.linkedAccount.findMany.mockResolvedValue([]);
 
       await service.handleWebhookEvent(event);
 
@@ -195,6 +197,8 @@ describe('StripeService', () => {
       mockPrisma.subscription.create.mockResolvedValue(
         createMockSubscription(),
       );
+      mockPrisma.subscriptionUser.create.mockResolvedValue({} as any);
+      mockPrisma.linkedAccount.findMany.mockResolvedValue([]);
 
       await service.handleWebhookEvent(event);
 
@@ -241,6 +245,8 @@ describe('StripeService', () => {
       mockPrisma.subscription.create.mockResolvedValue(
         createMockSubscription(),
       );
+      mockPrisma.subscriptionUser.create.mockResolvedValue({} as any);
+      mockPrisma.linkedAccount.findMany.mockResolvedValue([]);
 
       await service.handleWebhookEvent(event);
 

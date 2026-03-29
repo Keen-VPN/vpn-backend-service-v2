@@ -39,6 +39,10 @@ describe('AppleService', () => {
       async (fn: any) => fn(mockPrisma),
     );
 
+    // Default mocks for subscription_users mapping (account linking feature)
+    mockPrisma.subscriptionUser.create.mockResolvedValue({} as any);
+    mockPrisma.linkedAccount.findMany.mockResolvedValue([]);
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AppleService,

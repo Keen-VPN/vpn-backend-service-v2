@@ -6,6 +6,7 @@ import {
 } from '../../../src/account/account.controller';
 import { AccountService } from '../../../src/account/account.service';
 import { FirebaseAuthGuard } from '../../../src/auth/guards/firebase-auth.guard';
+import { SessionAuthGuard } from '../../../src/auth/guards/session-auth.guard';
 import {
   createMockUser,
   createMockSubscription,
@@ -33,6 +34,10 @@ describe('AccountController', () => {
       ],
     })
       .overrideGuard(FirebaseAuthGuard)
+      .useValue({
+        canActivate: jest.fn().mockReturnValue(true),
+      })
+      .overrideGuard(SessionAuthGuard)
       .useValue({
         canActivate: jest.fn().mockReturnValue(true),
       })

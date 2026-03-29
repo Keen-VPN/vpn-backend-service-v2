@@ -23,6 +23,7 @@ import { LoginDto } from '../common/dto/login.dto';
 import { GoogleSignInDto } from '../common/dto/google-signin.dto';
 import { AppleSignInDto } from '../common/dto/apple-signin.dto';
 import { VerifySessionDto } from '../common/dto/verify-session.dto';
+import { LinkProviderDto } from '../common/dto/link-provider.dto';
 import { FirebaseAuthGuard } from './guards/firebase-auth.guard';
 import { SessionAuthGuard } from './guards/session-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -106,6 +107,24 @@ export class AuthController {
   @Throttle({ default: { limit: 30, ttl: 60000 } }) // 30 requests per minute for verification
   async verifySession(@Body() verifySessionDto: VerifySessionDto) {
     return this.authService.verifySession(verifySessionDto.sessionToken);
+  }
+
+  @Post('link-provider')
+  @UseGuards(SessionAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Link a second auth provider to current account' })
+  @ApiBody({ type: LinkProviderDto })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async linkProvider(
+    @CurrentUser() user: SessionUserPayload,
+    @Body() linkProviderDto: LinkProviderDto,
+  ) {
+    return this.authService.linkProvider(
+      user.uid,
+      linkProviderDto.provider,
+      linkProviderDto.firebaseIdToken,
+    );
   }
 
   @Post('logout')

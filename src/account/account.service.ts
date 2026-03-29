@@ -5,7 +5,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { SubscriptionStatus, User, Subscription } from '@prisma/client';
+import { getActiveSubscriptionForUser } from '../subscription/subscription-lookup.util';
 import { SafeLogger } from '../common/utils/logger.util';
 import PDFDocument from 'pdfkit';
 
@@ -13,56 +13,39 @@ import PDFDocument from 'pdfkit';
 export class AccountService {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
-  async getProfileByFirebaseUid(
-    firebaseUid: string,
-  ): Promise<User & { subscriptions: Subscription[] }> {
+  async getProfileByFirebaseUid(firebaseUid: string) {
     const user = await this.prisma.user.findUnique({
       where: { firebaseUid },
-      include: {
-        subscriptions: {
-          where: {
-            status: SubscriptionStatus.ACTIVE,
-            OR: [
-              { currentPeriodEnd: null },
-              { currentPeriodEnd: { gte: new Date() } },
-            ],
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-      },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    return user;
+    const activeSubscription = await getActiveSubscriptionForUser(
+      this.prisma,
+      user.id,
+    );
+
+    return {
+      ...user,
+      subscriptions: activeSubscription ? [activeSubscription] : [],
+    };
   }
 
   async getProfile(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        subscriptions: {
-          where: {
-            status: SubscriptionStatus.ACTIVE,
-            OR: [
-              { currentPeriodEnd: null },
-              { currentPeriodEnd: { gte: new Date() } },
-            ],
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-      },
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    const activeSubscription = user.subscriptions[0] || null;
+    const activeSubscription = await getActiveSubscriptionForUser(
+      this.prisma,
+      userId,
+    );
 
     return {
       user: {
@@ -75,7 +58,7 @@ export class AccountService {
       subscription: activeSubscription
         ? {
             id: activeSubscription.id,
-            status: SubscriptionStatus.ACTIVE,
+            status: activeSubscription.status,
             planName: activeSubscription.planName,
             currentPeriodEnd: activeSubscription.currentPeriodEnd,
             cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
@@ -106,6 +89,32 @@ export class AccountService {
       subscriptionCount: user.subscriptions.length,
     });
 
+    // Check if this user has linked accounts via subscription_users
+    const linkedMappings = await this.prisma.subscriptionUser.findMany({
+      where: { userId },
+      include: { subscription: { select: { id: true, userId: true } } },
+    });
+
+    const isOwnerWithLinkedUsers = linkedMappings.some(
+      (m) => m.subscription.userId === userId,
+    );
+
+    if (isOwnerWithLinkedUsers) {
+      const affectedMappings = await this.prisma.subscriptionUser.findMany({
+        where: {
+          subscriptionId: { in: linkedMappings.map((m) => m.subscriptionId) },
+          userId: { not: userId },
+        },
+        select: { userId: true },
+      });
+
+      SafeLogger.warn(
+        'Deleting subscription owner with linked users — linked users will lose access',
+        { service: 'AccountService', userId },
+        { affectedUserIds: affectedMappings.map((m) => m.userId) },
+      );
+    }
+
     // Cascade delete will handle subscriptions
     await this.prisma.user.delete({
       where: { id: userId },
@@ -122,6 +131,65 @@ export class AccountService {
       stripeCustomerIds: user.subscriptions
         .map((s) => s.stripeCustomerId)
         .filter((id): id is string => id !== null),
+    };
+  }
+
+  async getLinkedProviders(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Google users have firebaseUid and/or provider === 'google' but may not have googleUserId set
+    const googleLinkedSelf =
+      !!user.googleUserId || !!user.firebaseUid || user.provider === 'google';
+    const appleLinkedSelf = !!user.appleUserId || user.provider === 'apple';
+
+    const linkedAccounts = await this.prisma.linkedAccount.findMany({
+      where: { OR: [{ primaryUserId: userId }, { linkedUserId: userId }] },
+    });
+
+    let googleLinkedOther = false;
+    let appleLinkedOther = false;
+    let googleEmail: string | undefined;
+    let appleEmail: string | undefined;
+
+    if (linkedAccounts.length > 0) {
+      const linkedUserIds = linkedAccounts.map((la) =>
+        la.primaryUserId === userId ? la.linkedUserId : la.primaryUserId,
+      );
+      const linkedUsers = await this.prisma.user.findMany({
+        where: { id: { in: linkedUserIds } },
+      });
+
+      for (const linkedUser of linkedUsers) {
+        if (
+          linkedUser.googleUserId ||
+          linkedUser.firebaseUid ||
+          linkedUser.provider === 'google'
+        ) {
+          googleLinkedOther = true;
+          googleEmail = googleEmail || linkedUser.email;
+        }
+        if (linkedUser.appleUserId) {
+          appleLinkedOther = true;
+          appleEmail = appleEmail || linkedUser.email;
+        }
+      }
+    }
+
+    return {
+      success: true,
+      providers: {
+        google: {
+          linked: googleLinkedSelf || googleLinkedOther,
+          email: googleLinkedSelf ? user.email : googleEmail,
+        },
+        apple: {
+          linked: appleLinkedSelf || appleLinkedOther,
+          email: appleLinkedSelf ? user.email : appleEmail,
+        },
+      },
     };
   }
 
@@ -176,7 +244,14 @@ export class AccountService {
     }
 
     // Verify subscription belongs to user
-    if (subscription.userId !== userId) {
+    let hasAccess = subscription.userId === userId;
+    if (!hasAccess) {
+      const mapping = await this.prisma.subscriptionUser.findFirst({
+        where: { subscriptionId: subscription.id, userId },
+      });
+      hasAccess = mapping !== null;
+    }
+    if (!hasAccess) {
       throw new ForbiddenException('Access denied');
     }
 
