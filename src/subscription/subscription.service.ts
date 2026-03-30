@@ -401,6 +401,7 @@ export class SubscriptionService {
   private resolveApplePlanName(subscription: {
     planName: string | null;
     appleProductId?: string | null;
+    billingPeriod?: string | null;
   }): string {
     const planName = subscription.planName || '';
     const productId = subscription.appleProductId || '';
@@ -420,6 +421,14 @@ export class SubscriptionService {
     }
     if (productId.includes('monthly')) {
       return 'Premium VPN - Monthly';
+    }
+
+    // Derive from billingPeriod for Stripe subscriptions with generic planName
+    if (subscription.billingPeriod === 'month') {
+      return 'Premium VPN - Monthly';
+    }
+    if (subscription.billingPeriod === 'year') {
+      return 'Premium VPN - Annual';
     }
 
     return planName;

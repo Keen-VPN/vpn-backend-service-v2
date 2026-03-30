@@ -428,7 +428,13 @@ export class StripeService {
           ? 'month'
           : null;
 
-    const planName = price.nickname || 'Premium VPN';
+    const planName =
+      price.nickname ||
+      (billingPeriod === 'month'
+        ? 'Premium VPN - Monthly'
+        : billingPeriod === 'year'
+          ? 'Premium VPN - Annual'
+          : 'Premium VPN');
 
     return {
       planId: price.id || null,

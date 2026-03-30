@@ -772,6 +772,7 @@ export class AuthService {
     planName: string | null;
     appleProductId?: string | null;
     subscriptionType?: string | null;
+    billingPeriod?: string | null;
   }): string {
     const planName = subscription.planName || '';
     const productId = subscription.appleProductId || '';
@@ -791,6 +792,14 @@ export class AuthService {
     }
     if (productId.includes('monthly')) {
       return 'Premium VPN - Monthly';
+    }
+
+    // Derive from billingPeriod for Stripe subscriptions
+    if (subscription.billingPeriod === 'month') {
+      return 'Premium VPN - Monthly';
+    }
+    if (subscription.billingPeriod === 'year') {
+      return 'Premium VPN - Annual';
     }
 
     return planName;
