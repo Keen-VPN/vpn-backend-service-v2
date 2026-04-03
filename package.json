@@ -133,6 +133,7 @@
     "@angular-devkit/core": {
       "ajv": "^8.18.0"
     },
+    "lodash": "4.18.1",
     "glob": {
       "minimatch": "^10.2.2"
     },

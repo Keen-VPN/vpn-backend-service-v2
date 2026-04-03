@@ -867,11 +867,47 @@ export class AuthService {
     if (!secondaryUser || secondaryUser.id === primaryUser.id) {
       const updateData: Record<string, any> = {};
       if (provider === 'google') {
+        // Check if this Firebase UID is already claimed by another user
+        const existingFirebaseUser = await this.prisma.user.findUnique({
+          where: { firebaseUid },
+        });
+        if (
+          existingFirebaseUser &&
+          existingFirebaseUser.id !== primaryUser.id
+        ) {
+          throw new ConflictException(
+            'This Google account is already linked to another user.',
+          );
+        }
         updateData.firebaseUid = firebaseUid;
       }
       if (provider === 'apple') {
-        if (appleUserIdFromToken) updateData.appleUserId = appleUserIdFromToken;
-        if (!primaryUser.firebaseUid) updateData.firebaseUid = firebaseUid;
+        if (appleUserIdFromToken) {
+          // Check if this Apple user ID is already claimed by another user
+          const existingAppleUser = await this.prisma.user.findUnique({
+            where: { appleUserId: appleUserIdFromToken },
+          });
+          if (existingAppleUser && existingAppleUser.id !== primaryUser.id) {
+            throw new ConflictException(
+              'This Apple account is already linked to another user.',
+            );
+          }
+          updateData.appleUserId = appleUserIdFromToken;
+        }
+        if (!primaryUser.firebaseUid) {
+          const existingFirebaseUser = await this.prisma.user.findUnique({
+            where: { firebaseUid },
+          });
+          if (
+            existingFirebaseUser &&
+            existingFirebaseUser.id !== primaryUser.id
+          ) {
+            throw new ConflictException(
+              'This account is already linked to another user.',
+            );
+          }
+          updateData.firebaseUid = firebaseUid;
+        }
       }
 
       if (Object.keys(updateData).length > 0) {
