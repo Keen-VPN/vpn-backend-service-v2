@@ -314,6 +314,12 @@ export class StripeService {
               ? SubscriptionStatus.CANCELLED
               : (subscription.status.toUpperCase() as SubscriptionStatus),
           cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+          planId: planInfo.planId || undefined,
+          planName: planInfo.planName || undefined,
+          priceAmount: planInfo.priceAmount || undefined,
+          priceCurrency: planInfo.priceCurrency || 'USD',
+          billingPeriod: planInfo.billingPeriod || undefined,
+          currentPeriodEnd,
         },
       });
       await this.ensureSubscriptionUserMapping(updatedSubscription.id, user.id);

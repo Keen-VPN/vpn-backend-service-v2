@@ -4,6 +4,7 @@ import {
   Inject,
   BadRequestException,
   ConflictException,
+  NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FirebaseConfig } from '../config/firebase.config';
@@ -104,6 +105,8 @@ export class AuthService {
           where: { id: user.id },
           data: {
             ...(shouldPreserveEmail ? {} : { email }),
+            // Set firebaseUid if missing (e.g. secondary user created during linking)
+            ...(!user.firebaseUid ? { firebaseUid } : {}),
             displayName: displayName || user.displayName,
             emailVerified,
           },
@@ -618,10 +621,15 @@ export class AuthService {
 
       const sessionToken = this.generateSessionToken(user.id);
 
+      const activeSubscription = await getActiveSubscriptionForUser(
+        this.prisma,
+        user.id,
+      );
+
       SafeLogger.info(
         'Apple sign-in completed successfully',
         { service: 'AuthService', userId: user.id },
-        { devicePlatform },
+        { devicePlatform, hasActiveSubscription: !!activeSubscription },
       );
 
       return {
@@ -635,6 +643,17 @@ export class AuthService {
         authMethod: 'apple',
         firebaseLinked: !!user.firebaseUid,
         ...(firebaseLinkError && { firebaseLinkError }),
+        subscription: activeSubscription
+          ? {
+              id: activeSubscription.id,
+              status: activeSubscription.status,
+              planName: activeSubscription.planName,
+              plan: this.resolveSubscriptionPlan(activeSubscription),
+              currentPeriodEnd: activeSubscription.currentPeriodEnd,
+              cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
+              subscriptionType: activeSubscription.subscriptionType,
+            }
+          : null,
       };
     } catch (error) {
       SafeLogger.error('Apple sign-in failed', error, {
@@ -849,6 +868,13 @@ export class AuthService {
       where: { firebaseUid },
     });
 
+    // If the firebaseUid lookup found the primary user (e.g. the token belongs
+    // to the caller after a successful Firebase linkWithPopup), reset so the
+    // appleUserId and email lookups below can still find the actual secondary.
+    if (secondaryUser && secondaryUser.id === primaryUser.id) {
+      secondaryUser = null;
+    }
+
     if (!secondaryUser && provider === 'apple' && appleUserIdFromToken) {
       secondaryUser = await this.prisma.user.findUnique({
         where: { appleUserId: appleUserIdFromToken },
@@ -865,79 +891,51 @@ export class AuthService {
     }
 
     if (!secondaryUser || secondaryUser.id === primaryUser.id) {
-      const updateData: Record<string, any> = {};
-      if (provider === 'google') {
-        // Check if this Firebase UID is already claimed by another user
-        const existingFirebaseUser = await this.prisma.user.findUnique({
-          where: { firebaseUid },
-        });
-        if (
-          existingFirebaseUser &&
-          existingFirebaseUser.id !== primaryUser.id
-        ) {
-          throw new ConflictException(
-            'This Google account is already linked to another user.',
-          );
-        }
-        updateData.firebaseUid = firebaseUid;
-      }
+      // No secondary user exists — create one for the linked provider identity
       if (provider === 'apple') {
-        if (appleUserIdFromToken) {
-          // Check if this Apple user ID is already claimed by another user
-          const existingAppleUser = await this.prisma.user.findUnique({
-            where: { appleUserId: appleUserIdFromToken },
-          });
-          if (existingAppleUser && existingAppleUser.id !== primaryUser.id) {
-            throw new ConflictException(
-              'This Apple account is already linked to another user.',
-            );
-          }
-          updateData.appleUserId = appleUserIdFromToken;
-        }
-        if (!primaryUser.firebaseUid) {
-          const existingFirebaseUser = await this.prisma.user.findUnique({
-            where: { firebaseUid },
-          });
-          if (
-            existingFirebaseUser &&
-            existingFirebaseUser.id !== primaryUser.id
-          ) {
-            throw new ConflictException(
-              'This account is already linked to another user.',
-            );
-          }
-          updateData.firebaseUid = firebaseUid;
+        if (!appleUserIdFromToken) {
+          throw new BadRequestException(
+            'Could not extract Apple identity from the provided token. Please try again.',
+          );
         }
       }
 
-      if (Object.keys(updateData).length > 0) {
-        await this.prisma.user.update({
-          where: { id: userId },
-          data: updateData,
+      // Only set firebaseUid on the secondary if it differs from the primary's
+      // (e.g. from the credential-already-in-use temp app flow).
+      // When provider-already-linked sends the primary user's token, the UIDs match.
+      const secondaryFirebaseUid =
+        firebaseUid !== primaryUser.firebaseUid ? firebaseUid : undefined;
+
+      try {
+        secondaryUser = await this.prisma.user.create({
+          data: {
+            email: emailFromToken || `${firebaseUid}@linked.keenvpn.com`,
+            provider,
+            firebaseUid: secondaryFirebaseUid,
+            appleUserId:
+              provider === 'apple' ? appleUserIdFromToken : undefined,
+          },
         });
+      } catch (e: unknown) {
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === 'P2002'
+        ) {
+          throw new ConflictException(
+            'This account is already linked to another user.',
+          );
+        }
+        throw e;
       }
 
       SafeLogger.info(
-        'Provider linked to existing user (no secondary)',
+        'Created secondary user for provider linking',
         { service: 'AuthService', userId },
-        { provider },
+        { secondaryUserId: secondaryUser.id, provider },
       );
-
-      return {
-        success: true,
-        linkedProviders: {
-          google: provider === 'google' || !!primaryUser.googleUserId,
-          apple:
-            provider === 'apple' ||
-            !!primaryUser.appleUserId ||
-            !!appleUserIdFromToken,
-        },
-      };
     }
 
     // Check if the secondary user is already linked to a different account
-    // This covers both cases: linked via linked_accounts table, or linked by having
-    // both provider IDs on the same user record (no secondary user path)
     const existingLink = await this.prisma.linkedAccount.findFirst({
       where: {
         OR: [
@@ -947,12 +945,28 @@ export class AuthService {
       },
     });
 
-    // Also check if the secondary user already has both providers set (linked on same record)
-    const secondaryHasBothProviders =
-      (!!secondaryUser.appleUserId || secondaryUser.provider === 'apple') &&
-      (!!secondaryUser.firebaseUid || secondaryUser.provider === 'google');
-
-    if (existingLink || secondaryHasBothProviders) {
+    if (existingLink) {
+      // If the existing link connects this same pair, it's a valid re-link — return success
+      const isSamePair =
+        (existingLink.primaryUserId === primaryUser.id &&
+          existingLink.linkedUserId === secondaryUser.id) ||
+        (existingLink.primaryUserId === secondaryUser.id &&
+          existingLink.linkedUserId === primaryUser.id);
+      if (isSamePair) {
+        return {
+          success: true,
+          linkedProviders: {
+            google:
+              !!primaryUser.googleUserId ||
+              !!primaryUser.firebaseUid ||
+              primaryUser.provider === 'google' ||
+              !!secondaryUser.googleUserId ||
+              !!secondaryUser.firebaseUid ||
+              secondaryUser.provider === 'google',
+            apple: !!primaryUser.appleUserId || !!secondaryUser.appleUserId,
+          },
+        };
+      }
       throw new ConflictException(
         'This account is already linked to another user.',
       );
@@ -1020,9 +1034,92 @@ export class AuthService {
     return {
       success: true,
       linkedProviders: {
-        google: !!primaryUser.googleUserId || provider === 'google',
-        apple: !!primaryUser.appleUserId || provider === 'apple',
+        google:
+          !!primaryUser.googleUserId ||
+          !!primaryUser.firebaseUid ||
+          primaryUser.provider === 'google' ||
+          !!secondaryUser.googleUserId ||
+          !!secondaryUser.firebaseUid ||
+          secondaryUser.provider === 'google',
+        apple: !!primaryUser.appleUserId || !!secondaryUser.appleUserId,
       },
     };
+  }
+
+  async unlinkProvider(userId: string, provider: 'google' | 'apple') {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (user.provider === provider) {
+      throw new BadRequestException(
+        'Cannot unlink your primary sign-in provider.',
+      );
+    }
+
+    // Only LinkedAccount-based unlinking — find the linked account with the target provider
+    const linkedAccounts = await this.prisma.linkedAccount.findMany({
+      where: { OR: [{ primaryUserId: userId }, { linkedUserId: userId }] },
+    });
+
+    if (linkedAccounts.length > 0) {
+      const linkedUserIds = linkedAccounts.map((la) =>
+        la.primaryUserId === userId ? la.linkedUserId : la.primaryUserId,
+      );
+      const linkedUsers = await this.prisma.user.findMany({
+        where: { id: { in: linkedUserIds } },
+      });
+
+      for (const linkedUser of linkedUsers) {
+        const hasTargetProvider =
+          provider === 'apple'
+            ? !!linkedUser.appleUserId || linkedUser.provider === 'apple'
+            : !!linkedUser.googleUserId ||
+              !!linkedUser.firebaseUid ||
+              linkedUser.provider === 'google';
+
+        if (hasTargetProvider) {
+          const linkedAccount = linkedAccounts.find(
+            (la) =>
+              la.primaryUserId === linkedUser.id ||
+              la.linkedUserId === linkedUser.id,
+          );
+          if (linkedAccount) {
+            await this.prisma.linkedAccount.delete({
+              where: { id: linkedAccount.id },
+            });
+
+            // Scope deletion to subscriptions owned by either user in this pair
+            const ownedSubs = await this.prisma.subscription.findMany({
+              where: { userId: { in: [userId, linkedUser.id] } },
+              select: { id: true },
+            });
+            const ownedSubIds = ownedSubs.map((s) => s.id);
+
+            if (ownedSubIds.length > 0) {
+              await this.prisma.subscriptionUser.deleteMany({
+                where: {
+                  role: SubscriptionUserRole.LINKED,
+                  subscriptionId: { in: ownedSubIds },
+                  userId: { in: [userId, linkedUser.id] },
+                },
+              });
+            }
+
+            SafeLogger.info(
+              'Provider unlinked (LinkedAccount bridge)',
+              { service: 'AuthService', userId },
+              { linkedUserId: linkedUser.id, provider },
+            );
+            return;
+          }
+        }
+      }
+    }
+
+    throw new NotFoundException('This provider is not linked to your account.');
   }
 }

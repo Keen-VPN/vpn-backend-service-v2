@@ -24,6 +24,7 @@ import { GoogleSignInDto } from '../common/dto/google-signin.dto';
 import { AppleSignInDto } from '../common/dto/apple-signin.dto';
 import { VerifySessionDto } from '../common/dto/verify-session.dto';
 import { LinkProviderDto } from '../common/dto/link-provider.dto';
+import { UnlinkProviderDto } from '../common/dto/unlink-provider.dto';
 import { FirebaseAuthGuard } from './guards/firebase-auth.guard';
 import { SessionAuthGuard } from './guards/session-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -125,6 +126,21 @@ export class AuthController {
       linkProviderDto.provider,
       linkProviderDto.firebaseIdToken,
     );
+  }
+
+  @Delete('unlink-provider')
+  @UseGuards(SessionAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Unlink an auth provider from current account' })
+  @ApiBody({ type: UnlinkProviderDto })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async unlinkProvider(
+    @CurrentUser() user: SessionUserPayload,
+    @Body() unlinkProviderDto: UnlinkProviderDto,
+  ) {
+    await this.authService.unlinkProvider(user.uid, unlinkProviderDto.provider);
+    return this.accountService.getLinkedProviders(user.uid);
   }
 
   @Post('logout')

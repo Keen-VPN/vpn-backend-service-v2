@@ -11,8 +11,9 @@ import {
   createMockUser,
   createMockSubscription,
   createMockDecodedFirebaseToken,
+  createMockLinkedAccount,
 } from '../../setup/test-helpers';
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { SubscriptionUserRole, Prisma } from '@prisma/client';
 import { AppleTokenVerifierService } from '../../../src/auth/apple-token-verifier.service';
 import { FirebaseConfig } from '../../../src/config/firebase.config';
@@ -51,22 +52,25 @@ describe('AuthService.linkProvider', () => {
     service = module.get<AuthService>(AuthService);
   });
 
-  it('links Google to an Apple-only user when no secondary user exists', async () => {
+  it('creates secondary user and LinkedAccount when no secondary exists', async () => {
     const primaryUser = createMockUser({
       provider: 'apple',
       appleUserId: 'apple-123',
       firebaseUid: null,
       googleUserId: null,
     });
+    const secondaryUser = createMockUser({
+      provider: 'google',
+      firebaseUid: 'fb-new',
+    });
     const decodedToken = createMockDecodedFirebaseToken();
 
     mockFirebaseConfig.getAuth().verifyIdToken.mockResolvedValue(decodedToken);
-    prisma.user.findUnique.mockResolvedValueOnce(primaryUser);
-    prisma.user.findUnique.mockResolvedValueOnce(null);
-    prisma.user.update.mockResolvedValue({
-      ...primaryUser,
-      firebaseUid: decodedToken.uid,
-    });
+    prisma.user.findUnique.mockResolvedValueOnce(primaryUser); // lookup primary
+    prisma.user.findUnique.mockResolvedValueOnce(null); // lookup by firebaseUid
+    prisma.user.create.mockResolvedValueOnce(secondaryUser); // create secondary user
+    prisma.linkedAccount.findFirst.mockResolvedValueOnce(null); // no existing link
+    mockGetActiveSub.mockResolvedValue(null); // no subscriptions
 
     const result = await service.linkProvider(
       primaryUser.id,
@@ -75,7 +79,13 @@ describe('AuthService.linkProvider', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(prisma.user.update).toHaveBeenCalled();
+    expect(prisma.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        provider: 'google',
+        firebaseUid: decodedToken.uid,
+      }),
+    });
+    expect(prisma.linkedAccount.create).toHaveBeenCalled();
   });
 
   it('returns 409 when provider is already linked', async () => {
@@ -196,5 +206,116 @@ describe('AuthService.linkProvider', () => {
     await expect(
       service.linkProvider(primaryUser.id, 'google', 'invalid-token'),
     ).rejects.toThrow();
+  });
+
+  it('rejects linking Apple when the Apple user is already linked to a different account', async () => {
+    // Scenario: Apple user (User A) is already linked to User C. User B tries to link the same Apple.
+    const userA = createMockUser({
+      provider: 'apple',
+      appleUserId: 'apple-shared',
+    });
+    const userB = createMockUser({
+      provider: 'google',
+      firebaseUid: 'fb-user-b',
+      appleUserId: null,
+    });
+    const existingLink = createMockLinkedAccount({
+      primaryUserId: 'user-c-id',
+      linkedUserId: userA.id,
+    });
+
+    const decodedToken = {
+      ...createMockDecodedFirebaseToken(),
+      uid: 'fb-user-b',
+      firebase: {
+        sign_in_provider: 'apple.com',
+        identities: { 'apple.com': ['apple-shared'] },
+      },
+    };
+
+    mockFirebaseConfig.getAuth().verifyIdToken.mockResolvedValue(decodedToken);
+
+    // 1st findUnique: lookup primary user by id
+    prisma.user.findUnique.mockResolvedValueOnce(userB);
+    // 2nd findUnique: lookup by firebaseUid from token → finds User B (primary) → reset to null
+    prisma.user.findUnique.mockResolvedValueOnce(userB);
+    // 3rd findUnique: lookup by appleUserId → finds User A
+    prisma.user.findUnique.mockResolvedValueOnce(userA);
+    // linkedAccount.findFirst: User A is already linked to User C
+    prisma.linkedAccount.findFirst.mockResolvedValueOnce(existingLink);
+
+    await expect(
+      service.linkProvider(userB.id, 'apple', 'mock-token'),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects linking Apple when appleUserIdFromToken is absent', async () => {
+    // Scenario: Firebase token lacks apple.com identities — should not silently succeed
+    const userB = createMockUser({
+      provider: 'google',
+      firebaseUid: 'fb-user-b',
+      appleUserId: null,
+    });
+
+    const decodedToken = {
+      ...createMockDecodedFirebaseToken(),
+      uid: 'fb-user-b',
+      // No apple.com identities in the token
+      firebase: { sign_in_provider: 'apple.com' },
+    };
+
+    mockFirebaseConfig.getAuth().verifyIdToken.mockResolvedValue(decodedToken);
+
+    // 1st findUnique: lookup primary user by id
+    prisma.user.findUnique.mockResolvedValueOnce(userB);
+    // 2nd findUnique: lookup by firebaseUid from token → finds User B (primary)
+    prisma.user.findUnique.mockResolvedValueOnce(userB);
+
+    await expect(
+      service.linkProvider(userB.id, 'apple', 'mock-token'),
+    ).rejects.toThrow('Could not extract Apple identity');
+  });
+
+  it('rejects when Apple account is already linked via LinkedAccount table', async () => {
+    // Scenario: Apple user exists as separate record, already linked to User A.
+    // User B tries to link the same Apple account via credential-already-in-use flow.
+    const appleUser = createMockUser({
+      provider: 'apple',
+      appleUserId: 'apple-shared',
+      firebaseUid: 'fb-apple-user',
+    });
+    const userB = createMockUser({
+      provider: 'google',
+      firebaseUid: 'fb-user-b',
+      appleUserId: null,
+    });
+    const existingLink = createMockLinkedAccount({
+      primaryUserId: 'user-a-id',
+      linkedUserId: appleUser.id,
+    });
+
+    // Token from temp Firebase app sign-in — has the Apple user's firebaseUid
+    const decodedToken = {
+      ...createMockDecodedFirebaseToken(),
+      uid: 'fb-apple-user',
+      firebase: {
+        sign_in_provider: 'apple.com',
+        identities: { 'apple.com': ['apple-shared'] },
+      },
+    };
+
+    mockFirebaseConfig.getAuth().verifyIdToken.mockResolvedValue(decodedToken);
+
+    // 1st findUnique: lookup primary user by id
+    prisma.user.findUnique.mockResolvedValueOnce(userB);
+    // 2nd findUnique: lookup by firebaseUid from token → finds Apple user (secondary)
+    prisma.user.findUnique.mockResolvedValueOnce(appleUser);
+
+    // linkedAccount.findFirst: Apple user already linked to User A
+    prisma.linkedAccount.findFirst.mockResolvedValueOnce(existingLink);
+
+    await expect(
+      service.linkProvider(userB.id, 'apple', 'mock-token'),
+    ).rejects.toThrow(ConflictException);
   });
 });
