@@ -849,6 +849,13 @@ export class AuthService {
       where: { firebaseUid },
     });
 
+    // If the firebaseUid lookup found the primary user (e.g. the token belongs
+    // to the caller after a successful Firebase linkWithPopup), reset so the
+    // appleUserId and email lookups below can still find the actual secondary.
+    if (secondaryUser && secondaryUser.id === primaryUser.id) {
+      secondaryUser = null;
+    }
+
     if (!secondaryUser && provider === 'apple' && appleUserIdFromToken) {
       secondaryUser = await this.prisma.user.findUnique({
         where: { appleUserId: appleUserIdFromToken },
@@ -882,18 +889,21 @@ export class AuthService {
         updateData.firebaseUid = firebaseUid;
       }
       if (provider === 'apple') {
-        if (appleUserIdFromToken) {
-          // Check if this Apple user ID is already claimed by another user
-          const existingAppleUser = await this.prisma.user.findUnique({
-            where: { appleUserId: appleUserIdFromToken },
-          });
-          if (existingAppleUser && existingAppleUser.id !== primaryUser.id) {
-            throw new ConflictException(
-              'This Apple account is already linked to another user.',
-            );
-          }
-          updateData.appleUserId = appleUserIdFromToken;
+        if (!appleUserIdFromToken) {
+          throw new BadRequestException(
+            'Could not extract Apple identity from the provided token. Please try again.',
+          );
         }
+        // Check if this Apple user ID is already claimed by another user
+        const existingAppleUser = await this.prisma.user.findUnique({
+          where: { appleUserId: appleUserIdFromToken },
+        });
+        if (existingAppleUser && existingAppleUser.id !== primaryUser.id) {
+          throw new ConflictException(
+            'This Apple account is already linked to another user.',
+          );
+        }
+        updateData.appleUserId = appleUserIdFromToken;
         if (!primaryUser.firebaseUid) {
           const existingFirebaseUser = await this.prisma.user.findUnique({
             where: { firebaseUid },
@@ -926,11 +936,12 @@ export class AuthService {
       return {
         success: true,
         linkedProviders: {
-          google: provider === 'google' || !!primaryUser.googleUserId,
-          apple:
-            provider === 'apple' ||
-            !!primaryUser.appleUserId ||
-            !!appleUserIdFromToken,
+          google:
+            !!updateData.firebaseUid ||
+            !!primaryUser.googleUserId ||
+            !!primaryUser.firebaseUid ||
+            primaryUser.provider === 'google',
+          apple: !!updateData.appleUserId || !!primaryUser.appleUserId,
         },
       };
     }
@@ -1020,8 +1031,14 @@ export class AuthService {
     return {
       success: true,
       linkedProviders: {
-        google: !!primaryUser.googleUserId || provider === 'google',
-        apple: !!primaryUser.appleUserId || provider === 'apple',
+        google:
+          !!primaryUser.googleUserId ||
+          !!primaryUser.firebaseUid ||
+          primaryUser.provider === 'google' ||
+          !!secondaryUser.googleUserId ||
+          !!secondaryUser.firebaseUid ||
+          secondaryUser.provider === 'google',
+        apple: !!primaryUser.appleUserId || !!secondaryUser.appleUserId,
       },
     };
   }
