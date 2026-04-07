@@ -4,6 +4,7 @@ import {
   Inject,
   BadRequestException,
   ConflictException,
+  NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FirebaseConfig } from '../config/firebase.config';
@@ -872,78 +873,42 @@ export class AuthService {
     }
 
     if (!secondaryUser || secondaryUser.id === primaryUser.id) {
-      const updateData: Record<string, any> = {};
-      if (provider === 'google') {
-        // Check if this Firebase UID is already claimed by another user
-        const existingFirebaseUser = await this.prisma.user.findUnique({
-          where: { firebaseUid },
-        });
-        if (
-          existingFirebaseUser &&
-          existingFirebaseUser.id !== primaryUser.id
-        ) {
-          throw new ConflictException(
-            'This Google account is already linked to another user.',
-          );
-        }
-        updateData.firebaseUid = firebaseUid;
-      }
+      // No secondary user exists — create one for the linked provider identity
       if (provider === 'apple') {
         if (!appleUserIdFromToken) {
           throw new BadRequestException(
             'Could not extract Apple identity from the provided token. Please try again.',
           );
         }
-        // Check if this Apple user ID is already claimed by another user
-        const existingAppleUser = await this.prisma.user.findUnique({
-          where: { appleUserId: appleUserIdFromToken },
-        });
-        if (existingAppleUser && existingAppleUser.id !== primaryUser.id) {
-          throw new ConflictException(
-            'This Apple account is already linked to another user.',
-          );
-        }
-        updateData.appleUserId = appleUserIdFromToken;
-        if (!primaryUser.firebaseUid) {
-          const existingFirebaseUser = await this.prisma.user.findUnique({
-            where: { firebaseUid },
-          });
-          if (
-            existingFirebaseUser &&
-            existingFirebaseUser.id !== primaryUser.id
-          ) {
-            throw new ConflictException(
-              'This account is already linked to another user.',
-            );
-          }
-          updateData.firebaseUid = firebaseUid;
-        }
       }
 
-      if (Object.keys(updateData).length > 0) {
-        await this.prisma.user.update({
-          where: { id: userId },
-          data: updateData,
+      try {
+        secondaryUser = await this.prisma.user.create({
+          data: {
+            email: emailFromToken || `${firebaseUid}@linked.keenvpn.com`,
+            provider,
+            firebaseUid: provider === 'google' ? firebaseUid : undefined,
+            appleUserId:
+              provider === 'apple' ? appleUserIdFromToken : undefined,
+          },
         });
+      } catch (e: unknown) {
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === 'P2002'
+        ) {
+          throw new ConflictException(
+            'This account is already linked to another user.',
+          );
+        }
+        throw e;
       }
 
       SafeLogger.info(
-        'Provider linked to existing user (no secondary)',
+        'Created secondary user for provider linking',
         { service: 'AuthService', userId },
-        { provider },
+        { secondaryUserId: secondaryUser.id, provider },
       );
-
-      return {
-        success: true,
-        linkedProviders: {
-          google:
-            !!updateData.firebaseUid ||
-            !!primaryUser.googleUserId ||
-            !!primaryUser.firebaseUid ||
-            primaryUser.provider === 'google',
-          apple: !!updateData.appleUserId || !!primaryUser.appleUserId,
-        },
-      };
     }
 
     // Check if the secondary user is already linked to a different account
@@ -1041,5 +1006,72 @@ export class AuthService {
         apple: !!primaryUser.appleUserId || !!secondaryUser.appleUserId,
       },
     };
+  }
+
+  async unlinkProvider(userId: string, provider: 'google' | 'apple') {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (user.provider === provider) {
+      throw new BadRequestException(
+        'Cannot unlink your primary sign-in provider.',
+      );
+    }
+
+    // Only LinkedAccount-based unlinking — find the linked account with the target provider
+    const linkedAccounts = await this.prisma.linkedAccount.findMany({
+      where: { OR: [{ primaryUserId: userId }, { linkedUserId: userId }] },
+    });
+
+    if (linkedAccounts.length > 0) {
+      const linkedUserIds = linkedAccounts.map((la) =>
+        la.primaryUserId === userId ? la.linkedUserId : la.primaryUserId,
+      );
+      const linkedUsers = await this.prisma.user.findMany({
+        where: { id: { in: linkedUserIds } },
+      });
+
+      for (const linkedUser of linkedUsers) {
+        const hasTargetProvider =
+          provider === 'apple'
+            ? !!linkedUser.appleUserId || linkedUser.provider === 'apple'
+            : !!linkedUser.googleUserId ||
+              !!linkedUser.firebaseUid ||
+              linkedUser.provider === 'google';
+
+        if (hasTargetProvider) {
+          const linkedAccount = linkedAccounts.find(
+            (la) =>
+              la.primaryUserId === linkedUser.id ||
+              la.linkedUserId === linkedUser.id,
+          );
+          if (linkedAccount) {
+            await this.prisma.linkedAccount.delete({
+              where: { id: linkedAccount.id },
+            });
+
+            await this.prisma.subscriptionUser.deleteMany({
+              where: {
+                role: SubscriptionUserRole.LINKED,
+                OR: [{ userId: userId }, { userId: linkedUser.id }],
+              },
+            });
+
+            SafeLogger.info(
+              'Provider unlinked (LinkedAccount bridge)',
+              { service: 'AuthService', userId },
+              { linkedUserId: linkedUser.id, provider },
+            );
+            return;
+          }
+        }
+      }
+    }
+
+    throw new NotFoundException('This provider is not linked to your account.');
   }
 }

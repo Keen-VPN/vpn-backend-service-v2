@@ -52,22 +52,25 @@ describe('AuthService.linkProvider', () => {
     service = module.get<AuthService>(AuthService);
   });
 
-  it('links Google to an Apple-only user when no secondary user exists', async () => {
+  it('creates secondary user and LinkedAccount when no secondary exists', async () => {
     const primaryUser = createMockUser({
       provider: 'apple',
       appleUserId: 'apple-123',
       firebaseUid: null,
       googleUserId: null,
     });
+    const secondaryUser = createMockUser({
+      provider: 'google',
+      firebaseUid: 'fb-new',
+    });
     const decodedToken = createMockDecodedFirebaseToken();
 
     mockFirebaseConfig.getAuth().verifyIdToken.mockResolvedValue(decodedToken);
-    prisma.user.findUnique.mockResolvedValueOnce(primaryUser);
-    prisma.user.findUnique.mockResolvedValueOnce(null);
-    prisma.user.update.mockResolvedValue({
-      ...primaryUser,
-      firebaseUid: decodedToken.uid,
-    });
+    prisma.user.findUnique.mockResolvedValueOnce(primaryUser); // lookup primary
+    prisma.user.findUnique.mockResolvedValueOnce(null); // lookup by firebaseUid
+    prisma.user.create.mockResolvedValueOnce(secondaryUser); // create secondary user
+    prisma.linkedAccount.findFirst.mockResolvedValueOnce(null); // no existing link
+    mockGetActiveSub.mockResolvedValue(null); // no subscriptions
 
     const result = await service.linkProvider(
       primaryUser.id,
@@ -76,7 +79,13 @@ describe('AuthService.linkProvider', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(prisma.user.update).toHaveBeenCalled();
+    expect(prisma.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        provider: 'google',
+        firebaseUid: decodedToken.uid,
+      }),
+    });
+    expect(prisma.linkedAccount.create).toHaveBeenCalled();
   });
 
   it('returns 409 when provider is already linked', async () => {
