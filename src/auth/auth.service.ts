@@ -247,28 +247,18 @@ export class AuthService {
         });
       }
 
-      const prioritizedSubscription = await this.prisma.subscription.findFirst({
-        where: {
-          userId: user.id,
-          status: {
-            in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING],
-          },
-          OR: [
-            { currentPeriodEnd: null },
-            { currentPeriodEnd: { gte: new Date() } },
-          ],
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+      // Use shared lookup that includes SubscriptionUser fallback for linked accounts
+      const activeSubscription = await getActiveSubscriptionForUser(
+        this.prisma,
+        user.id,
+      );
 
-      const latestSubscription =
-        prioritizedSubscription ??
+      let subscriptionForResponse =
+        activeSubscription ??
         (await this.prisma.subscription.findFirst({
           where: { userId: user.id },
           orderBy: { createdAt: 'desc' },
         }));
-
-      let subscriptionForResponse = latestSubscription;
 
       // Fallback for Apple users whose Apple purchase exists but has not yet
       // been materialized into the subscriptions table.
