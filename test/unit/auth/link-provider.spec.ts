@@ -208,11 +208,10 @@ describe('AuthService.linkProvider', () => {
     ).rejects.toThrow();
   });
 
-  it('rejects linking Apple when the Apple account is already linked to another user via field update', async () => {
-    // Scenario: User A (Google) has appleUserId set. User B (Google) tries to link the same Apple.
+  it('rejects linking Apple when the Apple user is already linked to a different account', async () => {
+    // Scenario: Apple user (User A) is already linked to User C. User B tries to link the same Apple.
     const userA = createMockUser({
-      provider: 'google',
-      firebaseUid: 'fb-user-a',
+      provider: 'apple',
       appleUserId: 'apple-shared',
     });
     const userB = createMockUser({
@@ -220,9 +219,11 @@ describe('AuthService.linkProvider', () => {
       firebaseUid: 'fb-user-b',
       appleUserId: null,
     });
+    const existingLink = createMockLinkedAccount({
+      primaryUserId: 'user-c-id',
+      linkedUserId: userA.id,
+    });
 
-    // Token from Firebase linkWithPopup — has User B's own firebaseUid
-    // and includes apple.com identities
     const decodedToken = {
       ...createMockDecodedFirebaseToken(),
       uid: 'fb-user-b',
@@ -236,10 +237,12 @@ describe('AuthService.linkProvider', () => {
 
     // 1st findUnique: lookup primary user by id
     prisma.user.findUnique.mockResolvedValueOnce(userB);
-    // 2nd findUnique: lookup by firebaseUid from token → finds User B (primary)
+    // 2nd findUnique: lookup by firebaseUid from token → finds User B (primary) → reset to null
     prisma.user.findUnique.mockResolvedValueOnce(userB);
-    // 3rd findUnique: lookup by appleUserId → finds User A (the actual owner)
+    // 3rd findUnique: lookup by appleUserId → finds User A
     prisma.user.findUnique.mockResolvedValueOnce(userA);
+    // linkedAccount.findFirst: User A is already linked to User C
+    prisma.linkedAccount.findFirst.mockResolvedValueOnce(existingLink);
 
     await expect(
       service.linkProvider(userB.id, 'apple', 'mock-token'),

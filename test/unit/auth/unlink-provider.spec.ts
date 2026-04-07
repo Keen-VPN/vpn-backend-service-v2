@@ -40,7 +40,7 @@ describe('AuthService.unlinkProvider', () => {
     service = module.get<AuthService>(AuthService);
   });
 
-  it('unlinks Apple via LinkedAccount (deletes row + SubscriptionUser LINKED entry)', async () => {
+  it('unlinks Apple via LinkedAccount (deletes row + scoped SubscriptionUser LINKED entries)', async () => {
     const primaryUser = createMockUser({
       provider: 'google',
       firebaseUid: 'fb-primary',
@@ -54,11 +54,13 @@ describe('AuthService.unlinkProvider', () => {
       primaryUserId: primaryUser.id,
       linkedUserId: linkedUser.id,
     });
+    const subId = 'sub-123';
 
     prisma.user.findUnique.mockResolvedValueOnce(primaryUser);
     prisma.linkedAccount.findMany.mockResolvedValueOnce([linkedAccount]);
     prisma.user.findMany.mockResolvedValueOnce([linkedUser]);
     prisma.linkedAccount.delete.mockResolvedValueOnce(linkedAccount);
+    prisma.subscription.findMany.mockResolvedValueOnce([{ id: subId }]);
     prisma.subscriptionUser.deleteMany.mockResolvedValueOnce({ count: 1 });
 
     await service.unlinkProvider(primaryUser.id, 'apple');
@@ -69,12 +71,13 @@ describe('AuthService.unlinkProvider', () => {
     expect(prisma.subscriptionUser.deleteMany).toHaveBeenCalledWith({
       where: {
         role: SubscriptionUserRole.LINKED,
-        OR: [{ userId: primaryUser.id }, { userId: linkedUser.id }],
+        subscriptionId: { in: [subId] },
+        userId: { in: [primaryUser.id, linkedUser.id] },
       },
     });
   });
 
-  it('unlinks Google via LinkedAccount (deletes row + SubscriptionUser LINKED entry)', async () => {
+  it('unlinks Google via LinkedAccount (deletes row + scoped SubscriptionUser LINKED entries)', async () => {
     const primaryUser = createMockUser({
       provider: 'apple',
       appleUserId: 'apple-primary',
@@ -87,11 +90,13 @@ describe('AuthService.unlinkProvider', () => {
       primaryUserId: primaryUser.id,
       linkedUserId: linkedUser.id,
     });
+    const subId = 'sub-456';
 
     prisma.user.findUnique.mockResolvedValueOnce(primaryUser);
     prisma.linkedAccount.findMany.mockResolvedValueOnce([linkedAccount]);
     prisma.user.findMany.mockResolvedValueOnce([linkedUser]);
     prisma.linkedAccount.delete.mockResolvedValueOnce(linkedAccount);
+    prisma.subscription.findMany.mockResolvedValueOnce([{ id: subId }]);
     prisma.subscriptionUser.deleteMany.mockResolvedValueOnce({ count: 1 });
 
     await service.unlinkProvider(primaryUser.id, 'google');
@@ -102,7 +107,8 @@ describe('AuthService.unlinkProvider', () => {
     expect(prisma.subscriptionUser.deleteMany).toHaveBeenCalledWith({
       where: {
         role: SubscriptionUserRole.LINKED,
-        OR: [{ userId: primaryUser.id }, { userId: linkedUser.id }],
+        subscriptionId: { in: [subId] },
+        userId: { in: [primaryUser.id, linkedUser.id] },
       },
     });
   });
@@ -157,10 +163,12 @@ describe('AuthService.unlinkProvider', () => {
     prisma.linkedAccount.findMany.mockResolvedValueOnce([linkedAccount]);
     prisma.user.findMany.mockResolvedValueOnce([linkedUser]);
     prisma.linkedAccount.delete.mockResolvedValueOnce(linkedAccount);
+    prisma.subscription.findMany.mockResolvedValueOnce([{ id: 'sub-owner' }]);
     prisma.subscriptionUser.deleteMany.mockResolvedValueOnce({ count: 1 });
 
     await service.unlinkProvider(primaryUser.id, 'apple');
 
+    // Subscription records themselves should never be touched
     expect(prisma.subscription.delete).not.toHaveBeenCalled();
     expect(prisma.subscription.update).not.toHaveBeenCalled();
     expect(prisma.subscription.deleteMany).not.toHaveBeenCalled();
