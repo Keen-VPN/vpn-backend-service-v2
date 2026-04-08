@@ -63,4 +63,50 @@ describe('AccountService.getLinkedProviders', () => {
     expect(result.providers.google.linked).toBe(true);
     expect(result.providers.apple.linked).toBe(true);
   });
+
+  it('reports Apple linked via provider field when appleUserId is null', async () => {
+    // Scenario: secondary Apple user was created by googleSignIn (provider='apple'
+    // after our fix, but appleUserId may still be null in edge cases)
+    const googleUser = createMockUser({
+      googleUserId: null,
+      appleUserId: null,
+      provider: 'google',
+    });
+    const appleUser = createMockUser({
+      firebaseUid: 'fb-apple',
+      googleUserId: null,
+      appleUserId: null, // appleUserId not set
+      provider: 'apple', // but provider is correct
+      email: 'apple@test.com',
+    });
+    prisma.user.findUnique.mockResolvedValue(googleUser);
+    prisma.linkedAccount.findMany.mockResolvedValue([
+      {
+        id: 'la-1',
+        primaryUserId: googleUser.id,
+        linkedUserId: appleUser.id,
+        createdAt: new Date(),
+      },
+    ]);
+    prisma.user.findMany.mockResolvedValue([appleUser]);
+    const result = await service.getLinkedProviders(googleUser.id);
+    expect(result.providers.apple.linked).toBe(true);
+    expect(result.providers.apple.email).toBe('apple@test.com');
+  });
+
+  it('does not report Apple user with firebaseUid as Google-linked', async () => {
+    // Scenario: Apple user who signed in via website has firebaseUid set.
+    // Should NOT be falsely detected as Google-linked.
+    const appleUser = createMockUser({
+      firebaseUid: 'fb-apple',
+      googleUserId: null,
+      appleUserId: 'apple-1',
+      provider: 'apple',
+    });
+    prisma.user.findUnique.mockResolvedValue(appleUser);
+    prisma.linkedAccount.findMany.mockResolvedValue([]);
+    const result = await service.getLinkedProviders(appleUser.id);
+    expect(result.providers.google.linked).toBe(false);
+    expect(result.providers.apple.linked).toBe(true);
+  });
 });
