@@ -202,7 +202,7 @@ describe('AuthService', () => {
       );
     });
 
-    it('should fallback to active Apple purchase when subscription row is missing', async () => {
+    it('should reject Google sign-in when account is registered with Apple provider', async () => {
       const idToken = 'valid-google-token';
       const decodedToken = createMockDecodedFirebaseToken({
         email: 'apple-user@example.com',
@@ -213,38 +213,12 @@ describe('AuthService', () => {
         provider: 'apple',
       });
 
-      const applePurchase = {
-        id: 'purchase-1',
-        transactionId: 'tx-123',
-        originalTransactionId: 'orig-123',
-        productId: 'com.keenvpn.yearly',
-        expiresDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        linkedUserId: null,
-        linkedEmail: 'apple-user@example.com',
-      } as any;
-
-      const createdSubscription = createMockSubscription({
-        userId: user.id,
-        status: 'ACTIVE' as any,
-        subscriptionType: 'apple_iap',
-      } as any);
-
       mockFirebaseAuth.verifyIdToken.mockResolvedValue(decodedToken as any);
       mockPrisma.user.findUnique.mockResolvedValue(user);
-      mockPrisma.user.update.mockResolvedValue(user);
-      mockPrisma.subscription.findFirst
-        .mockResolvedValueOnce(null) // prioritized
-        .mockResolvedValueOnce(null) // latest
-        .mockResolvedValueOnce(null); // matched by apple tx/original tx
-      mockPrisma.appleIAPPurchase.findFirst.mockResolvedValue(applePurchase);
-      mockPrisma.subscription.create.mockResolvedValue(createdSubscription);
 
-      const result = await service.googleSignIn(idToken);
-
-      expect(result.subscription).toBeDefined();
-      expect(result.subscription?.subscriptionType).toBe('apple_iap');
-      expect(mockPrisma.appleIAPPurchase.findFirst).toHaveBeenCalled();
-      expect(mockPrisma.subscription.create).toHaveBeenCalled();
+      await expect(service.googleSignIn(idToken)).rejects.toThrow(
+        'This email is registered with Apple Sign-In. Please sign in with Apple instead.',
+      );
     });
   });
 
