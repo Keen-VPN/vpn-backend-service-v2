@@ -140,9 +140,7 @@ export class AccountService {
       throw new NotFoundException('User not found');
     }
 
-    // Google users have firebaseUid and/or provider === 'google' but may not have googleUserId set
-    const googleLinkedSelf =
-      !!user.googleUserId || !!user.firebaseUid || user.provider === 'google';
+    const googleLinkedSelf = !!user.googleUserId || user.provider === 'google';
     const appleLinkedSelf = !!user.appleUserId || user.provider === 'apple';
 
     const linkedAccounts = await this.prisma.linkedAccount.findMany({
@@ -163,15 +161,11 @@ export class AccountService {
       });
 
       for (const linkedUser of linkedUsers) {
-        if (
-          linkedUser.googleUserId ||
-          linkedUser.firebaseUid ||
-          linkedUser.provider === 'google'
-        ) {
+        if (linkedUser.googleUserId || linkedUser.provider === 'google') {
           googleLinkedOther = true;
           googleEmail = googleEmail || linkedUser.email;
         }
-        if (linkedUser.appleUserId) {
+        if (linkedUser.appleUserId || linkedUser.provider === 'apple') {
           appleLinkedOther = true;
           appleEmail = appleEmail || linkedUser.email;
         }

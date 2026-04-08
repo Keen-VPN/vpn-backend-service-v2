@@ -36,6 +36,9 @@ describe('AuthService.linkProvider', () => {
     mockFirebaseConfig = createMockFirebaseConfig();
     mockGetActiveSub.mockReset();
 
+    // Default: no existing linked accounts (early guard)
+    prisma.linkedAccount.findMany.mockResolvedValue([]);
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -317,5 +320,99 @@ describe('AuthService.linkProvider', () => {
     await expect(
       service.linkProvider(userB.id, 'apple', 'mock-token'),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('updates secondary provider and appleUserId when found with wrong provider', async () => {
+    // Scenario: Apple user was previously created via googleSignIn (provider='google',
+    // appleUserId=null). When linked as Apple, provider and appleUserId should be updated.
+    const primaryUser = createMockUser({
+      provider: 'google',
+      firebaseUid: 'fb-primary',
+      appleUserId: null,
+    });
+    const secondaryUser = createMockUser({
+      provider: 'google', // wrong — should become 'apple'
+      firebaseUid: 'fb-apple-user',
+      appleUserId: null, // missing — should be set
+    });
+    const updatedSecondary = {
+      ...secondaryUser,
+      provider: 'apple',
+      appleUserId: 'apple-id-123',
+    };
+
+    const decodedToken = {
+      ...createMockDecodedFirebaseToken(),
+      uid: 'fb-apple-user',
+      firebase: {
+        sign_in_provider: 'apple.com',
+        identities: { 'apple.com': ['apple-id-123'] },
+      },
+    };
+
+    mockFirebaseConfig.getAuth().verifyIdToken.mockResolvedValue(decodedToken);
+    prisma.user.findUnique.mockResolvedValueOnce(primaryUser); // lookup primary
+    prisma.user.findUnique.mockResolvedValueOnce(secondaryUser); // lookup by firebaseUid
+    prisma.linkedAccount.findFirst.mockResolvedValueOnce(null); // no existing link
+    prisma.user.update.mockResolvedValueOnce(updatedSecondary); // provider update
+    mockGetActiveSub.mockResolvedValue(null);
+
+    const result = await service.linkProvider(
+      primaryUser.id,
+      'apple',
+      'mock-token',
+    );
+
+    expect(result.success).toBe(true);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: secondaryUser.id },
+      data: { provider: 'apple', appleUserId: 'apple-id-123' },
+    });
+  });
+
+  it('recovers from P2002 on user creation by looking up existing user by email', async () => {
+    // Scenario: secondary user creation fails because email already exists.
+    // Should fall back to email lookup instead of throwing misleading error.
+    const primaryUser = createMockUser({
+      provider: 'apple',
+      appleUserId: 'apple-1',
+      firebaseUid: null,
+      googleUserId: null,
+    });
+    const existingUser = createMockUser({
+      provider: 'google',
+      firebaseUid: 'fb-existing',
+      email: 'shared@example.com',
+    });
+
+    const decodedToken = {
+      ...createMockDecodedFirebaseToken(),
+      uid: 'fb-new',
+      email: 'shared@example.com',
+    };
+
+    mockFirebaseConfig.getAuth().verifyIdToken.mockResolvedValue(decodedToken);
+    prisma.user.findUnique.mockResolvedValueOnce(primaryUser); // lookup primary
+    prisma.user.findUnique.mockResolvedValueOnce(null); // lookup by firebaseUid
+    prisma.user.findUnique.mockResolvedValueOnce(null); // lookup by email (during secondary search)
+
+    const p2002Error = new Prisma.PrismaClientKnownRequestError(
+      'Unique constraint',
+      { code: 'P2002', clientVersion: '6.0.0' },
+    );
+    prisma.user.create.mockRejectedValueOnce(p2002Error);
+    prisma.user.findUnique.mockResolvedValueOnce(existingUser); // P2002 fallback email lookup
+
+    prisma.linkedAccount.findFirst.mockResolvedValueOnce(null);
+    mockGetActiveSub.mockResolvedValue(null);
+
+    const result = await service.linkProvider(
+      primaryUser.id,
+      'google',
+      'mock-token',
+    );
+
+    expect(result.success).toBe(true);
+    expect(prisma.linkedAccount.create).toHaveBeenCalled();
   });
 });

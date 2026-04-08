@@ -29,11 +29,14 @@ export class AuthService {
     private appleTokenVerifier: AppleTokenVerifierService,
   ) {}
 
-  private normalizeProvider(provider?: string | null): 'google' | 'apple' {
+  private normalizeProvider(
+    provider?: string | null,
+    fallback: 'google' | 'apple' = 'google',
+  ): 'google' | 'apple' {
     const value = (provider || '').toLowerCase();
     if (value === 'apple' || value === 'apple.com') return 'apple';
     if (value === 'google' || value === 'google.com') return 'google';
-    return 'google';
+    return fallback;
   }
 
   async login(idToken: string, providerOverride?: 'google' | 'apple') {
@@ -47,13 +50,6 @@ export class AuthService {
       const email = decodedToken.email;
       const displayName = (decodedToken.name as string) || '';
       const emailVerified = decodedToken.email_verified || false;
-      const provider = providerOverride
-        ? this.normalizeProvider(providerOverride)
-        : this.normalizeProvider(decodedToken.firebase?.sign_in_provider);
-
-      if (!email) {
-        throw new UnauthorizedException('Email not found in token');
-      }
 
       // Extract Apple user ID from Firebase token identities (for linked account lookup)
       const firebaseClaim = decodedToken.firebase as
@@ -61,6 +57,21 @@ export class AuthService {
         | undefined;
       const appleUserIdFromToken =
         firebaseClaim?.identities?.['apple.com']?.[0];
+
+      // Determine provider: use override if given, otherwise infer from the
+      // Firebase token. If sign_in_provider is absent/unrecognised, use Apple
+      // identities in the token as a hint so Apple users don't get mislabelled.
+      const providerFallback = appleUserIdFromToken ? 'apple' : 'google';
+      const provider = providerOverride
+        ? this.normalizeProvider(providerOverride)
+        : this.normalizeProvider(
+            decodedToken.firebase?.sign_in_provider,
+            providerFallback,
+          );
+
+      if (!email) {
+        throw new UnauthorizedException('Email not found in token');
+      }
 
       // Find or create user
       let user = await this.prisma.user.findUnique({
@@ -97,8 +108,7 @@ export class AuthService {
         // Update user info — but preserve email if user has a linked Google account
         // and this is an Apple sign-in (prevents Apple relay email from overwriting Google email)
         const isAppleLogin = provider === 'apple';
-        const hasGoogleLinked =
-          !!user.firebaseUid && user.provider === 'google';
+        const hasGoogleLinked = user.provider === 'google';
         const shouldPreserveEmail = isAppleLogin && hasGoogleLinked;
 
         user = await this.prisma.user.update({
@@ -826,19 +836,34 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    if (
-      provider === 'google' &&
-      (primaryUser.googleUserId ||
-        primaryUser.firebaseUid ||
-        primaryUser.provider === 'google')
-    ) {
-      throw new ConflictException('Google account is already linked');
+    // Reject if the user is trying to link the same provider they signed up with
+    if (provider === primaryUser.provider) {
+      throw new ConflictException(
+        `${provider === 'google' ? 'Google' : 'Apple'} account is already linked`,
+      );
     }
-    if (
-      provider === 'apple' &&
-      (primaryUser.appleUserId || primaryUser.provider === 'apple')
-    ) {
-      throw new ConflictException('Apple account is already linked');
+
+    // Reject if the user already has a linked account with this provider type
+    const existingLinks = await this.prisma.linkedAccount.findMany({
+      where: { OR: [{ primaryUserId: userId }, { linkedUserId: userId }] },
+    });
+    if (existingLinks.length > 0) {
+      const linkedUserIds = existingLinks.map((la) =>
+        la.primaryUserId === userId ? la.linkedUserId : la.primaryUserId,
+      );
+      const linkedUsers = await this.prisma.user.findMany({
+        where: { id: { in: linkedUserIds } },
+      });
+      const alreadyHasProvider = linkedUsers.some((lu) =>
+        provider === 'apple'
+          ? !!lu.appleUserId || lu.provider === 'apple'
+          : !!lu.googleUserId || lu.provider === 'google',
+      );
+      if (alreadyHasProvider) {
+        throw new ConflictException(
+          `${provider === 'google' ? 'Google' : 'Apple'} account is already linked`,
+        );
+      }
     }
 
     const decodedToken = await this.firebaseConfig
@@ -911,11 +936,29 @@ export class AuthService {
           e instanceof Prisma.PrismaClientKnownRequestError &&
           e.code === 'P2002'
         ) {
-          throw new ConflictException(
-            'This account is already linked to another user.',
-          );
+          // Unique constraint failed (e.g. email collision) — look up the existing
+          // user instead of throwing a misleading "already linked" error.
+          const fallbackUser = emailFromToken
+            ? await this.prisma.user.findUnique({
+                where: { email: emailFromToken },
+              })
+            : null;
+          if (fallbackUser && fallbackUser.id !== primaryUser.id) {
+            secondaryUser = fallbackUser;
+          } else {
+            throw new ConflictException(
+              'This account is already linked to another user.',
+            );
+          }
+        } else {
+          throw e;
         }
-        throw e;
+      }
+
+      if (!secondaryUser) {
+        throw new ConflictException(
+          'Could not resolve secondary account for linking.',
+        );
       }
 
       SafeLogger.info(
@@ -948,18 +991,55 @@ export class AuthService {
           linkedProviders: {
             google:
               !!primaryUser.googleUserId ||
-              !!primaryUser.firebaseUid ||
               primaryUser.provider === 'google' ||
               !!secondaryUser.googleUserId ||
-              !!secondaryUser.firebaseUid ||
               secondaryUser.provider === 'google',
-            apple: !!primaryUser.appleUserId || !!secondaryUser.appleUserId,
+            apple:
+              !!primaryUser.appleUserId ||
+              primaryUser.provider === 'apple' ||
+              !!secondaryUser.appleUserId ||
+              secondaryUser.provider === 'apple',
           },
         };
       }
       throw new ConflictException(
         'This account is already linked to another user.',
       );
+    }
+
+    // Ensure the secondary user has the correct provider identity fields.
+    // This handles the case where the secondary was originally created via a
+    // different sign-in method (e.g. googleSignIn) and is now being linked
+    // as the other provider. Runs after the existingLink check to avoid
+    // mutating state on rejected link attempts.
+    if (provider === 'apple' && appleUserIdFromToken) {
+      if (
+        secondaryUser.provider !== 'apple' ||
+        secondaryUser.appleUserId !== appleUserIdFromToken
+      ) {
+        secondaryUser = await this.prisma.user.update({
+          where: { id: secondaryUser.id },
+          data: {
+            provider: 'apple',
+            appleUserId: appleUserIdFromToken,
+          },
+        });
+      }
+    } else if (provider === 'google') {
+      if (secondaryUser.provider !== 'google') {
+        const updateData: Record<string, unknown> = { provider: 'google' };
+        if (
+          firebaseUid &&
+          firebaseUid !== primaryUser.firebaseUid &&
+          !secondaryUser.firebaseUid
+        ) {
+          updateData.firebaseUid = firebaseUid;
+        }
+        secondaryUser = await this.prisma.user.update({
+          where: { id: secondaryUser.id },
+          data: updateData,
+        });
+      }
     }
 
     const primarySub = await getActiveSubscriptionForUser(
@@ -1026,12 +1106,14 @@ export class AuthService {
       linkedProviders: {
         google:
           !!primaryUser.googleUserId ||
-          !!primaryUser.firebaseUid ||
           primaryUser.provider === 'google' ||
           !!secondaryUser.googleUserId ||
-          !!secondaryUser.firebaseUid ||
           secondaryUser.provider === 'google',
-        apple: !!primaryUser.appleUserId || !!secondaryUser.appleUserId,
+        apple:
+          !!primaryUser.appleUserId ||
+          primaryUser.provider === 'apple' ||
+          !!secondaryUser.appleUserId ||
+          secondaryUser.provider === 'apple',
       },
     };
   }
@@ -1067,9 +1149,7 @@ export class AuthService {
         const hasTargetProvider =
           provider === 'apple'
             ? !!linkedUser.appleUserId || linkedUser.provider === 'apple'
-            : !!linkedUser.googleUserId ||
-              !!linkedUser.firebaseUid ||
-              linkedUser.provider === 'google';
+            : !!linkedUser.googleUserId || linkedUser.provider === 'google';
 
         if (hasTargetProvider) {
           const linkedAccount = linkedAccounts.find(
