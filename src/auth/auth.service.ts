@@ -105,6 +105,14 @@ export class AuthService {
           },
         });
       } else {
+        // Block sign-in if the token provider doesn't match the registered provider
+        if (user.provider !== provider) {
+          const registeredWith = user.provider === 'apple' ? 'Apple' : 'Google';
+          throw new ConflictException(
+            `This email is registered with ${registeredWith}. Please sign in with ${registeredWith} instead.`,
+          );
+        }
+
         // Update user info — but preserve email if user has a linked Google account
         // and this is an Apple sign-in (prevents Apple relay email from overwriting Google email)
         const isAppleLogin = provider === 'apple';
@@ -161,6 +169,7 @@ export class AuthService {
           : null,
       };
     } catch (error) {
+      if (error instanceof ConflictException) throw error;
       SafeLogger.error('Login failed', error, { service: 'AuthService' });
       throw new UnauthorizedException('Invalid token');
     }
@@ -241,6 +250,13 @@ export class AuthService {
           },
         });
       } else {
+        // Block sign-in if this account is registered with a different provider
+        if (user.provider === 'apple') {
+          throw new ConflictException(
+            'This email is registered with Apple Sign-In. Please sign in with Apple instead.',
+          );
+        }
+
         // Update user info — but preserve email if user has a linked account
         const hasLinkedApple = !!user.appleUserId;
         const isAppleToken = !!appleUserIdFromTokenG;
@@ -377,6 +393,7 @@ export class AuthService {
         authMethod: 'google',
       };
     } catch (error) {
+      if (error instanceof ConflictException) throw error;
       SafeLogger.error('Google sign-in failed', error, {
         service: 'AuthService',
       });
@@ -526,6 +543,13 @@ export class AuthService {
         }
 
         if (user) {
+          // Block sign-in if this account is registered with a different provider
+          if (user.provider === 'google') {
+            throw new ConflictException(
+              'This email is registered with Google. Please sign in with Google instead.',
+            );
+          }
+
           // Update existing user with Apple user ID
           // Only set email if user doesn't already have a Google-linked email
           // (prevents Apple relay email from overwriting the original Google email)
@@ -656,6 +680,7 @@ export class AuthService {
           : null,
       };
     } catch (error) {
+      if (error instanceof ConflictException) throw error;
       SafeLogger.error('Apple sign-in failed', error, {
         service: 'AuthService',
       });
