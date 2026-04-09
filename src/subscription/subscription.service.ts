@@ -272,10 +272,11 @@ export class SubscriptionService {
     const directWhere = { userId, ...subscriptionFilter };
 
     // Subscriptions shared via subscription_users mapping (linked accounts)
-    const linkedSubIds = await this.prisma.subscriptionUser.findMany({
-      where: { userId },
-      select: { subscriptionId: true },
-    });
+    const linkedSubIds =
+      (await this.prisma.subscriptionUser.findMany({
+        where: { userId },
+        select: { subscriptionId: true },
+      })) || [];
     const linkedIds = linkedSubIds.map((s) => s.subscriptionId);
 
     // Combined where: direct OR linked
