@@ -241,33 +241,50 @@ export class SubscriptionService {
     const limit = Math.min(100, Math.max(1, Number(filters.limit || 25)));
     const skip = (page - 1) * limit;
 
-    const where: {
-      userId: string;
+    const subscriptionFilter: {
       subscriptionType?: string;
       createdAt?: { gte?: Date; lte?: Date };
-    } = { userId };
+    } = {};
 
     if (filters.provider === 'stripe' || filters.provider === 'apple_iap') {
-      where.subscriptionType = filters.provider;
+      subscriptionFilter.subscriptionType = filters.provider;
     }
 
     if (filters.dateFrom || filters.dateTo) {
-      where.createdAt = {};
+      subscriptionFilter.createdAt = {};
       if (filters.dateFrom) {
         const from = new Date(filters.dateFrom);
         if (isNaN(from.getTime())) {
           throw new BadRequestException('Invalid dateFrom');
         }
-        where.createdAt.gte = from;
+        subscriptionFilter.createdAt.gte = from;
       }
       if (filters.dateTo) {
         const to = new Date(filters.dateTo);
         if (isNaN(to.getTime())) {
           throw new BadRequestException('Invalid dateTo');
         }
-        where.createdAt.lte = to;
+        subscriptionFilter.createdAt.lte = to;
       }
     }
+
+    // Direct subscriptions owned by this user
+    const directWhere = { userId, ...subscriptionFilter };
+
+    // Subscriptions shared via subscription_users mapping (linked accounts)
+    const linkedSubIds = await this.prisma.subscriptionUser.findMany({
+      where: { userId },
+      select: { subscriptionId: true },
+    });
+    const linkedIds = linkedSubIds.map((s) => s.subscriptionId);
+
+    // Combined where: direct OR linked
+    const where =
+      linkedIds.length > 0
+        ? {
+            OR: [directWhere, { id: { in: linkedIds }, ...subscriptionFilter }],
+          }
+        : directWhere;
 
     const [total, subscriptions] = await Promise.all([
       this.prisma.subscription.count({ where }),
@@ -346,9 +363,19 @@ export class SubscriptionService {
   }
 
   async getHistoryEventDetails(userId: string, eventId: string) {
-    const sub = await this.prisma.subscription.findFirst({
+    // Check direct ownership first
+    let sub = await this.prisma.subscription.findFirst({
       where: { id: eventId, userId },
     });
+
+    // Fallback: check subscription_users mapping (linked accounts)
+    if (!sub) {
+      const mapping = await this.prisma.subscriptionUser.findFirst({
+        where: { userId, subscriptionId: eventId },
+        include: { subscription: true },
+      });
+      sub = mapping?.subscription ?? null;
+    }
 
     if (!sub) {
       throw new NotFoundException('Subscription history event not found');
