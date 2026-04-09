@@ -79,14 +79,12 @@ export class AuthService {
       });
 
       if (!user) {
-        // Check if user exists by email
         user = await this.prisma.user.findUnique({
           where: { email },
         });
       }
 
       // For Apple sign-in via Firebase: also check by appleUserId
-      // This finds the linked account when a Google user linked their Apple identity
       if (!user && appleUserIdFromToken) {
         user = await this.prisma.user.findUnique({
           where: { appleUserId: appleUserIdFromToken },
@@ -105,7 +103,11 @@ export class AuthService {
           },
         });
       } else {
-        // Block sign-in if the token provider doesn't match the registered provider
+        // Block sign-in if the token provider doesn't match the registered provider.
+        // This catches cases where Firebase auto-merged accounts (same email) but
+        // the user registered with a different provider on our platform.
+        // Linked accounts are separate user records — each signs in with their own
+        // provider, so there's never a legitimate mismatch here.
         if (user.provider !== provider) {
           const registeredWith = user.provider === 'apple' ? 'Apple' : 'Google';
           throw new ConflictException(
