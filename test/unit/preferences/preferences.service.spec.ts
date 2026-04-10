@@ -1,11 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PreferencesService } from '../../../src/preferences/preferences.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { NotificationService } from '../../../src/notification/notification.service';
 import { createMockPrismaClient, MockPrismaClient } from '../../setup/mocks';
 
 describe('PreferencesService', () => {
   let service: PreferencesService;
   let mockPrisma: MockPrismaClient;
+  const mockNotificationService = {
+    notifyServerLocationRequest: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(async () => {
     mockPrisma = createMockPrismaClient();
@@ -16,6 +20,10 @@ describe('PreferencesService', () => {
         {
           provide: PrismaService,
           useValue: mockPrisma,
+        },
+        {
+          provide: NotificationService,
+          useValue: mockNotificationService,
         },
       ],
     }).compile();
@@ -110,6 +118,59 @@ describe('PreferencesService', () => {
       await expect(
         service.submitServerLocationPreference(body),
       ).rejects.toThrow('Database error');
+    });
+
+    it('should send Slack notification after successful save', async () => {
+      const body = { region: 'NL', reason: 'Privacy laws' };
+      const created = {
+        id: 'pref_slack',
+        region: body.region,
+        reason: body.reason,
+        createdAt: new Date('2026-04-10T14:30:00Z'),
+        updatedAt: new Date('2026-04-10T14:30:00Z'),
+      };
+
+      mockPrisma.serverLocationPreference.create.mockResolvedValue(
+        created as any,
+      );
+
+      await service.submitServerLocationPreference(body);
+
+      expect(
+        mockNotificationService.notifyServerLocationRequest,
+      ).toHaveBeenCalledWith({
+        region: 'NL',
+        reason: 'Privacy laws',
+        createdAt: '2026-04-10T14:30:00.000Z',
+      });
+    });
+
+    it('should still return success if Slack notification fails', async () => {
+      const body = { region: 'BR', reason: 'Closer servers' };
+      const created = {
+        id: 'pref_fail',
+        region: body.region,
+        reason: body.reason,
+        createdAt: new Date('2026-04-10T14:30:00Z'),
+        updatedAt: new Date('2026-04-10T14:30:00Z'),
+      };
+
+      mockPrisma.serverLocationPreference.create.mockResolvedValue(
+        created as any,
+      );
+      mockNotificationService.notifyServerLocationRequest.mockRejectedValueOnce(
+        new Error('Slack down'),
+      );
+
+      const result = await service.submitServerLocationPreference(body);
+
+      expect(result).toEqual({
+        id: 'pref_fail',
+        region: 'BR',
+        reason: 'Closer servers',
+        createdAt: '2026-04-10T14:30:00.000Z',
+        updatedAt: '2026-04-10T14:30:00.000Z',
+      });
     });
   });
 });
