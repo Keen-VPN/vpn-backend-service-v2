@@ -183,9 +183,13 @@ export class SubscriptionService {
   }
 
   async cancel(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const user =
+      (await this.prisma.user.findUnique({
+        where: { id: userId },
+      })) ??
+      (await this.prisma.user.findUnique({
+        where: { firebaseUid: userId },
+      }));
 
     if (!user) {
       throw new UnauthorizedException('User not found');
