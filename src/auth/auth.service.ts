@@ -115,10 +115,10 @@ export class AuthService {
           );
         }
 
-        // Update user info — but preserve email if user has a linked Google account
-        // and this is an Apple sign-in (prevents Apple relay email from overwriting Google email)
+        // Update user info — but preserve email if this Apple account has a linked
+        // Google identity (prevents Apple relay email from overwriting canonical email).
         const isAppleLogin = provider === 'apple';
-        const hasGoogleLinked = user.provider === 'google';
+        const hasGoogleLinked = !!user.googleUserId;
         const shouldPreserveEmail = isAppleLogin && hasGoogleLinked;
 
         user = await this.prisma.user.update({

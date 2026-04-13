@@ -1,2 +1,2 @@
 ALTER TABLE "users"
-ADD COLUMN "longest_session_seconds" INTEGER NOT NULL DEFAULT 0;
+ADD COLUMN IF NOT EXISTS "longest_session_seconds" INTEGER NOT NULL DEFAULT 0;

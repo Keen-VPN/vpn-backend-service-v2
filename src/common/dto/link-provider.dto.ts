@@ -1,4 +1,4 @@
-import { IsString, IsIn } from 'class-validator';
+import { IsString, IsIn, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class LinkProviderDto {
@@ -16,5 +16,6 @@ export class LinkProviderDto {
     description: 'Firebase ID token from the linked provider',
   })
   @IsString()
+  @IsNotEmpty()
   firebaseIdToken: string;
 }

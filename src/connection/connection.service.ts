@@ -112,32 +112,26 @@ export class ConnectionService {
 
   async upsertUserLongestSession(userId: string, durationSeconds: number) {
     try {
-      const currentRows = await this.prisma.$queryRaw<
+      const rows = await this.prisma.$queryRaw<
         Array<{ longest_session_seconds: number }>
-      >`SELECT longest_session_seconds FROM users WHERE id = ${userId} LIMIT 1`;
-      const current = currentRows[0];
+      >`
+        UPDATE users
+        SET longest_session_seconds = GREATEST(longest_session_seconds, ${durationSeconds})
+        WHERE id = ${userId}
+        RETURNING longest_session_seconds
+      `;
+      const updated = rows[0];
 
-      if (!current) {
+      if (!updated) {
         return {
           success: false,
           error: 'User not found',
         };
       }
 
-      const longestSessionSeconds = Math.max(
-        current.longest_session_seconds ?? 0,
-        durationSeconds,
-      );
-
-      await this.prisma.$executeRaw`
-        UPDATE users
-        SET longest_session_seconds = ${longestSessionSeconds}
-        WHERE id = ${userId}
-      `;
-
       return {
         success: true,
-        data: { longest_session_seconds: longestSessionSeconds },
+        data: { longest_session_seconds: updated.longest_session_seconds ?? 0 },
       };
     } catch (error) {
       SafeLogger.error('Error updating user longest session', error);
