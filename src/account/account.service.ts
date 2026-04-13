@@ -100,9 +100,13 @@ export class AccountService {
     );
 
     if (isOwnerWithLinkedUsers) {
+      const ownedSubscriptionIds = linkedMappings
+        .filter((m) => m.subscription.userId === userId)
+        .map((m) => m.subscriptionId);
+
       const affectedMappings = await this.prisma.subscriptionUser.findMany({
         where: {
-          subscriptionId: { in: linkedMappings.map((m) => m.subscriptionId) },
+          subscriptionId: { in: ownedSubscriptionIds },
           userId: { not: userId },
         },
         select: { userId: true },
