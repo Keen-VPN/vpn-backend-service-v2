@@ -109,4 +109,75 @@ export class ConnectionService {
       };
     }
   }
+
+  async upsertUserLongestSession(userId: string, durationSeconds: number) {
+    try {
+      const currentRows = await this.prisma.$queryRaw<
+        Array<{ longest_session_seconds: number }>
+      >`SELECT longest_session_seconds FROM users WHERE id = ${userId} LIMIT 1`;
+      const current = currentRows[0];
+
+      if (!current) {
+        return {
+          success: false,
+          error: 'User not found',
+        };
+      }
+
+      const longestSessionSeconds = Math.max(
+        current.longest_session_seconds ?? 0,
+        durationSeconds,
+      );
+
+      await this.prisma.$executeRaw`
+        UPDATE users
+        SET longest_session_seconds = ${longestSessionSeconds}
+        WHERE id = ${userId}
+      `;
+
+      return {
+        success: true,
+        data: { longest_session_seconds: longestSessionSeconds },
+      };
+    } catch (error) {
+      SafeLogger.error('Error updating user longest session', error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to update longest session';
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  async getUserLongestSession(userId: string) {
+    try {
+      const rows = await this.prisma.$queryRaw<
+        Array<{ longest_session_seconds: number }>
+      >`SELECT longest_session_seconds FROM users WHERE id = ${userId} LIMIT 1`;
+      const user = rows[0];
+
+      if (!user) {
+        return {
+          success: false,
+          error: 'User not found',
+        };
+      }
+
+      return {
+        success: true,
+        data: { longest_session_seconds: user.longest_session_seconds ?? 0 },
+      };
+    } catch (error) {
+      SafeLogger.error('Error fetching user longest session', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to fetch metric';
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
 }
