@@ -13,6 +13,7 @@ import { PlansConfigService } from './config/plans.config';
 import { serializeTrialStatus } from './trial.util';
 import * as jwt from 'jsonwebtoken';
 import { SubscriptionStatus } from '@prisma/client';
+import { getActiveSubscriptionForUser } from './subscription-lookup.util';
 
 @Injectable()
 export class SubscriptionService {
@@ -102,19 +103,10 @@ export class SubscriptionService {
       }
 
       // Get active subscription (includes both "active" and "trialing" status)
-      const activeSubscription = await this.prisma.subscription.findFirst({
-        where: {
-          userId: user.id,
-          status: {
-            in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING], // Include both active and trialing subscriptions
-          },
-          OR: [
-            { currentPeriodEnd: null },
-            { currentPeriodEnd: { gte: new Date() } },
-          ],
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+      const activeSubscription = await getActiveSubscriptionForUser(
+        this.prisma,
+        user.id,
+      );
 
       // Check if subscription is active (DB subscription or linked Apple IAP)
       let hasActiveSubscription =
@@ -191,28 +183,23 @@ export class SubscriptionService {
   }
 
   async cancel(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { firebaseUid: userId },
-    });
+    const user =
+      (await this.prisma.user.findUnique({
+        where: { id: userId },
+      })) ??
+      (await this.prisma.user.findUnique({
+        where: { firebaseUid: userId },
+      }));
 
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
 
     // Find active subscription (includes both "active" and "trialing" status)
-    const activeSubscription = await this.prisma.subscription.findFirst({
-      where: {
-        userId: user.id,
-        status: {
-          in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING], // Include both active and trialing subscriptions
-        },
-        OR: [
-          { currentPeriodEnd: null },
-          { currentPeriodEnd: { gte: new Date() } },
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const activeSubscription = await getActiveSubscriptionForUser(
+      this.prisma,
+      user.id,
+    );
 
     if (!activeSubscription) {
       return {
@@ -258,33 +245,51 @@ export class SubscriptionService {
     const limit = Math.min(100, Math.max(1, Number(filters.limit || 25)));
     const skip = (page - 1) * limit;
 
-    const where: {
-      userId: string;
+    const subscriptionFilter: {
       subscriptionType?: string;
       createdAt?: { gte?: Date; lte?: Date };
-    } = { userId };
+    } = {};
 
     if (filters.provider === 'stripe' || filters.provider === 'apple_iap') {
-      where.subscriptionType = filters.provider;
+      subscriptionFilter.subscriptionType = filters.provider;
     }
 
     if (filters.dateFrom || filters.dateTo) {
-      where.createdAt = {};
+      subscriptionFilter.createdAt = {};
       if (filters.dateFrom) {
         const from = new Date(filters.dateFrom);
         if (isNaN(from.getTime())) {
           throw new BadRequestException('Invalid dateFrom');
         }
-        where.createdAt.gte = from;
+        subscriptionFilter.createdAt.gte = from;
       }
       if (filters.dateTo) {
         const to = new Date(filters.dateTo);
         if (isNaN(to.getTime())) {
           throw new BadRequestException('Invalid dateTo');
         }
-        where.createdAt.lte = to;
+        subscriptionFilter.createdAt.lte = to;
       }
     }
+
+    // Direct subscriptions owned by this user
+    const directWhere = { userId, ...subscriptionFilter };
+
+    // Subscriptions shared via subscription_users mapping (linked accounts)
+    const linkedSubIds =
+      (await this.prisma.subscriptionUser.findMany({
+        where: { userId },
+        select: { subscriptionId: true },
+      })) || [];
+    const linkedIds = linkedSubIds.map((s) => s.subscriptionId);
+
+    // Combined where: direct OR linked
+    const where =
+      linkedIds.length > 0
+        ? {
+            OR: [directWhere, { id: { in: linkedIds }, ...subscriptionFilter }],
+          }
+        : directWhere;
 
     const [total, subscriptions] = await Promise.all([
       this.prisma.subscription.count({ where }),
@@ -363,9 +368,19 @@ export class SubscriptionService {
   }
 
   async getHistoryEventDetails(userId: string, eventId: string) {
-    const sub = await this.prisma.subscription.findFirst({
+    // Check direct ownership first
+    let sub = await this.prisma.subscription.findFirst({
       where: { id: eventId, userId },
     });
+
+    // Fallback: check subscription_users mapping (linked accounts)
+    if (!sub) {
+      const mapping = await this.prisma.subscriptionUser.findFirst({
+        where: { userId, subscriptionId: eventId },
+        include: { subscription: true },
+      });
+      sub = mapping?.subscription ?? null;
+    }
 
     if (!sub) {
       throw new NotFoundException('Subscription history event not found');
@@ -418,6 +433,7 @@ export class SubscriptionService {
   private resolveApplePlanName(subscription: {
     planName: string | null;
     appleProductId?: string | null;
+    billingPeriod?: string | null;
   }): string {
     const planName = subscription.planName || '';
     const productId = subscription.appleProductId || '';
@@ -437,6 +453,14 @@ export class SubscriptionService {
     }
     if (productId.includes('monthly')) {
       return 'Premium VPN - Monthly';
+    }
+
+    // Derive from billingPeriod for Stripe subscriptions with generic planName
+    if (subscription.billingPeriod === 'month') {
+      return 'Premium VPN - Monthly';
+    }
+    if (subscription.billingPeriod === 'year') {
+      return 'Premium VPN - Annual';
     }
 
     return planName;

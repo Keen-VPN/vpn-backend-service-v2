@@ -7,7 +7,12 @@ import {
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SubscriptionStatus } from '@prisma/client';
+import {
+  SubscriptionStatus,
+  Prisma,
+  SubscriptionUserRole,
+} from '@prisma/client';
+import { getActiveSubscriptionForUser } from '../../subscription/subscription-lookup.util';
 import { SafeLogger } from '../../common/utils/logger.util';
 import { TrialService } from '../../subscription/trial.service';
 
@@ -56,19 +61,10 @@ export class StripeService {
     }
 
     // Server-side guard: never allow checkout when an active subscription exists.
-    const existingSubscription = await this.prisma.subscription.findFirst({
-      where: {
-        userId,
-        status: {
-          in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING],
-        },
-        OR: [
-          { currentPeriodEnd: null },
-          { currentPeriodEnd: { gte: new Date() } },
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const existingSubscription = await getActiveSubscriptionForUser(
+      this.prisma,
+      userId,
+    );
 
     if (existingSubscription) {
       throw new ConflictException(
@@ -213,6 +209,20 @@ export class StripeService {
     session: Stripe.Checkout.Session,
   ) {
     if (!session.subscription || typeof session.subscription !== 'string') {
+      SafeLogger.warn(
+        'checkout.session.completed has no subscription ID — likely a one-time payment, not a subscription checkout',
+        {
+          sessionId: session.id,
+          mode: session.mode,
+          subscriptionValue:
+            session.subscription == null
+              ? 'null'
+              : typeof session.subscription === 'string'
+                ? session.subscription
+                : session.subscription.id,
+          subscriptionType: typeof session.subscription,
+        },
+      );
       return;
     }
 
@@ -296,7 +306,7 @@ export class StripeService {
     /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
     if (existing) {
       // Update existing
-      await this.prisma.subscription.update({
+      const updatedSubscription = await this.prisma.subscription.update({
         where: { id: existing.id },
         data: {
           status:
@@ -304,11 +314,18 @@ export class StripeService {
               ? SubscriptionStatus.CANCELLED
               : (subscription.status.toUpperCase() as SubscriptionStatus),
           cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+          planId: planInfo.planId || undefined,
+          planName: planInfo.planName || undefined,
+          priceAmount: planInfo.priceAmount || undefined,
+          priceCurrency: planInfo.priceCurrency || 'USD',
+          billingPeriod: planInfo.billingPeriod || undefined,
+          currentPeriodEnd,
         },
       });
+      await this.ensureSubscriptionUserMapping(updatedSubscription.id, user.id);
     } else {
       // Create new
-      await this.prisma.subscription.create({
+      const newSubscription = await this.prisma.subscription.create({
         data: {
           userId: user.id,
           subscriptionType: 'stripe',
@@ -328,6 +345,7 @@ export class StripeService {
           cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
         },
       });
+      await this.ensureSubscriptionUserMapping(newSubscription.id, user.id);
 
       // Grant trial if eligible (after subscription is created)
       try {
@@ -416,7 +434,13 @@ export class StripeService {
           ? 'month'
           : null;
 
-    const planName = price.nickname || 'Premium VPN';
+    const planName =
+      price.nickname ||
+      (billingPeriod === 'month'
+        ? 'Premium VPN - Monthly'
+        : billingPeriod === 'year'
+          ? 'Premium VPN - Annual'
+          : 'Premium VPN');
 
     return {
       planId: price.id || null,
@@ -446,5 +470,52 @@ export class StripeService {
     };
 
     return priceMap[planId] || null;
+  }
+
+  private async ensureSubscriptionUserMapping(
+    subscriptionId: string,
+    userId: string,
+  ): Promise<void> {
+    // 1. Create OWNER mapping
+    try {
+      await this.prisma.subscriptionUser.create({
+        data: { subscriptionId, userId, role: SubscriptionUserRole.OWNER },
+      });
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        // Already exists — idempotent
+      } else {
+        throw error;
+      }
+    }
+
+    // 2. Auto-create LINKED mappings for linked accounts
+    const linkedAccounts = await this.prisma.linkedAccount.findMany({
+      where: { OR: [{ primaryUserId: userId }, { linkedUserId: userId }] },
+    });
+    for (const link of linkedAccounts) {
+      const linkedUserId =
+        link.primaryUserId === userId ? link.linkedUserId : link.primaryUserId;
+      try {
+        await this.prisma.subscriptionUser.create({
+          data: {
+            subscriptionId,
+            userId: linkedUserId,
+            role: SubscriptionUserRole.LINKED,
+          },
+        });
+      } catch (e: unknown) {
+        if (
+          !(
+            e instanceof Prisma.PrismaClientKnownRequestError &&
+            e.code === 'P2002'
+          )
+        )
+          throw e;
+      }
+    }
   }
 }

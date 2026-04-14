@@ -23,11 +23,15 @@ model User {
   trialStartsAt           DateTime?                @map("trial_starts_at") @db.Timestamptz(6)
   trialEndsAt             DateTime?                @map("trial_ends_at") @db.Timestamptz(6)
   trialTier               String?                  @map("trial_tier")
+  longestSessionSeconds   Int                      @default(0) @map("longest_session_seconds")
   appleIAPPurchases       AppleIAPPurchase[]
   pushTokens              PushToken[]
   subscriptions           Subscription[]
   deviceTrialFingerprints DeviceTrialFingerprint[]
   trialGrant              TrialGrant?
+  subscriptionUsers       SubscriptionUser[]
+  primaryLinks            LinkedAccount[]      @relation("primaryLinks")
+  linkedLinks             LinkedAccount[]      @relation("linkedLinks")
 
   @@index([provider])
   @@map("users")
@@ -56,6 +60,7 @@ model Subscription {
   appleTransactionId         String?            @unique @map("apple_transaction_id")
   subscriptionType           String             @default("stripe") @map("subscription_type")
   user                       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionUsers          SubscriptionUser[]
 
   @@unique([stripeSubscriptionId, currentPeriodStart], map: "subscription_period_unique")
   @@index([userId])
@@ -213,6 +218,37 @@ model PushToken {
   @@map("push_tokens")
 }
 
+model SubscriptionUser {
+  id              String               @id @default(uuid())
+  subscriptionId  String               @map("subscription_id")
+  userId          String               @map("user_id")
+  role            SubscriptionUserRole  @default(OWNER)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  subscription    Subscription         @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, userId])
+  @@index([userId])
+  @@index([subscriptionId])
+  @@map("subscription_users")
+}
+
+model LinkedAccount {
+  id              String   @id @default(uuid())
+  primaryUserId   String   @map("primary_user_id")
+  linkedUserId    String   @map("linked_user_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  primaryUser     User     @relation("primaryLinks", fields: [primaryUserId], references: [id], onDelete: Cascade)
+  linkedUser      User     @relation("linkedLinks", fields: [linkedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([primaryUserId, linkedUserId])
+  @@index([primaryUserId])
+  @@index([linkedUserId])
+  @@map("linked_accounts")
+}
+
 model ServerLocationPreference {
   id        String   @id @default(uuid())
   region    String
@@ -300,4 +336,11 @@ enum NodeStatus {
   OFFLINE @map("OFFLINE")
 
   @@map("node_status")
+}
+
+enum SubscriptionUserRole {
+  OWNER  @map("owner")
+  LINKED @map("linked")
+
+  @@map("subscription_user_role")
 }

@@ -109,4 +109,69 @@ export class ConnectionService {
       };
     }
   }
+
+  async upsertUserLongestSession(userId: string, durationSeconds: number) {
+    try {
+      const rows = await this.prisma.$queryRaw<
+        Array<{ longest_session_seconds: number }>
+      >`
+        UPDATE users
+        SET longest_session_seconds = GREATEST(longest_session_seconds, ${durationSeconds})
+        WHERE id = ${userId}
+        RETURNING longest_session_seconds
+      `;
+      const updated = rows[0];
+
+      if (!updated) {
+        return {
+          success: false,
+          error: 'User not found',
+        };
+      }
+
+      return {
+        success: true,
+        data: { longest_session_seconds: updated.longest_session_seconds ?? 0 },
+      };
+    } catch (error) {
+      SafeLogger.error('Error updating user longest session', error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to update longest session';
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  async getUserLongestSession(userId: string) {
+    try {
+      const rows = await this.prisma.$queryRaw<
+        Array<{ longest_session_seconds: number }>
+      >`SELECT longest_session_seconds FROM users WHERE id = ${userId} LIMIT 1`;
+      const user = rows[0];
+
+      if (!user) {
+        return {
+          success: false,
+          error: 'User not found',
+        };
+      }
+
+      return {
+        success: true,
+        data: { longest_session_seconds: user.longest_session_seconds ?? 0 },
+      };
+    } catch (error) {
+      SafeLogger.error('Error fetching user longest session', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to fetch metric';
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
 }

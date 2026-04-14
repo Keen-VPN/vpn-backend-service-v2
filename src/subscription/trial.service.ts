@@ -8,6 +8,7 @@ import {
   computeTrialDaysRemaining,
 } from './trial-helpers';
 import { SubscriptionStatus } from '@prisma/client';
+import { getActiveSubscriptionForUser } from './subscription-lookup.util';
 
 const TRIAL_DURATION_DAYS = 30;
 const TRIAL_TIER_NAME = 'free_trial';
@@ -305,19 +306,7 @@ export class TrialService {
    * Checks if user has an active subscription (status "active" or "trialing")
    */
   private async hasActiveSubscription(userId: string): Promise<boolean> {
-    const activeSubscription = await this.prisma.subscription.findFirst({
-      where: {
-        userId,
-        status: {
-          in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING],
-        },
-        OR: [
-          { currentPeriodEnd: null },
-          { currentPeriodEnd: { gte: new Date() } },
-        ],
-      },
-    });
-
-    return activeSubscription !== null;
+    const sub = await getActiveSubscriptionForUser(this.prisma, userId);
+    return sub !== null;
   }
 }

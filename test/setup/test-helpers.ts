@@ -1,6 +1,16 @@
 import { faker } from '@faker-js/faker';
-import { Prisma, SubscriptionStatus } from '@prisma/client';
-import type { User, Subscription, AppleIAPPurchase } from '@prisma/client';
+import {
+  Prisma,
+  SubscriptionStatus,
+  SubscriptionUserRole,
+} from '@prisma/client';
+import type {
+  User,
+  Subscription,
+  AppleIAPPurchase,
+  SubscriptionUser,
+  LinkedAccount,
+} from '@prisma/client';
 
 export function createMockUser(overrides?: Partial<User>): User {
   return {
@@ -69,6 +79,31 @@ export function createMockAppleIAPPurchase(
     linkedAt: new Date(),
     createdAt: new Date(),
     updatedAt: new Date(),
+    ...overrides,
+  };
+}
+
+export function createMockSubscriptionUser(
+  overrides?: Partial<SubscriptionUser>,
+): SubscriptionUser {
+  return {
+    id: faker.string.uuid(),
+    subscriptionId: faker.string.uuid(),
+    userId: faker.string.uuid(),
+    role: SubscriptionUserRole.OWNER,
+    createdAt: new Date(),
+    ...overrides,
+  };
+}
+
+export function createMockLinkedAccount(
+  overrides?: Partial<LinkedAccount>,
+): LinkedAccount {
+  return {
+    id: faker.string.uuid(),
+    primaryUserId: faker.string.uuid(),
+    linkedUserId: faker.string.uuid(),
+    createdAt: new Date(),
     ...overrides,
   };
 }

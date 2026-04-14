@@ -270,4 +270,142 @@ describe('NotificationService', () => {
       );
     });
   });
+
+  describe('notifyServerLocationRequest', () => {
+    it('should send server location request to dedicated Slack webhook', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'test';
+        if (key === 'SLACK_SERVER_REQUESTS_WEBHOOK_URL')
+          return 'https://hooks.slack.com/server-requests';
+        return undefined;
+      });
+
+      const mockResponse: AxiosResponse = {
+        data: 'ok',
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: {} as AxiosResponse['config'],
+      };
+      mockHttpService.post.mockReturnValue(of(mockResponse));
+
+      await service.notifyServerLocationRequest({
+        region: 'Netherlands',
+        reason: 'High-speed streaming and privacy laws',
+        createdAt: '2026-04-10T14:30:00.000Z',
+      });
+
+      expect(mockHttpService.post).toHaveBeenCalledWith(
+        'https://hooks.slack.com/server-requests',
+        expect.objectContaining({
+          text: expect.stringContaining('Netherlands') as string,
+        }),
+      );
+      expect(mockHttpService.post).toHaveBeenCalledWith(
+        expect.any(String) as string,
+        expect.objectContaining({
+          text: expect.stringContaining(
+            'High-speed streaming and privacy laws',
+          ) as string,
+        }),
+      );
+    });
+
+    it('should skip when SLACK_SERVER_REQUESTS_WEBHOOK_URL is not configured', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'test';
+        return undefined;
+      });
+
+      await service.notifyServerLocationRequest({
+        region: 'Germany',
+        reason: 'EU compliance',
+        createdAt: '2026-04-10T14:30:00.000Z',
+      });
+
+      expect(mockHttpService.post).not.toHaveBeenCalled();
+    });
+
+    it('should skip in development environment', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'development';
+        if (key === 'SLACK_SERVER_REQUESTS_WEBHOOK_URL')
+          return 'https://hooks.slack.com/server-requests';
+        return undefined;
+      });
+
+      await service.notifyServerLocationRequest({
+        region: 'Japan',
+        reason: 'Low latency',
+        createdAt: '2026-04-10T14:30:00.000Z',
+      });
+
+      expect(mockHttpService.post).not.toHaveBeenCalled();
+    });
+
+    it('should not throw when Slack call fails', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'test';
+        if (key === 'SLACK_SERVER_REQUESTS_WEBHOOK_URL')
+          return 'https://hooks.slack.com/server-requests';
+        return undefined;
+      });
+
+      mockHttpService.post.mockReturnValue(
+        throwError(() => new Error('Network error')),
+      );
+
+      await expect(
+        service.notifyServerLocationRequest({
+          region: 'Brazil',
+          reason: 'Closer servers',
+          createdAt: '2026-04-10T14:30:00.000Z',
+        }),
+      ).resolves.not.toThrow();
+    });
+
+    it('should strip Slack mrkdwn control characters from region and reason', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'test';
+        if (key === 'SLACK_SERVER_REQUESTS_WEBHOOK_URL')
+          return 'https://hooks.slack.com/server-requests';
+        return undefined;
+      });
+
+      const mockResponse: AxiosResponse = {
+        data: 'ok',
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: {} as AxiosResponse['config'],
+      };
+      mockHttpService.post.mockReturnValue(of(mockResponse));
+
+      await service.notifyServerLocationRequest({
+        region: '*bold injection*',
+        reason: '<https://evil.com|Click here> and `code` and ~strike~',
+        createdAt: '2026-04-10T14:30:00.000Z',
+      });
+
+      const postedText: string = mockHttpService.post.mock.calls[0][1].text;
+
+      // Extract just the Country and Reason lines so we only inspect the
+      // user-supplied values, not the intentional mrkdwn in the static headers.
+      const lines = postedText.split('\n');
+      const countryLine = lines.find((l) => l.startsWith('*Country:*')) ?? '';
+      const reasonLine = lines.find((l) => l.startsWith('*Reason:*')) ?? '';
+      const countryValue = countryLine.replace('*Country:*', '').trim();
+      const reasonValue = reasonLine.replace('*Reason:*', '').trim();
+
+      // mrkdwn control characters must be stripped from the user-supplied values
+      expect(countryValue).not.toMatch(/[*_~`<>|]/);
+      expect(reasonValue).not.toMatch(/[*_~`<>|]/);
+
+      // Legitimate plain-text content is preserved
+      expect(countryValue).toContain('bold injection');
+      expect(reasonValue).toContain('Click here');
+      expect(reasonValue).toContain('code');
+      expect(reasonValue).toContain('strike');
+    });
+  });
 });

@@ -89,6 +89,7 @@ describe('Account (e2e)', () => {
         ...user,
         subscriptions: [],
       } as any);
+      mockPrisma.subscriptionUser.findMany.mockResolvedValue([]);
       mockPrisma.user.delete.mockResolvedValue(user);
 
       const response = await request(app.getHttpServer())

@@ -5,12 +5,20 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  UseGuards,
+  Get,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { ConnectionService } from './connection.service';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
 import { SuccessResponseDto } from '../common/dto/response/success.response.dto';
 import { Throttle } from '@nestjs/throttler';
+import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import {
+  LongestSessionResponseDto,
+  UpdateLongestSessionDto,
+} from '../common/dto/user-longest-session.dto';
 
 @ApiTags('Connection')
 @Controller('connection')
@@ -39,5 +47,42 @@ export class ConnectionController {
     @Body() sessionDto: ConnectionSessionDto,
   ): Promise<SuccessResponseDto> {
     return this.connectionService.recordSession(sessionDto);
+  }
+
+  @Post('metrics/longest-session')
+  @UseGuards(SessionAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Update longest session metric for authenticated user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Longest session updated',
+    type: LongestSessionResponseDto,
+  })
+  @ApiBody({ type: UpdateLongestSessionDto })
+  async updateLongestSession(
+    @CurrentUser() user: { uid: string },
+    @Body() body: UpdateLongestSessionDto,
+  ) {
+    return this.connectionService.upsertUserLongestSession(
+      user.uid,
+      body.duration_seconds,
+    );
+  }
+
+  @Get('metrics/longest-session')
+  @UseGuards(SessionAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get longest session metric for authenticated user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Longest session fetched',
+    type: LongestSessionResponseDto,
+  })
+  async getLongestSession(@CurrentUser() user: { uid: string }) {
+    return this.connectionService.getUserLongestSession(user.uid);
   }
 }

@@ -19,6 +19,12 @@ export interface Alert {
   metadata?: Record<string, any>;
 }
 
+export interface ServerLocationRequest {
+  region: string;
+  reason: string;
+  createdAt: string;
+}
+
 /** Parse first file path and line number from an Error stack. */
 export function parseErrorLocation(
   stack: string | undefined,
@@ -64,6 +70,13 @@ export class NotificationService {
     // Strip Slack mrkdwn control characters that could be used to spoof links.
     // Normal URLs never require these, so removing them is safe.
     return url.replace(/[<>*_|~]/g, '');
+  }
+
+  private sanitizeForSlackText(text: string): string {
+    // Strip Slack mrkdwn control characters from arbitrary user-supplied text
+    // to prevent injection of formatted links, bold, italic, strikethrough, or
+    // code spans into Slack messages.
+    return text.replace(/[*_~`<>|]/g, '');
   }
 
   private getFullEndpointUrl(request?: Request): string | null {
@@ -254,6 +267,49 @@ export class NotificationService {
     } catch (e) {
       this.logger.warn(
         `Failed to send error to Slack: ${(e as Error).message}`,
+      );
+    }
+  }
+
+  async notifyServerLocationRequest(
+    request: ServerLocationRequest,
+  ): Promise<void> {
+    if (this.isDevelopment()) return;
+
+    const webhookUrl = this.configService.get<string>(
+      'SLACK_SERVER_REQUESTS_WEBHOOK_URL',
+    );
+
+    if (!webhookUrl) {
+      this.logger.warn(
+        'SLACK_SERVER_REQUESTS_WEBHOOK_URL not configured, skipping notification',
+      );
+      return;
+    }
+
+    const region = this.sanitizeForSlackText(request.region);
+    const reason = this.sanitizeForSlackText(request.reason);
+    const submitted = new Date(request.createdAt).toLocaleString('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'UTC',
+    });
+    const text = [
+      `🌍 *New Server Location Request*`,
+      `*Country:* ${region}`,
+      `*Reason:* ${reason}`,
+      `*Submitted:* ${submitted} UTC`,
+    ].join('\n');
+
+    try {
+      await firstValueFrom(this.httpService.post(webhookUrl, { text }));
+      this.logger.log(
+        `Server location request notification sent for region: ${request.region}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send server location request to Slack: ${(error as Error).message}`,
+        (error as Error).stack,
       );
     }
   }

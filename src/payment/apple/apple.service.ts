@@ -3,7 +3,11 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SubscriptionStatus } from '@prisma/client';
+import {
+  SubscriptionStatus,
+  Prisma,
+  SubscriptionUserRole,
+} from '@prisma/client';
 import { SafeLogger } from '../../common/utils/logger.util';
 import { TrialService } from '../../subscription/trial.service';
 
@@ -225,7 +229,7 @@ export class AppleService {
     const nextStatus = this.getExpectedSubscriptionStatus(expiresDate);
 
     // Renewals share originalTransactionId; prefer that for lineage.
-    await this.prisma.$transaction(async (tx) => {
+    const txResult = await this.prisma.$transaction(async (tx) => {
       const existing =
         (await tx.subscription.findFirst({
           where: { appleOriginalTransactionId: originalTransactionId },
@@ -235,7 +239,7 @@ export class AppleService {
         }));
 
       if (!existing) {
-        await tx.subscription.create({
+        const newSubscription = await tx.subscription.create({
           data: {
             userId,
             subscriptionType: 'apple_iap',
@@ -254,7 +258,24 @@ export class AppleService {
             cancelAtPeriodEnd: false,
           },
         });
-        return;
+        try {
+          await tx.subscriptionUser.create({
+            data: {
+              subscriptionId: newSubscription.id,
+              userId,
+              role: SubscriptionUserRole.OWNER,
+            },
+          });
+        } catch (e: unknown) {
+          if (
+            !(
+              e instanceof Prisma.PrismaClientKnownRequestError &&
+              e.code === 'P2002'
+            )
+          )
+            throw e;
+        }
+        return { subscriptionId: newSubscription.id, created: true };
       }
 
       const needsUpdate =
@@ -264,7 +285,7 @@ export class AppleService {
         (expiresDate &&
           existing.currentPeriodEnd?.getTime() !== expiresDate.getTime());
 
-      if (!needsUpdate) return;
+      if (!needsUpdate) return { subscriptionId: existing.id, created: false };
 
       await tx.subscription.update({
         where: { id: existing.id },
@@ -282,7 +303,38 @@ export class AppleService {
           currentPeriodEnd: expiresDate || undefined,
         },
       });
+      return { subscriptionId: existing.id, created: false };
     });
+
+    // Auto-create LINKED mappings for linked accounts (outside transaction)
+    if (txResult.created) {
+      const linkedAccounts = await this.prisma.linkedAccount.findMany({
+        where: { OR: [{ primaryUserId: userId }, { linkedUserId: userId }] },
+      });
+      for (const link of linkedAccounts) {
+        const linkedUserId =
+          link.primaryUserId === userId
+            ? link.linkedUserId
+            : link.primaryUserId;
+        try {
+          await this.prisma.subscriptionUser.create({
+            data: {
+              subscriptionId: txResult.subscriptionId,
+              userId: linkedUserId,
+              role: SubscriptionUserRole.LINKED,
+            },
+          });
+        } catch (e: unknown) {
+          if (
+            !(
+              e instanceof Prisma.PrismaClientKnownRequestError &&
+              e.code === 'P2002'
+            )
+          )
+            throw e;
+        }
+      }
+    }
   }
 
   private resolvePlanMetadata(productId: string): PlanMetadata {
@@ -816,8 +868,54 @@ export class AppleService {
         // If business rules change, implement a dedicated guard method here.
         void purchase;
 
+        try {
+          await tx.subscriptionUser.create({
+            data: {
+              subscriptionId: subscription.id,
+              userId,
+              role: SubscriptionUserRole.OWNER,
+            },
+          });
+        } catch (e: unknown) {
+          if (
+            !(
+              e instanceof Prisma.PrismaClientKnownRequestError &&
+              e.code === 'P2002'
+            )
+          )
+            throw e;
+        }
+
         return { subscription };
       });
+
+      // Auto-create LINKED mappings for linked accounts (outside transaction)
+      const linkedAccounts = await this.prisma.linkedAccount.findMany({
+        where: { OR: [{ primaryUserId: userId }, { linkedUserId: userId }] },
+      });
+      for (const link of linkedAccounts) {
+        const linkedUserId =
+          link.primaryUserId === userId
+            ? link.linkedUserId
+            : link.primaryUserId;
+        try {
+          await this.prisma.subscriptionUser.create({
+            data: {
+              subscriptionId: result.subscription.id,
+              userId: linkedUserId,
+              role: SubscriptionUserRole.LINKED,
+            },
+          });
+        } catch (e: unknown) {
+          if (
+            !(
+              e instanceof Prisma.PrismaClientKnownRequestError &&
+              e.code === 'P2002'
+            )
+          )
+            throw e;
+        }
+      }
 
       SafeLogger.info('Apple IAP purchase linked to user', {
         userId,
@@ -1066,12 +1164,60 @@ export class AppleService {
                     },
                   });
 
+              try {
+                await tx.subscriptionUser.create({
+                  data: {
+                    subscriptionId: subscription.id,
+                    userId,
+                    role: SubscriptionUserRole.OWNER,
+                  },
+                });
+              } catch (e: unknown) {
+                if (
+                  !(
+                    e instanceof Prisma.PrismaClientKnownRequestError &&
+                    e.code === 'P2002'
+                  )
+                )
+                  throw e;
+              }
+
               return {
                 subscriptionId: subscription.id,
                 status: subscription.status,
               };
             },
           );
+
+          // Auto-create LINKED mappings for linked accounts (outside transaction)
+          const linkedAccounts = await this.prisma.linkedAccount.findMany({
+            where: {
+              OR: [{ primaryUserId: userId }, { linkedUserId: userId }],
+            },
+          });
+          for (const link of linkedAccounts) {
+            const linkedUserIdForMapping =
+              link.primaryUserId === userId
+                ? link.linkedUserId
+                : link.primaryUserId;
+            try {
+              await this.prisma.subscriptionUser.create({
+                data: {
+                  subscriptionId,
+                  userId: linkedUserIdForMapping,
+                  role: SubscriptionUserRole.LINKED,
+                },
+              });
+            } catch (e: unknown) {
+              if (
+                !(
+                  e instanceof Prisma.PrismaClientKnownRequestError &&
+                  e.code === 'P2002'
+                )
+              )
+                throw e;
+            }
+          }
 
           linkedPurchases.push({
             transactionId: purchase.transactionId,
