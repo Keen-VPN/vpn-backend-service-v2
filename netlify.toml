@@ -1,8 +1,14 @@
 [build]
-  command = "prisma generate && prisma migrate deploy && npm run build"
+  command = "prisma generate && npm run build"
   publish = "dist"
   functions = "netlify/functions"
   node_bundle = true
+
+[context.production.build]
+  command = "prisma generate && prisma migrate deploy && npm run build"
+
+[context.branch-deploy.build]
+  command = "prisma generate && prisma migrate deploy && npm run build"
 
 [functions]
   external_node_modules = ["@nestjs/microservices", "@nestjs/websockets", "cache-manager", "class-transformer", "class-validator"]
