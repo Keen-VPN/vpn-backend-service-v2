@@ -281,8 +281,10 @@ export class NotificationService {
     );
 
     if (!webhookUrl) {
-      this.logger.warn(
-        'SLACK_SERVER_REQUESTS_WEBHOOK_URL not configured, skipping notification',
+      const nodeEnv =
+        this.configService.get<string>('NODE_ENV') || process.env.NODE_ENV;
+      this.logger.error(
+        `SLACK_SERVER_REQUESTS_WEBHOOK_URL not configured (NODE_ENV=${nodeEnv}); server location request notification dropped`,
       );
       return;
     }

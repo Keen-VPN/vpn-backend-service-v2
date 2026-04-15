@@ -311,11 +311,15 @@ describe('NotificationService', () => {
       );
     });
 
-    it('should skip when SLACK_SERVER_REQUESTS_WEBHOOK_URL is not configured', async () => {
+    it('should skip and log an error when SLACK_SERVER_REQUESTS_WEBHOOK_URL is not configured', async () => {
       mockConfigService.get.mockImplementation((key: string) => {
         if (key === 'NODE_ENV') return 'test';
         return undefined;
       });
+
+      const errorSpy = jest
+        .spyOn(service['logger'], 'error')
+        .mockImplementation(() => {});
 
       await service.notifyServerLocationRequest({
         region: 'Germany',
@@ -324,6 +328,11 @@ describe('NotificationService', () => {
       });
 
       expect(mockHttpService.post).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'SLACK_SERVER_REQUESTS_WEBHOOK_URL not configured',
+        ),
+      );
     });
 
     it('should skip in development environment', async () => {
