@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ModuleRef } from '@nestjs/core';
 import { PreferencesService } from '../../../src/preferences/preferences.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { NotificationService } from '../../../src/notification/notification.service';
@@ -10,9 +11,19 @@ describe('PreferencesService', () => {
   const mockNotificationService = {
     notifyServerLocationRequest: jest.fn().mockResolvedValue(undefined),
   };
+  const mockModuleRef = {
+    get: jest.fn((token: unknown) => {
+      if (token === NotificationService) return mockNotificationService;
+      return undefined;
+    }),
+  };
 
   beforeEach(async () => {
     mockPrisma = createMockPrismaClient();
+    mockModuleRef.get.mockImplementation((token: unknown) => {
+      if (token === NotificationService) return mockNotificationService;
+      return undefined;
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -22,8 +33,8 @@ describe('PreferencesService', () => {
           useValue: mockPrisma,
         },
         {
-          provide: NotificationService,
-          useValue: mockNotificationService,
+          provide: ModuleRef,
+          useValue: mockModuleRef,
         },
       ],
     }).compile();
@@ -143,6 +154,31 @@ describe('PreferencesService', () => {
         reason: 'Privacy laws',
         createdAt: '2026-04-10T14:30:00.000Z',
       });
+    });
+
+    it('should still return success when NotificationService cannot be resolved', async () => {
+      const body = { region: 'SE', reason: 'Testing DI resilience' };
+      const created = {
+        id: 'pref_noresolve',
+        region: body.region,
+        reason: body.reason,
+        createdAt: new Date('2026-04-10T14:30:00Z'),
+        updatedAt: new Date('2026-04-10T14:30:00Z'),
+      };
+
+      mockPrisma.serverLocationPreference.create.mockResolvedValue(
+        created as any,
+      );
+      mockModuleRef.get.mockImplementationOnce(() => {
+        throw new Error('Nest can not export a provider');
+      });
+
+      const result = await service.submitServerLocationPreference(body);
+
+      expect(result.region).toBe('SE');
+      expect(
+        mockNotificationService.notifyServerLocationRequest,
+      ).not.toHaveBeenCalled();
     });
 
     it('should still return success if Slack notification fails', async () => {

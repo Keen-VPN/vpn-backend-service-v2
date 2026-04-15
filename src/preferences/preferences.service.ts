@@ -1,4 +1,5 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { ServerLocationPreferenceBodyDto } from '../common/dto/server-location-preference.dto';
@@ -17,8 +18,7 @@ export class PreferencesService {
 
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(NotificationService)
-    private readonly notificationService: NotificationService,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   async submitServerLocationPreference(
@@ -39,17 +39,34 @@ export class PreferencesService {
       updatedAt: preference.updatedAt.toISOString(),
     };
 
-    this.notificationService
-      .notifyServerLocationRequest({
-        region: result.region,
-        reason: result.reason,
-        createdAt: result.createdAt,
-      })
-      .catch((error: Error) => {
-        this.logger.error(
-          `Failed to send Slack notification for server location request: ${error.message}`,
-        );
+    // Resolve NotificationService at runtime — constructor DI for its inner
+    // deps (ConfigService/HttpService) is unreliable under Netlify's
+    // serverless bundling, matching the workaround in HttpExceptionFilter.
+    try {
+      const notificationService = this.moduleRef.get(NotificationService, {
+        strict: false,
       });
+      if (
+        notificationService &&
+        typeof notificationService.notifyServerLocationRequest === 'function'
+      ) {
+        void notificationService
+          .notifyServerLocationRequest({
+            region: result.region,
+            reason: result.reason,
+            createdAt: result.createdAt,
+          })
+          .catch((error: Error) => {
+            this.logger.error(
+              `Failed to send Slack notification for server location request: ${error.message}`,
+            );
+          });
+      }
+    } catch (error) {
+      this.logger.error(
+        `Could not resolve NotificationService for server location request: ${(error as Error).message}`,
+      );
+    }
 
     return result;
   }
