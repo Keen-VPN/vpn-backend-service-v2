@@ -174,4 +174,139 @@ export class ConnectionService {
       };
     }
   }
+
+  async getConnectionStats() {
+    try {
+      // NOTE: Current schema stores connection sessions without user linkage.
+      // This returns aggregate totals from all recorded sessions.
+      const [aggregate, platformRows, dailyRows] = await Promise.all([
+        this.prisma.connectionSession.aggregate({
+          _count: { _all: true },
+          _sum: {
+            durationSeconds: true,
+            bytesTransferred: true,
+          },
+          _avg: {
+            durationSeconds: true,
+          },
+        }),
+        this.prisma.connectionSession.groupBy({
+          by: ['platform'],
+          _count: { _all: true },
+          _sum: { durationSeconds: true },
+        }),
+        this.prisma.$queryRaw<Array<{ day: Date; count: number }>>`
+          SELECT DATE(session_start) AS day, COUNT(*)::int AS count
+          FROM connection_sessions
+          WHERE session_start >= (CURRENT_DATE - INTERVAL '13 days')
+          GROUP BY DATE(session_start)
+          ORDER BY day ASC
+        `,
+      ]);
+
+      const totalSessions = aggregate._count._all ?? 0;
+      const totalDurationSeconds = aggregate._sum.durationSeconds ?? 0;
+      const averageDurationSeconds = Math.round(
+        aggregate._avg.durationSeconds ?? 0,
+      );
+      const totalBytesTransferred = Number(
+        aggregate._sum.bytesTransferred ?? BigInt(0),
+      );
+
+      const platformBreakdown = platformRows.reduce<
+        Record<string, { sessions: number; total_duration_seconds: number }>
+      >((acc, row) => {
+        const key = row.platform || 'unknown';
+        acc[key] = {
+          sessions: row._count._all ?? 0,
+          total_duration_seconds: row._sum.durationSeconds ?? 0,
+        };
+        return acc;
+      }, {});
+
+      const countsByDay = new Map<string, number>();
+      for (const row of dailyRows) {
+        const key = new Date(row.day).toISOString().slice(0, 10);
+        countsByDay.set(key, row.count ?? 0);
+      }
+
+      const dailyConnectionFrequency: Array<{ date: string; count: number }> =
+        [];
+      for (let offset = 13; offset >= 0; offset -= 1) {
+        const date = new Date();
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() - offset);
+        const key = date.toISOString().slice(0, 10);
+        dailyConnectionFrequency.push({
+          date: `${key}T00:00:00.000Z`,
+          count: countsByDay.get(key) ?? 0,
+        });
+      }
+
+      return {
+        success: true,
+        data: {
+          total_sessions: totalSessions,
+          total_duration_seconds: totalDurationSeconds,
+          average_duration_seconds: averageDurationSeconds,
+          total_bytes_transferred: totalBytesTransferred,
+          platform_breakdown: platformBreakdown,
+          daily_connection_frequency: dailyConnectionFrequency,
+        },
+      };
+    } catch (error) {
+      SafeLogger.error('Error fetching connection stats', error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to fetch connection stats';
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  async getConnectionSessions(limit = 50, offset = 0) {
+    try {
+      const safeLimit = Math.max(1, Math.min(limit, 200));
+      const safeOffset = Math.max(0, offset);
+
+      const sessions = await this.prisma.connectionSession.findMany({
+        orderBy: { sessionStart: 'desc' },
+        take: safeLimit,
+        skip: safeOffset,
+        select: {
+          id: true,
+          sessionStart: true,
+          sessionEnd: true,
+          durationSeconds: true,
+          platform: true,
+          appVersion: true,
+        },
+      });
+
+      return {
+        success: true,
+        data: sessions.map((session) => ({
+          id: session.id,
+          session_start: session.sessionStart.toISOString(),
+          session_end: session.sessionEnd?.toISOString() ?? null,
+          duration_seconds: session.durationSeconds ?? 0,
+          platform: session.platform,
+          app_version: session.appVersion ?? null,
+        })),
+      };
+    } catch (error) {
+      SafeLogger.error('Error fetching connection sessions', error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to fetch connection sessions';
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
 }
