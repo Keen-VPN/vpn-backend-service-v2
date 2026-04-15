@@ -7,6 +7,10 @@ import {
   Inject,
   UseGuards,
   Get,
+  Param,
+  Query,
+  DefaultValuePipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { ConnectionService } from './connection.service';
@@ -84,5 +88,75 @@ export class ConnectionController {
   })
   async getLongestSession(@CurrentUser() user: { uid: string }) {
     return this.connectionService.getUserLongestSession(user.uid);
+  }
+
+  @Get('stats')
+  @UseGuards(SessionAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get connection aggregate statistics',
+    description:
+      'Returns total sessions, duration, bytes transferred and platform breakdown.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Connection stats fetched',
+  })
+  async getConnectionStats() {
+    return this.connectionService.getConnectionStats();
+  }
+
+  // Backward-compatible route for older clients.
+  @Get('stats/:identifier')
+  @UseGuards(SessionAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get connection aggregate statistics (legacy path)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Connection stats fetched',
+  })
+  async getConnectionStatsLegacy(@Param('identifier') identifier: string) {
+    void identifier;
+    return this.connectionService.getConnectionStats();
+  }
+
+  @Get('sessions')
+  @UseGuards(SessionAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get recent connection sessions',
+    description: 'Returns paginated recent sessions in descending time order.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Connection sessions fetched',
+  })
+  async getConnectionSessions(
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+  ) {
+    return this.connectionService.getConnectionSessions(limit, offset);
+  }
+
+  // Backward-compatible route for older clients.
+  @Get('sessions/:identifier')
+  @UseGuards(SessionAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get recent connection sessions (legacy path)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Connection sessions fetched',
+  })
+  async getConnectionSessionsLegacy(
+    @Param('identifier') identifier: string,
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+  ) {
+    void identifier;
+    return this.connectionService.getConnectionSessions(limit, offset);
   }
 }
