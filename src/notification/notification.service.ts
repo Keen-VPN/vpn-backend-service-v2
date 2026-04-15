@@ -45,7 +45,7 @@ export class NotificationService {
 
   constructor(
     @Inject(HttpService) private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
+    @Inject(ConfigService) private readonly configService: ConfigService,
   ) {}
 
   private isDevelopment(): boolean {
