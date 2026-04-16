@@ -114,6 +114,11 @@ export class SubscriptionService {
         (activeSubscription.status === SubscriptionStatus.ACTIVE ||
           activeSubscription.status === SubscriptionStatus.TRIALING);
 
+      // Track whether the active entitlement comes from an Apple IAP (no DB subscription row).
+      // This is used below to return the correct subscriptionType so the client knows to route
+      // to Apple's subscription management instead of the backend cancel endpoint.
+      let activeFromAppleIAP = false;
+
       if (!hasActiveSubscription) {
         const validIAP = await this.prisma.appleIAPPurchase.findFirst({
           where: {
@@ -123,6 +128,7 @@ export class SubscriptionService {
         });
         if (validIAP) {
           hasActiveSubscription = true;
+          activeFromAppleIAP = true;
           SafeLogger.info(
             'Active access from linked Apple IAP',
             { service: 'SubscriptionService', userId: user.id },
@@ -168,7 +174,10 @@ export class SubscriptionService {
               endDate: '',
               customerId: '',
               cancelAtPeriodEnd: false,
-              subscriptionType: 'stripe',
+              // Use 'apple_iap' when the only active entitlement is an Apple IAP purchase
+              // so the client correctly routes to Apple's subscription management UI
+              // instead of calling the backend Stripe cancel endpoint.
+              subscriptionType: activeFromAppleIAP ? 'apple_iap' : 'stripe',
             },
         trial,
       };
@@ -195,11 +204,26 @@ export class SubscriptionService {
       throw new UnauthorizedException('User not found');
     }
 
-    // Find active subscription (includes both "active" and "trialing" status)
-    const activeSubscription = await getActiveSubscriptionForUser(
+    // Primary lookup: subscription directly owned by this user (or via subscriptionUser mapping).
+    let activeSubscription = await getActiveSubscriptionForUser(
       this.prisma,
       user.id,
     );
+
+    // Fallback: look up by email. Handles edge cases where the subscription was created under a
+    // different internal user record (e.g. Google vs Apple auth producing separate rows) but
+    // shares the same email address.
+    if (!activeSubscription && user.email) {
+      const userByEmail = await this.prisma.user.findFirst({
+        where: { email: user.email, id: { not: user.id } },
+      });
+      if (userByEmail) {
+        activeSubscription = await getActiveSubscriptionForUser(
+          this.prisma,
+          userByEmail.id,
+        );
+      }
+    }
 
     if (!activeSubscription) {
       return {
