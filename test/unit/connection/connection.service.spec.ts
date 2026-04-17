@@ -141,7 +141,7 @@ describe('ConnectionService', () => {
         { day: day1, count: 2 },
       ] as any);
 
-      const result = await service.getConnectionStats();
+      const result = await service.getConnectionStats('user-123');
 
       expect(result.success).toBe(true);
       expect(result.data?.daily_connection_frequency).toHaveLength(14);
@@ -163,7 +163,7 @@ describe('ConnectionService', () => {
         new Error('aggregate failed'),
       );
 
-      const result = await service.getConnectionStats();
+      const result = await service.getConnectionStats('user-123');
 
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
@@ -185,7 +185,7 @@ describe('ConnectionService', () => {
         },
       ] as any);
 
-      const result = await service.getConnectionSessions(50, 0);
+      const result = await service.getConnectionSessions('user-123', 50, 0);
 
       expect(result).toEqual({
         success: true,
@@ -213,7 +213,7 @@ describe('ConnectionService', () => {
         new Error('find failed'),
       );
 
-      const result = await service.getConnectionSessions(50, 0);
+      const result = await service.getConnectionSessions('user-123', 50, 0);
 
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();

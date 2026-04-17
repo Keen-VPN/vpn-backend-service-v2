@@ -32,6 +32,7 @@ model User {
   subscriptionUsers       SubscriptionUser[]
   primaryLinks            LinkedAccount[]      @relation("primaryLinks")
   linkedLinks             LinkedAccount[]      @relation("linkedLinks")
+  connectionSessions      ConnectionSession[]
 
   @@index([provider])
   @@map("users")
@@ -96,6 +97,7 @@ model AppleIAPPurchase {
 model ConnectionSession {
   id                 String            @id @default(uuid())
   clientSessionId    String            @unique @map("client_session_id")
+  userId             String?           @map("user_id")
   sessionStart       DateTime          @map("session_start") @db.Timestamptz(6)
   sessionEnd         DateTime?         @map("session_end") @db.Timestamptz(6)
   durationSeconds    Int               @default(0) @map("duration_seconds")
@@ -112,7 +114,9 @@ model ConnectionSession {
   heartbeatTimestamp DateTime?         @map("heartbeat_timestamp") @db.Timestamptz(6)
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user               User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  @@index([userId])
   @@index([sessionStart])
   @@index([sessionEnd])
   @@index([durationSeconds])
