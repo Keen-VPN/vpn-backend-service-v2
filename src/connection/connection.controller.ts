@@ -34,10 +34,11 @@ export class ConnectionController {
 
   @Post('session')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(SessionAuthGuard)
   @ApiOperation({
     summary: 'Record a VPN connection session',
     description:
-      'Records a session identified by client_session_id. User identity is from the Authorization Bearer token when present; no user_id or email in the body.',
+      'Records a session identified by client_session_id. User identity is resolved from the Authorization Bearer token.',
   })
   @ApiResponse({
     status: 200,
@@ -48,9 +49,10 @@ export class ConnectionController {
   @ApiBody({ type: ConnectionSessionDto })
   @Throttle({ default: { limit: 100, ttl: 60000 } })
   async recordSession(
+    @CurrentUser() user: { uid: string },
     @Body() sessionDto: ConnectionSessionDto,
   ): Promise<SuccessResponseDto> {
-    return this.connectionService.recordSession(sessionDto);
+    return this.connectionService.recordSession(sessionDto, user.uid);
   }
 
   @Post('metrics/longest-session')
@@ -102,8 +104,8 @@ export class ConnectionController {
     status: 200,
     description: 'Connection stats fetched',
   })
-  async getConnectionStats() {
-    return this.connectionService.getConnectionStats();
+  async getConnectionStats(@CurrentUser() user: { uid: string }) {
+    return this.connectionService.getConnectionStats(user.uid);
   }
 
   // Backward-compatible route for older clients.
@@ -117,9 +119,12 @@ export class ConnectionController {
     status: 200,
     description: 'Connection stats fetched',
   })
-  async getConnectionStatsLegacy(@Param('identifier') identifier: string) {
+  async getConnectionStatsLegacy(
+    @CurrentUser() user: { uid: string },
+    @Param('identifier') identifier: string,
+  ) {
     void identifier;
-    return this.connectionService.getConnectionStats();
+    return this.connectionService.getConnectionStats(user.uid);
   }
 
   @Get('sessions')
@@ -134,10 +139,15 @@ export class ConnectionController {
     description: 'Connection sessions fetched',
   })
   async getConnectionSessions(
+    @CurrentUser() user: { uid: string },
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
   ) {
-    return this.connectionService.getConnectionSessions(limit, offset);
+    return this.connectionService.getConnectionSessions(
+      user.uid,
+      limit,
+      offset,
+    );
   }
 
   // Backward-compatible route for older clients.
@@ -152,11 +162,16 @@ export class ConnectionController {
     description: 'Connection sessions fetched',
   })
   async getConnectionSessionsLegacy(
+    @CurrentUser() user: { uid: string },
     @Param('identifier') identifier: string,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
   ) {
     void identifier;
-    return this.connectionService.getConnectionSessions(limit, offset);
+    return this.connectionService.getConnectionSessions(
+      user.uid,
+      limit,
+      offset,
+    );
   }
 }
