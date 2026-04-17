@@ -1,8 +1,14 @@
 import { Injectable, Inject } from '@nestjs/common';
+import { TerminationReason } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
 import { NodesService } from '../nodes/nodes.service';
+
+const HEALTH_CHECK_FAILURE_REASON =
+  'HEALTH_CHECK_FAILURE' as unknown as TerminationReason;
+const RECOVERY_EXHAUSTED_REASON =
+  'RECOVERY_EXHAUSTED' as unknown as TerminationReason;
 
 @Injectable()
 export class ConnectionService {
@@ -26,9 +32,6 @@ export class ConnectionService {
   async recordSession(sessionDto: ConnectionSessionDto) {
     try {
       const sessionStart = new Date(sessionDto.session_start);
-      // Map event type string to Enum if needed, or rely on Prisma casting
-      // sessionDto.event_type is 'START' | 'HEARTBEAT' | 'END'
-      // Prisma EventType is SESSION_START, HEARTBEAT, SESSION_END
 
       let eventType: 'SESSION_START' | 'HEARTBEAT' | 'SESSION_END';
       switch (sessionDto.event_type) {
@@ -48,8 +51,32 @@ export class ConnectionService {
       const sessionEnd = sessionDto.session_end
         ? new Date(sessionDto.session_end)
         : sessionDto.event_type === 'END'
-          ? new Date() // Default to now if END but no time provided
+          ? new Date()
           : null;
+
+      // Derive a typed TerminationReason from the granular disconnect_reason sent
+      // by the client. Only set on END events; leave undefined for START/HEARTBEAT.
+      const resolveTerminationReason = (
+        disconnectReason?: string,
+      ): TerminationReason => {
+        switch (disconnectReason) {
+          case 'RECOVERY_EXHAUSTED':
+            return RECOVERY_EXHAUSTED_REASON;
+          case 'HEALTH_CHECK_FAILURE':
+            return HEALTH_CHECK_FAILURE_REASON;
+          case 'NETWORK_RECOVERY':
+            // Mid-recovery reconnect — classify as connection lost (not user-initiated)
+            return TerminationReason.CONNECTION_LOST;
+          case 'USER_TERMINATION':
+          default:
+            return TerminationReason.USER_TERMINATION;
+        }
+      };
+
+      const terminationReasonForEnd =
+        sessionDto.event_type === 'END'
+          ? resolveTerminationReason(sessionDto.disconnect_reason)
+          : undefined;
 
       // Upsert the session based on clientSessionId
       await this.prisma.connectionSession.upsert({
@@ -62,13 +89,10 @@ export class ConnectionService {
           heartbeatTimestamp: new Date(),
           eventType: eventType,
           sessionEnd: sessionEnd,
-          terminationReason:
-            sessionDto.event_type === 'END' ? 'USER_TERMINATION' : undefined,
+          terminationReason: terminationReasonForEnd,
           disconnectReason: sessionDto.disconnect_reason,
           networkType: sessionDto.network_type,
           subscriptionTier: sessionDto.subscription_tier,
-          // Only update these if provided? Or strictly update?
-          // Usually heartbeat just updates duration/bytes/timestamp
         },
         create: {
           clientSessionId: sessionDto.client_session_id,
@@ -83,7 +107,9 @@ export class ConnectionService {
             ? BigInt(sessionDto.bytes_transferred)
             : BigInt(0),
           eventType: eventType,
-          terminationReason: 'USER_TERMINATION',
+          terminationReason:
+            terminationReasonForEnd ?? TerminationReason.USER_TERMINATION,
+          disconnectReason: sessionDto.disconnect_reason,
           protocol: sessionDto.protocol || 'wireguard',
           networkType: sessionDto.network_type,
           heartbeatTimestamp: new Date(),

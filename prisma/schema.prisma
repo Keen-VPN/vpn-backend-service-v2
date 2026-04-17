@@ -297,8 +297,10 @@ model NodeClient {
 }
 
 enum TerminationReason {
-  USER_TERMINATION @map("user_termination")
-  CONNECTION_LOST  @map("connection_lost")
+  USER_TERMINATION   @map("user_termination")
+  CONNECTION_LOST    @map("connection_lost")
+  HEALTH_CHECK_FAILURE @map("health_check_failure")
+  RECOVERY_EXHAUSTED @map("recovery_exhausted")
 
   @@map("termination_reason")
 }
