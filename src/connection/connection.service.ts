@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { TerminationReason } from '@prisma/client';
+import { Prisma, TerminationReason } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
@@ -78,35 +78,44 @@ export class ConnectionService {
           ? resolveTerminationReason(sessionDto.disconnect_reason)
           : undefined;
 
-      // Upsert the session based on clientSessionId
+      // Build the update payload carefully so that:
+      //   - durationSeconds / bytesTransferred never regress to smaller values
+      //     (handled via GREATEST in a follow-up raw query)
+      //   - sessionEnd is only written on END events (HEARTBEATs would otherwise
+      //     clobber a real end time with null)
+      //   - userId is set if it wasn't already, so orphaned rows created before
+      //     the user authenticated get linked retroactively
+      const incomingDuration = sessionDto.duration_seconds ?? 0;
+      const incomingBytes = sessionDto.bytes_transferred
+        ? BigInt(sessionDto.bytes_transferred)
+        : BigInt(0);
+
+      const updatePayload: Record<string, unknown> = {
+        heartbeatTimestamp: new Date(),
+        eventType: eventType,
+        disconnectReason: sessionDto.disconnect_reason,
+        networkType: sessionDto.network_type,
+        subscriptionTier: sessionDto.subscription_tier,
+      };
+      if (sessionDto.event_type === 'END') {
+        updatePayload.sessionEnd = sessionEnd;
+        updatePayload.terminationReason = terminationReasonForEnd;
+      }
+
       await this.prisma.connectionSession.upsert({
         where: { clientSessionId: sessionDto.client_session_id },
-        update: {
-          durationSeconds: sessionDto.duration_seconds || 0,
-          bytesTransferred: sessionDto.bytes_transferred
-            ? BigInt(sessionDto.bytes_transferred)
-            : undefined,
-          heartbeatTimestamp: new Date(),
-          eventType: eventType,
-          sessionEnd: sessionEnd,
-          terminationReason: terminationReasonForEnd,
-          disconnectReason: sessionDto.disconnect_reason,
-          networkType: sessionDto.network_type,
-          subscriptionTier: sessionDto.subscription_tier,
-        },
+        update: updatePayload,
         create: {
           clientSessionId: sessionDto.client_session_id,
           userId: userId ?? null,
           sessionStart: sessionStart,
           sessionEnd: sessionEnd,
-          durationSeconds: sessionDto.duration_seconds || 0,
+          durationSeconds: incomingDuration,
           platform: sessionDto.platform,
           appVersion: sessionDto.app_version,
           serverLocation: sessionDto.server_location,
           subscriptionTier: sessionDto.subscription_tier,
-          bytesTransferred: sessionDto.bytes_transferred
-            ? BigInt(sessionDto.bytes_transferred)
-            : BigInt(0),
+          bytesTransferred: incomingBytes,
           eventType: eventType,
           terminationReason:
             terminationReasonForEnd ?? TerminationReason.USER_TERMINATION,
@@ -116,6 +125,17 @@ export class ConnectionService {
           heartbeatTimestamp: new Date(),
         },
       });
+
+      // Monotonic (GREATEST) update for the counters + retroactive userId link.
+      // Done as a single raw UPDATE to keep it atomic and avoid regressions when
+      // events arrive out of order (e.g. a late HEARTBEAT after an END).
+      await this.prisma.$executeRaw`
+        UPDATE connection_sessions
+           SET duration_seconds = GREATEST(duration_seconds, ${incomingDuration}),
+               bytes_transferred = GREATEST(bytes_transferred, ${incomingBytes}),
+               user_id = COALESCE(user_id, ${userId ?? null})
+         WHERE client_session_id = ${sessionDto.client_session_id}
+      `;
 
       SafeLogger.info('Connection session recorded', {
         clientId: sessionDto.client_session_id,
@@ -204,25 +224,53 @@ export class ConnectionService {
 
   async getConnectionStats(userId: string) {
     try {
-      const userFilter = { userId };
-      const [aggregate, platformRows, dailyRows] = await Promise.all([
-        this.prisma.connectionSession.aggregate({
-          where: userFilter,
-          _count: { _all: true },
-          _sum: {
-            durationSeconds: true,
-            bytesTransferred: true,
-          },
-          _avg: {
-            durationSeconds: true,
-          },
-        }),
-        this.prisma.connectionSession.groupBy({
-          where: userFilter,
-          by: ['platform'],
-          _count: { _all: true },
-          _sum: { durationSeconds: true },
-        }),
+      // `duration_seconds` can lag behind reality when the client is killed before
+      // sending an END event. Fall back to the elapsed time between session_start
+      // and the freshest timestamp we have (session_end > heartbeat_timestamp > updated_at).
+      // Using GREATEST picks whichever value is largest, so real telemetry beats
+      // the fallback once it catches up.
+      const effectiveDurationSql = `GREATEST(
+        COALESCE(duration_seconds, 0),
+        COALESCE(
+          EXTRACT(EPOCH FROM (
+            COALESCE(session_end, heartbeat_timestamp, updated_at) - session_start
+          ))::int,
+          0
+        )
+      )`;
+
+      const [aggregateRows, platformRows, dailyRows] = await Promise.all([
+        this.prisma.$queryRaw<
+          Array<{
+            total_sessions: number;
+            total_duration_seconds: number | null;
+            average_duration_seconds: number | null;
+            total_bytes_transferred: bigint | null;
+          }>
+        >`
+          SELECT
+            COUNT(*)::int                                               AS total_sessions,
+            COALESCE(SUM(${Prisma.raw(effectiveDurationSql)}), 0)::bigint AS total_duration_seconds,
+            COALESCE(AVG(${Prisma.raw(effectiveDurationSql)}), 0)::float AS average_duration_seconds,
+            COALESCE(SUM(bytes_transferred), 0)::bigint                 AS total_bytes_transferred
+          FROM connection_sessions
+          WHERE user_id = ${userId}
+        `,
+        this.prisma.$queryRaw<
+          Array<{
+            platform: string | null;
+            sessions: number;
+            total_duration_seconds: number | null;
+          }>
+        >`
+          SELECT
+            platform,
+            COUNT(*)::int                                               AS sessions,
+            COALESCE(SUM(${Prisma.raw(effectiveDurationSql)}), 0)::bigint AS total_duration_seconds
+          FROM connection_sessions
+          WHERE user_id = ${userId}
+          GROUP BY platform
+        `,
         this.prisma.$queryRaw<Array<{ day: Date; count: number }>>`
           SELECT DATE(session_start) AS day, COUNT(*)::int AS count
           FROM connection_sessions
@@ -233,13 +281,22 @@ export class ConnectionService {
         `,
       ]);
 
-      const totalSessions = aggregate._count._all ?? 0;
-      const totalDurationSeconds = aggregate._sum.durationSeconds ?? 0;
+      const aggregate = aggregateRows[0] ?? {
+        total_sessions: 0,
+        total_duration_seconds: BigInt(0),
+        average_duration_seconds: 0,
+        total_bytes_transferred: BigInt(0),
+      };
+
+      const totalSessions = Number(aggregate.total_sessions ?? 0);
+      const totalDurationSeconds = Number(
+        aggregate.total_duration_seconds ?? 0,
+      );
       const averageDurationSeconds = Math.round(
-        aggregate._avg.durationSeconds ?? 0,
+        Number(aggregate.average_duration_seconds ?? 0),
       );
       const totalBytesTransferred = Number(
-        aggregate._sum.bytesTransferred ?? BigInt(0),
+        aggregate.total_bytes_transferred ?? BigInt(0),
       );
 
       const platformBreakdown = platformRows.reduce<
@@ -247,8 +304,8 @@ export class ConnectionService {
       >((acc, row) => {
         const key = row.platform || 'unknown';
         acc[key] = {
-          sessions: row._count._all ?? 0,
-          total_duration_seconds: row._sum.durationSeconds ?? 0,
+          sessions: Number(row.sessions ?? 0),
+          total_duration_seconds: Number(row.total_duration_seconds ?? 0),
         };
         return acc;
       }, {});
