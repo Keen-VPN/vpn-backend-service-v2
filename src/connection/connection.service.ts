@@ -29,7 +29,7 @@ export class ConnectionService {
     return nodes[0];
   }
 
-  async recordSession(sessionDto: ConnectionSessionDto) {
+  async recordSession(sessionDto: ConnectionSessionDto, userId?: string) {
     try {
       const sessionStart = new Date(sessionDto.session_start);
 
@@ -96,6 +96,7 @@ export class ConnectionService {
         },
         create: {
           clientSessionId: sessionDto.client_session_id,
+          userId: userId ?? null,
           sessionStart: sessionStart,
           sessionEnd: sessionEnd,
           durationSeconds: sessionDto.duration_seconds || 0,
@@ -201,12 +202,12 @@ export class ConnectionService {
     }
   }
 
-  async getConnectionStats() {
+  async getConnectionStats(userId: string) {
     try {
-      // NOTE: Current schema stores connection sessions without user linkage.
-      // This returns aggregate totals from all recorded sessions.
+      const userFilter = { userId };
       const [aggregate, platformRows, dailyRows] = await Promise.all([
         this.prisma.connectionSession.aggregate({
+          where: userFilter,
           _count: { _all: true },
           _sum: {
             durationSeconds: true,
@@ -217,6 +218,7 @@ export class ConnectionService {
           },
         }),
         this.prisma.connectionSession.groupBy({
+          where: userFilter,
           by: ['platform'],
           _count: { _all: true },
           _sum: { durationSeconds: true },
@@ -225,6 +227,7 @@ export class ConnectionService {
           SELECT DATE(session_start) AS day, COUNT(*)::int AS count
           FROM connection_sessions
           WHERE session_start >= (CURRENT_DATE - INTERVAL '13 days')
+            AND user_id = ${userId}
           GROUP BY DATE(session_start)
           ORDER BY day ASC
         `,
@@ -293,12 +296,13 @@ export class ConnectionService {
     }
   }
 
-  async getConnectionSessions(limit = 50, offset = 0) {
+  async getConnectionSessions(userId: string, limit = 50, offset = 0) {
     try {
       const safeLimit = Math.max(1, Math.min(limit, 200));
       const safeOffset = Math.max(0, offset);
 
       const sessions = await this.prisma.connectionSession.findMany({
+        where: { userId },
         orderBy: { sessionStart: 'desc' },
         take: safeLimit,
         skip: safeOffset,

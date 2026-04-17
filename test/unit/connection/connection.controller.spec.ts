@@ -78,10 +78,14 @@ describe('ConnectionController', () => {
         success: true,
       });
 
-      const result = await controller.recordSession(sessionDto);
+      const mockUser = { uid: 'user-123' };
+      const result = await controller.recordSession(mockUser, sessionDto);
 
       expect(result.success).toBe(true);
-      expect(connectionService.recordSession).toHaveBeenCalledWith(sessionDto);
+      expect(connectionService.recordSession).toHaveBeenCalledWith(
+        sessionDto,
+        mockUser.uid,
+      );
     });
   });
 
@@ -98,14 +102,18 @@ describe('ConnectionController', () => {
             ios: { sessions: 7, total_duration_seconds: 2100 },
             macos: { sessions: 5, total_duration_seconds: 1500 },
           },
+          daily_connection_frequency: [],
         },
       };
       connectionService.getConnectionStats.mockResolvedValue(mockStats);
 
-      const result = await controller.getConnectionStats();
+      const mockUser = { uid: 'user-123' };
+      const result = await controller.getConnectionStats(mockUser);
 
       expect(result).toEqual(mockStats);
-      expect(connectionService.getConnectionStats).toHaveBeenCalledTimes(1);
+      expect(connectionService.getConnectionStats).toHaveBeenCalledWith(
+        mockUser.uid,
+      );
     });
   });
 
@@ -126,10 +134,12 @@ describe('ConnectionController', () => {
       };
       connectionService.getConnectionSessions.mockResolvedValue(mockSessions);
 
-      const result = await controller.getConnectionSessions(50, 0);
+      const mockUser = { uid: 'user-123' };
+      const result = await controller.getConnectionSessions(mockUser, 50, 0);
 
       expect(result).toEqual(mockSessions);
       expect(connectionService.getConnectionSessions).toHaveBeenCalledWith(
+        mockUser.uid,
         50,
         0,
       );
