@@ -22,10 +22,14 @@ export class NodeAuthGuard implements CanActivate {
     }
 
     const token = authHeader.split('Bearer ')[1];
-    const nodeToken =
+    const nodeTokenRaw =
       process.env.NODE_TOKEN || this.configService?.get<string>('NODE_TOKEN');
+    const allowedTokens = (nodeTokenRaw || '')
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
 
-    if (!nodeToken || token !== nodeToken) {
+    if (!allowedTokens.length || !allowedTokens.includes(token)) {
       throw new UnauthorizedException('Invalid node token');
     }
 
