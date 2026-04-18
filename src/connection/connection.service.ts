@@ -246,13 +246,15 @@ export class ConnectionService {
             total_duration_seconds: number | null;
             average_duration_seconds: number | null;
             total_bytes_transferred: bigint | null;
+            max_duration_seconds: number | null;
           }>
         >`
           SELECT
             COUNT(*)::int                                               AS total_sessions,
             COALESCE(SUM(${Prisma.raw(effectiveDurationSql)}), 0)::bigint AS total_duration_seconds,
             COALESCE(AVG(${Prisma.raw(effectiveDurationSql)}), 0)::float AS average_duration_seconds,
-            COALESCE(SUM(bytes_transferred), 0)::bigint                 AS total_bytes_transferred
+            COALESCE(SUM(bytes_transferred), 0)::bigint                 AS total_bytes_transferred,
+            COALESCE(MAX(${Prisma.raw(effectiveDurationSql)}), 0)::int  AS max_duration_seconds
           FROM connection_sessions
           WHERE user_id = ${userId}
         `,
@@ -286,6 +288,7 @@ export class ConnectionService {
         total_duration_seconds: BigInt(0),
         average_duration_seconds: 0,
         total_bytes_transferred: BigInt(0),
+        max_duration_seconds: 0,
       };
 
       const totalSessions = Number(aggregate.total_sessions ?? 0);
@@ -298,6 +301,7 @@ export class ConnectionService {
       const totalBytesTransferred = Number(
         aggregate.total_bytes_transferred ?? BigInt(0),
       );
+      const maxDurationSeconds = Number(aggregate.max_duration_seconds ?? 0);
 
       const platformBreakdown = platformRows.reduce<
         Record<string, { sessions: number; total_duration_seconds: number }>
@@ -336,6 +340,7 @@ export class ConnectionService {
           total_duration_seconds: totalDurationSeconds,
           average_duration_seconds: averageDurationSeconds,
           total_bytes_transferred: totalBytesTransferred,
+          max_duration_seconds: maxDurationSeconds,
           platform_breakdown: platformBreakdown,
           daily_connection_frequency: dailyConnectionFrequency,
         },
