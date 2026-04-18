@@ -112,6 +112,20 @@ describe('NodesController', () => {
 
       expect(multiGuard.canActivate(context)).toBe(true);
     });
+
+    it('should trim Bearer token and allow match when NODE_TOKEN has no trailing newline', () => {
+      const context = {
+        switchToHttp: () => ({
+          getRequest: () => ({
+            headers: {
+              authorization: 'Bearer test-token\n',
+            },
+          }),
+        }),
+      } as ExecutionContext;
+
+      expect(guard.canActivate(context)).toBe(true);
+    });
   });
 
   describe('register', () => {

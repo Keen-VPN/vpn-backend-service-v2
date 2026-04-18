@@ -21,7 +21,7 @@ export class NodeAuthGuard implements CanActivate {
       throw new UnauthorizedException('No node token provided');
     }
 
-    const token = authHeader.split('Bearer ')[1];
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
     const nodeTokenRaw =
       process.env.NODE_TOKEN || this.configService?.get<string>('NODE_TOKEN');
     const allowedTokens = (nodeTokenRaw || '')
