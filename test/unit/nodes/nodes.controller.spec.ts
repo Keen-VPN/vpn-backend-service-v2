@@ -91,6 +91,27 @@ describe('NodesController', () => {
 
       expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
     });
+
+    it('should allow access when Bearer token matches any comma-separated NODE_TOKEN', () => {
+      const multiConfig = {
+        get: jest.fn((key: string) => {
+          if (key === 'NODE_TOKEN') return 'first-token,second-token';
+          return null;
+        }),
+      };
+      const multiGuard = new NodeAuthGuard(multiConfig as any);
+      const context = {
+        switchToHttp: () => ({
+          getRequest: () => ({
+            headers: {
+              authorization: 'Bearer second-token',
+            },
+          }),
+        }),
+      } as ExecutionContext;
+
+      expect(multiGuard.canActivate(context)).toBe(true);
+    });
   });
 
   describe('register', () => {
