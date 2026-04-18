@@ -98,6 +98,7 @@ describe('ConnectionController', () => {
           total_duration_seconds: 3600,
           average_duration_seconds: 300,
           total_bytes_transferred: 1024,
+          max_duration_seconds: 600,
           platform_breakdown: {
             ios: { sessions: 7, total_duration_seconds: 2100 },
             macos: { sessions: 5, total_duration_seconds: 1500 },
