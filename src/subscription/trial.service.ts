@@ -9,9 +9,16 @@ import {
 } from './trial-helpers';
 import { SubscriptionStatus } from '@prisma/client';
 import { getActiveSubscriptionForUser } from './subscription-lookup.util';
+import { NotificationService } from '../notification/notification.service';
+import { getLinkedUserClusterIds } from './linked-user-cluster.util';
 
 const TRIAL_DURATION_DAYS = 30;
 const TRIAL_TIER_NAME = 'free_trial';
+
+export interface TrialGrantNotifyContext {
+  billingChannel: 'stripe' | 'apple';
+  planLabel: string;
+}
 
 export interface GrantResult {
   granted: boolean;
@@ -33,6 +40,8 @@ export class TrialService {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(ConfigService) private configService: ConfigService,
+    @Inject(NotificationService)
+    private readonly notificationService: NotificationService,
   ) {}
 
   /**
@@ -46,6 +55,7 @@ export class TrialService {
   async grantIfEligible(
     user: { id: string; email: string; provider: string | null },
     deviceHash: string | null,
+    trialNotify?: TrialGrantNotifyContext,
   ): Promise<GrantResult> {
     SafeLogger.debug(
       'TrialService.grantIfEligible called',
@@ -193,7 +203,58 @@ export class TrialService {
       return { granted: true, userId: user.id, trialEndsAt: expiresAt };
     });
 
+    if (result.granted && trialNotify) {
+      await this.maybeNotifyTrialStartedSlack(user.id, user.email, trialNotify);
+    }
+
     return result;
+  }
+
+  /**
+   * One Slack message per linked identity cluster: if any linked user was already
+   * notified for a trial start, skip (covers Apple + Google on separate user rows).
+   */
+  private async maybeNotifyTrialStartedSlack(
+    userId: string,
+    userEmail: string,
+    trialNotify: TrialGrantNotifyContext,
+  ): Promise<void> {
+    try {
+      const clusterIds = await getLinkedUserClusterIds(this.prisma, userId);
+      const alreadyNotified = await this.prisma.trialGrant.findFirst({
+        where: {
+          userId: { in: clusterIds },
+          slackTrialStartedNotifiedAt: { not: null },
+        },
+        select: { id: true },
+      });
+      if (alreadyNotified) {
+        return;
+      }
+
+      const sent = await this.notificationService.notifyTrialStarted({
+        userId,
+        userEmail,
+        billingChannel: trialNotify.billingChannel,
+        planLabel: trialNotify.planLabel,
+        occurredAt: new Date(),
+      });
+
+      if (sent) {
+        await this.prisma.trialGrant.update({
+          where: { userId },
+          data: { slackTrialStartedNotifiedAt: new Date() },
+        });
+      }
+    } catch (err) {
+      SafeLogger.warn(
+        'Trial Slack notification failed (non-fatal)',
+        { service: 'TrialService', userId },
+        {
+          error: err instanceof Error ? err.message : String(err),
+        },
+      );
+    }
   }
 
   /**

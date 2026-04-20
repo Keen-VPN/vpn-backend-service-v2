@@ -10,6 +10,7 @@ import {
 } from '@prisma/client';
 import { SafeLogger } from '../../common/utils/logger.util';
 import { TrialService } from '../../subscription/trial.service';
+import { PaidConversionSlackService } from '../../notification/paid-conversion-slack.service';
 
 const APPLE_RECEIPT_URLS = {
   sandbox: 'https://sandbox.itunes.apple.com/verifyReceipt',
@@ -70,6 +71,7 @@ export class AppleService {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(forwardRef(() => TrialService))
     private trialService: TrialService,
+    private readonly paidConversionSlackService: PaidConversionSlackService,
   ) {}
 
   async verifyReceipt(
@@ -335,6 +337,100 @@ export class AppleService {
         }
       }
     }
+
+    if (
+      txResult.created &&
+      (nextStatus === SubscriptionStatus.ACTIVE ||
+        nextStatus === SubscriptionStatus.TRIALING)
+    ) {
+      await this.maybeGrantTrialAfterAppleIap(userId, null, productId);
+    }
+
+    if (nextStatus === SubscriptionStatus.ACTIVE) {
+      try {
+        await this.maybeNotifyApplePaidConversion(
+          userId,
+          originalTransactionId,
+          productId,
+        );
+      } catch (paidErr) {
+        SafeLogger.warn(
+          'Apple paid-conversion Slack skipped (non-fatal)',
+          undefined,
+          {
+            userId,
+            error: paidErr instanceof Error ? paidErr.message : String(paidErr),
+          },
+        );
+      }
+    }
+  }
+
+  private describeAppleTrialPlan(plan: PlanMetadata): string {
+    if (plan.billingPeriod === 'month') {
+      return 'Monthly trial';
+    }
+    if (plan.billingPeriod === 'year') {
+      return 'Annual trial';
+    }
+    return `${plan.planName} (trial)`;
+  }
+
+  private async maybeGrantTrialAfterAppleIap(
+    userId: string,
+    deviceFingerprint: string | null | undefined,
+    productId: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return;
+
+    const plan = this.resolvePlanMetadata(productId);
+    try {
+      await this.trialService.grantIfEligible(
+        { id: user.id, email: user.email, provider: user.provider },
+        deviceFingerprint ?? null,
+        {
+          billingChannel: 'apple',
+          planLabel: this.describeAppleTrialPlan(plan),
+        },
+      );
+    } catch (trialError) {
+      SafeLogger.warn(
+        'Failed to grant trial after Apple IAP (non-fatal)',
+        undefined,
+        {
+          userId,
+          error:
+            trialError instanceof Error
+              ? trialError.message
+              : String(trialError),
+        },
+      );
+    }
+  }
+
+  private async maybeNotifyApplePaidConversion(
+    userId: string,
+    originalTransactionId: string,
+    productId: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return;
+    }
+
+    const plan = this.resolvePlanMetadata(productId);
+    const billingPeriod =
+      plan.billingPeriod === 'month' || plan.billingPeriod === 'year'
+        ? plan.billingPeriod
+        : null;
+
+    await this.paidConversionSlackService.maybeNotifyApplePaidConversion({
+      userId,
+      userEmail: user.email,
+      originalTransactionId,
+      billingPeriod,
+    });
   }
 
   private resolvePlanMetadata(productId: string): PlanMetadata {
@@ -864,10 +960,6 @@ export class AppleService {
               },
             });
 
-        // Paid Apple subscriptions should not automatically grant trials unless explicitly required.
-        // If business rules change, implement a dedicated guard method here.
-        void purchase;
-
         try {
           await tx.subscriptionUser.create({
             data: {
@@ -914,6 +1006,37 @@ export class AppleService {
             )
           )
             throw e;
+        }
+      }
+
+      if (
+        result.subscription.status === SubscriptionStatus.ACTIVE ||
+        result.subscription.status === SubscriptionStatus.TRIALING
+      ) {
+        await this.maybeGrantTrialAfterAppleIap(
+          userId,
+          deviceFingerprint,
+          verifiedProductId,
+        );
+      }
+
+      if (result.subscription.status === SubscriptionStatus.ACTIVE) {
+        try {
+          await this.maybeNotifyApplePaidConversion(
+            userId,
+            verifiedOriginalTransactionId,
+            verifiedProductId,
+          );
+        } catch (paidErr) {
+          SafeLogger.warn(
+            'Apple paid-conversion Slack skipped (non-fatal)',
+            undefined,
+            {
+              userId,
+              error:
+                paidErr instanceof Error ? paidErr.message : String(paidErr),
+            },
+          );
         }
       }
 
@@ -1216,6 +1339,39 @@ export class AppleService {
                 )
               )
                 throw e;
+            }
+          }
+
+          if (
+            status === SubscriptionStatus.ACTIVE ||
+            status === SubscriptionStatus.TRIALING
+          ) {
+            await this.maybeGrantTrialAfterAppleIap(
+              userId,
+              deviceFingerprint,
+              purchase.productId,
+            );
+          }
+
+          if (status === SubscriptionStatus.ACTIVE) {
+            try {
+              await this.maybeNotifyApplePaidConversion(
+                userId,
+                purchase.originalTransactionId,
+                purchase.productId,
+              );
+            } catch (paidErr) {
+              SafeLogger.warn(
+                'Apple paid-conversion Slack skipped (non-fatal)',
+                undefined,
+                {
+                  userId,
+                  error:
+                    paidErr instanceof Error
+                      ? paidErr.message
+                      : String(paidErr),
+                },
+              );
             }
           }
 

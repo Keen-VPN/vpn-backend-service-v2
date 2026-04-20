@@ -58,4 +58,6 @@ export const configValidationSchema = Joi.object({
 
   // Slack error reporting (optional)
   SLACK_WEBHOOK_URL: Joi.string().uri().optional(),
+  // Free-trial growth notifications (optional; dedicated webhook recommended)
+  SLACK_TRIAL_WEBHOOK_URL: Joi.string().uri().optional(),
 });
