@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { SubscriptionStatus } from '@prisma/client';
+import { SubscriptionStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from './notification.service';
 
@@ -27,11 +27,11 @@ export class PaidConversionSlackService {
     }
 
     const dedupeKey = `stripe:${params.stripeSubscriptionId}:paid`;
-    const already =
-      await this.prisma.paidConversionSlackNotification.findUnique({
-        where: { dedupeKey },
-      });
-    if (already) {
+    const notificationId = await this.tryAcquireDedupeKey(
+      dedupeKey,
+      params.user.id,
+    );
+    if (!notificationId) {
       return;
     }
 
@@ -51,9 +51,9 @@ export class PaidConversionSlackService {
       occurredAt: new Date(),
     });
 
-    if (sent) {
-      await this.prisma.paidConversionSlackNotification.create({
-        data: { dedupeKey, userId: params.user.id },
+    if (!sent) {
+      await this.prisma.paidConversionSlackNotification.delete({
+        where: { id: notificationId },
       });
     }
   }
@@ -69,11 +69,11 @@ export class PaidConversionSlackService {
     billingPeriod: string | null;
   }): Promise<void> {
     const dedupeKey = `apple:${params.originalTransactionId}:paid`;
-    const already =
-      await this.prisma.paidConversionSlackNotification.findUnique({
-        where: { dedupeKey },
-      });
-    if (already) {
+    const notificationId = await this.tryAcquireDedupeKey(
+      dedupeKey,
+      params.userId,
+    );
+    if (!notificationId) {
       return;
     }
 
@@ -93,10 +93,30 @@ export class PaidConversionSlackService {
       occurredAt: new Date(),
     });
 
-    if (sent) {
-      await this.prisma.paidConversionSlackNotification.create({
-        data: { dedupeKey, userId: params.userId },
+    if (!sent) {
+      await this.prisma.paidConversionSlackNotification.delete({
+        where: { id: notificationId },
       });
+    }
+  }
+
+  private async tryAcquireDedupeKey(
+    dedupeKey: string,
+    userId: string,
+  ): Promise<string | null> {
+    try {
+      const row = await this.prisma.paidConversionSlackNotification.create({
+        data: { dedupeKey, userId },
+      });
+      return row.id;
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return null;
+      }
+      throw error;
     }
   }
 

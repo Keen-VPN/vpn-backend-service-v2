@@ -221,14 +221,29 @@ export class TrialService {
   ): Promise<void> {
     try {
       const clusterIds = await getLinkedUserClusterIds(this.prisma, userId);
-      const alreadyNotified = await this.prisma.trialGrant.findFirst({
+      const grants = await this.prisma.trialGrant.findMany({
         where: {
           userId: { in: clusterIds },
-          slackTrialStartedNotifiedAt: { not: null },
         },
-        select: { id: true },
+        select: { userId: true, slackTrialStartedNotifiedAt: true },
+        orderBy: { userId: 'asc' },
       });
+      const alreadyNotified = grants.some(
+        (g) => g.slackTrialStartedNotifiedAt !== null,
+      );
       if (alreadyNotified) {
+        return;
+      }
+      const coordinatorUserId = grants[0]?.userId ?? userId;
+      const claimAt = new Date();
+      const claim = await this.prisma.trialGrant.updateMany({
+        where: {
+          userId: coordinatorUserId,
+          slackTrialStartedNotifiedAt: null,
+        },
+        data: { slackTrialStartedNotifiedAt: claimAt },
+      });
+      if (claim.count === 0) {
         return;
       }
 
@@ -240,10 +255,13 @@ export class TrialService {
         occurredAt: new Date(),
       });
 
-      if (sent) {
-        await this.prisma.trialGrant.update({
-          where: { userId },
-          data: { slackTrialStartedNotifiedAt: new Date() },
+      if (!sent) {
+        await this.prisma.trialGrant.updateMany({
+          where: {
+            userId: coordinatorUserId,
+            slackTrialStartedNotifiedAt: claimAt,
+          },
+          data: { slackTrialStartedNotifiedAt: null },
         });
       }
     } catch (err) {

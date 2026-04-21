@@ -15,9 +15,9 @@ describe('PaidConversionSlackService', () => {
     mockPrisma.paidConversionSlackNotification.findUnique.mockResolvedValue(
       null,
     );
-    mockPrisma.paidConversionSlackNotification.create.mockResolvedValue(
-      {} as any,
-    );
+    mockPrisma.paidConversionSlackNotification.create.mockResolvedValue({
+      id: 'notif-1',
+    } as any);
     mockPrisma.trialGrant.findUnique.mockResolvedValue(null);
 
     const module: TestingModule = await Test.createTestingModule({

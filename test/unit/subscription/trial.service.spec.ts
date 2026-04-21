@@ -25,7 +25,8 @@ describe('TrialService', () => {
     mockConfigService = createMockConfigService();
     mockConfigService.get.mockReturnValue('true'); // Default enable trials
     mockPrisma.linkedAccount.findMany.mockResolvedValue([]);
-    mockPrisma.trialGrant.findFirst.mockResolvedValue(null);
+    mockPrisma.trialGrant.findMany.mockResolvedValue([]);
+    mockPrisma.trialGrant.updateMany.mockResolvedValue({ count: 1 } as any);
     mockNotifyTrialStarted.mockResolvedValue(false);
 
     const module: TestingModule = await Test.createTestingModule({
@@ -229,9 +230,9 @@ describe('TrialService', () => {
           planLabel: 'Monthly trial',
         }),
       );
-      expect(mockPrisma.trialGrant.update).toHaveBeenCalledWith(
+      expect(mockPrisma.trialGrant.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { userId: user.id },
+          where: expect.objectContaining({ userId: user.id }),
           data: expect.objectContaining({
             slackTrialStartedNotifiedAt: expect.any(Date) as Date,
           }),
@@ -260,7 +261,7 @@ describe('TrialService', () => {
         planLabel: 'Monthly trial',
       });
 
-      expect(mockPrisma.trialGrant.update).not.toHaveBeenCalled();
+      expect(mockPrisma.trialGrant.updateMany).toHaveBeenCalledTimes(2);
     });
 
     it('skips Slack when a linked-cluster user was already notified', async () => {
@@ -273,9 +274,12 @@ describe('TrialService', () => {
           createdAt: new Date(),
         },
       ] as any);
-      mockPrisma.trialGrant.findFirst.mockResolvedValueOnce({
-        id: 'prior',
-      } as any);
+      mockPrisma.trialGrant.findMany.mockResolvedValueOnce([
+        {
+          userId: user.id,
+          slackTrialStartedNotifiedAt: new Date(),
+        },
+      ] as any);
 
       mockPrisma.$transaction.mockImplementation(async (callback) => {
         mockPrisma.trialGrant.findUnique.mockResolvedValue(null);
