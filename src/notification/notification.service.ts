@@ -25,6 +25,27 @@ export interface ServerLocationRequest {
   createdAt: string;
 }
 
+export type TrialBillingChannelSlack = 'stripe' | 'apple';
+
+export interface TrialStartedSlackPayload {
+  userId: string;
+  userEmail: string;
+  billingChannel: TrialBillingChannelSlack;
+  planLabel: string;
+  occurredAt: Date;
+}
+
+export type PaidConversionTypeSlack = 'new_paid' | 'trial_to_paid';
+
+export interface PaidConversionSlackPayload {
+  userId: string;
+  userEmail: string;
+  paymentSource: 'stripe' | 'apple';
+  planDisplay: string;
+  conversionType: PaidConversionTypeSlack;
+  occurredAt: Date;
+}
+
 /** Parse first file path and line number from an Error stack. */
 export function parseErrorLocation(
   stack: string | undefined,
@@ -54,6 +75,13 @@ export class NotificationService {
     return nodeEnv === 'development';
   }
 
+  /** Trial growth notifications are intentionally production-only (not staging/test). */
+  private isProductionRuntime(): boolean {
+    const nodeEnv =
+      this.configService.get<string>('NODE_ENV') || process.env.NODE_ENV;
+    return nodeEnv === 'production';
+  }
+
   private getRuntimeEnvironment(): string {
     return (
       this.configService.get<string>('APP_ENV') ||
@@ -77,6 +105,25 @@ export class NotificationService {
     // to prevent injection of formatted links, bold, italic, strikethrough, or
     // code spans into Slack messages.
     return text.replace(/[*_~`<>|]/g, '');
+  }
+
+  /** e.g. "Monthly trial" → "Monthly (Trial)" */
+  private formatTrialPlanLine(sanitizedPlanLabel: string): string {
+    const base = sanitizedPlanLabel.replace(/\s+trial\s*$/i, '').trim();
+    if (base.length > 0) {
+      return `${base} (Trial)`;
+    }
+    return `${sanitizedPlanLabel} (Trial)`;
+  }
+
+  /** e.g. 2026-04-16 15:42 (UTC) */
+  private formatTrialTimestampUtc(occurredAt: Date): string {
+    const y = occurredAt.getUTCFullYear();
+    const mo = String(occurredAt.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(occurredAt.getUTCDate()).padStart(2, '0');
+    const h = String(occurredAt.getUTCHours()).padStart(2, '0');
+    const min = String(occurredAt.getUTCMinutes()).padStart(2, '0');
+    return `${y}-${mo}-${day} ${h}:${min}`;
   }
 
   private getFullEndpointUrl(request?: Request): string | null {
@@ -268,6 +315,124 @@ export class NotificationService {
       this.logger.warn(
         `Failed to send error to Slack: ${(e as Error).message}`,
       );
+    }
+  }
+
+  /**
+   * Growth / onboarding: notify when a user’s VPN free trial is activated after billing is in place.
+   * Production only (NODE_ENV=production). Uses SLACK_TRIAL_WEBHOOK_URL so trial traffic can be
+   * routed separately from ops alerts.
+   */
+  /** @returns true if a message was posted to Slack */
+  async notifyTrialStarted(
+    payload: TrialStartedSlackPayload,
+  ): Promise<boolean> {
+    if (this.isDevelopment()) return false;
+
+    if (!this.isProductionRuntime()) {
+      return false;
+    }
+
+    const webhookUrl = this.configService.get<string>(
+      'SLACK_TRIAL_WEBHOOK_URL',
+    );
+
+    if (!webhookUrl) {
+      this.logger.warn(
+        'SLACK_TRIAL_WEBHOOK_URL not configured; trial-started Slack notification skipped',
+      );
+      return false;
+    }
+
+    const email = this.sanitizeForSlackText(payload.userEmail);
+    const planLine = this.formatTrialPlanLine(
+      this.sanitizeForSlackText(payload.planLabel),
+    );
+    const signupMethod =
+      payload.billingChannel === 'stripe' ? 'Stripe' : 'Apple';
+    const when = this.formatTrialTimestampUtc(payload.occurredAt);
+
+    const text = [
+      `🎉 *New Free Trial Started*`,
+      '',
+      `*User:* ${email}`,
+      `*Signup Method:* ${signupMethod}`,
+      `*Plan:* ${planLine}`,
+      `*Time:* ${when}`,
+    ].join('\n');
+
+    try {
+      await firstValueFrom(this.httpService.post(webhookUrl, { text }));
+      this.logger.log(
+        `Trial-started Slack notification sent for ${payload.userId}`,
+      );
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Failed to send trial-started Slack: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Revenue / growth: first-time paid subscription (same Slack channel as trials).
+   * Production only; uses SLACK_TRIAL_WEBHOOK_URL.
+   */
+  async notifyPaidConversion(
+    payload: PaidConversionSlackPayload,
+  ): Promise<boolean> {
+    if (this.isDevelopment()) {
+      return false;
+    }
+
+    if (!this.isProductionRuntime()) {
+      return false;
+    }
+
+    const webhookUrl = this.configService.get<string>(
+      'SLACK_TRIAL_WEBHOOK_URL',
+    );
+
+    if (!webhookUrl) {
+      this.logger.warn(
+        'SLACK_TRIAL_WEBHOOK_URL not configured; paid-conversion Slack skipped',
+      );
+      return false;
+    }
+
+    const email = this.sanitizeForSlackText(payload.userEmail);
+    const plan = this.sanitizeForSlackText(payload.planDisplay);
+    const source = payload.paymentSource === 'stripe' ? 'Stripe' : 'Apple';
+    const typeLine =
+      payload.conversionType === 'trial_to_paid'
+        ? 'Trial → Paid'
+        : 'New paid user';
+    const when = this.formatTrialTimestampUtc(payload.occurredAt);
+
+    const text = [
+      `💰 *New Paid User*`,
+      '',
+      `*User:* ${email}`,
+      `*Source:* ${source}`,
+      `*Plan:* ${plan}`,
+      `*Type:* ${typeLine}`,
+      `*Time:* ${when}`,
+    ].join('\n');
+
+    try {
+      await firstValueFrom(this.httpService.post(webhookUrl, { text }));
+      this.logger.log(
+        `Paid-conversion Slack notification sent for ${payload.userId}`,
+      );
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Failed to send paid-conversion Slack: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      return false;
     }
   }
 

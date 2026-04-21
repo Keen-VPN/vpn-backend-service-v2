@@ -271,6 +271,163 @@ describe('NotificationService', () => {
     });
   });
 
+  describe('notifyTrialStarted', () => {
+    it('posts to SLACK_TRIAL_WEBHOOK_URL when configured in production', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'production';
+        if (key === 'SLACK_TRIAL_WEBHOOK_URL')
+          return 'https://hooks.slack.com/trial-test';
+        return undefined;
+      });
+
+      mockHttpService.post.mockReturnValue(
+        of({
+          data: 'ok',
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config: {} as AxiosResponse['config'],
+        }),
+      );
+
+      const ok = await service.notifyTrialStarted({
+        userId: 'user-uuid',
+        userEmail: 'a@example.com',
+        billingChannel: 'stripe',
+        planLabel: 'Monthly trial',
+        occurredAt: new Date('2026-04-21T12:00:00.000Z'),
+      });
+
+      expect(ok).toBe(true);
+      const postedText = mockHttpService.post.mock.calls[0][1].text as string;
+      expect(mockHttpService.post).toHaveBeenCalledWith(
+        'https://hooks.slack.com/trial-test',
+        expect.objectContaining({
+          text: expect.stringContaining('a@example.com') as string,
+        }),
+      );
+      expect(postedText).toContain('New Free Trial Started');
+      expect(postedText).toContain('*Signup Method:* Stripe');
+      expect(postedText).toContain('Monthly (Trial)');
+    });
+
+    it('returns false when SLACK_TRIAL_WEBHOOK_URL is missing', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'production';
+        return undefined;
+      });
+
+      const ok = await service.notifyTrialStarted({
+        userId: 'user-uuid',
+        userEmail: 'a@example.com',
+        billingChannel: 'apple',
+        planLabel: 'Annual trial',
+        occurredAt: new Date(),
+      });
+
+      expect(ok).toBe(false);
+      expect(mockHttpService.post).not.toHaveBeenCalled();
+    });
+
+    it('returns false outside production (e.g. staging)', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'staging';
+        if (key === 'SLACK_TRIAL_WEBHOOK_URL')
+          return 'https://hooks.slack.com/trial-test';
+        return undefined;
+      });
+
+      const ok = await service.notifyTrialStarted({
+        userId: 'user-uuid',
+        userEmail: 'a@example.com',
+        billingChannel: 'stripe',
+        planLabel: 'Monthly trial',
+        occurredAt: new Date(),
+      });
+
+      expect(ok).toBe(false);
+      expect(mockHttpService.post).not.toHaveBeenCalled();
+    });
+
+    it('returns false in development', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'development';
+        if (key === 'SLACK_TRIAL_WEBHOOK_URL')
+          return 'https://hooks.slack.com/trial-test';
+        return undefined;
+      });
+
+      const ok = await service.notifyTrialStarted({
+        userId: 'user-uuid',
+        userEmail: 'a@example.com',
+        billingChannel: 'apple',
+        planLabel: 'Annual trial',
+        occurredAt: new Date(),
+      });
+
+      expect(ok).toBe(false);
+      expect(mockHttpService.post).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('notifyPaidConversion', () => {
+    it('posts to SLACK_TRIAL_WEBHOOK_URL in production', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'production';
+        if (key === 'SLACK_TRIAL_WEBHOOK_URL')
+          return 'https://hooks.slack.com/trial-test';
+        return undefined;
+      });
+
+      mockHttpService.post.mockReturnValue(
+        of({
+          data: 'ok',
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config: {} as AxiosResponse['config'],
+        }),
+      );
+
+      const ok = await service.notifyPaidConversion({
+        userId: 'u1',
+        userEmail: 'a@example.com',
+        paymentSource: 'stripe',
+        planDisplay: 'Annual',
+        conversionType: 'trial_to_paid',
+        occurredAt: new Date('2026-04-16T16:10:00.000Z'),
+      });
+
+      expect(ok).toBe(true);
+      const text = mockHttpService.post.mock.calls[0][1].text as string;
+      expect(text).toContain('New Paid User');
+      expect(text).toContain('*Source:* Stripe');
+      expect(text).toContain('*Plan:* Annual');
+      expect(text).toContain('Trial → Paid');
+    });
+
+    it('returns false outside production', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'test';
+        if (key === 'SLACK_TRIAL_WEBHOOK_URL')
+          return 'https://hooks.slack.com/trial-test';
+        return undefined;
+      });
+
+      const ok = await service.notifyPaidConversion({
+        userId: 'u1',
+        userEmail: 'a@example.com',
+        paymentSource: 'apple',
+        planDisplay: 'Monthly',
+        conversionType: 'new_paid',
+        occurredAt: new Date(),
+      });
+
+      expect(ok).toBe(false);
+      expect(mockHttpService.post).not.toHaveBeenCalled();
+    });
+  });
+
   describe('notifyServerLocationRequest', () => {
     it('should send server location request to dedicated Slack webhook', async () => {
       mockConfigService.get.mockImplementation((key: string) => {

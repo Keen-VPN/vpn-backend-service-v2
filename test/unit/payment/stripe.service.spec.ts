@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { StripeService } from '../../../src/payment/stripe/stripe.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { TrialService } from '../../../src/subscription/trial.service';
+import { PaidConversionSlackService } from '../../../src/notification/paid-conversion-slack.service';
 import { SubscriptionStatus } from '@prisma/client';
 import { ConflictException } from '@nestjs/common';
 import {
@@ -51,6 +52,17 @@ describe('StripeService', () => {
           useValue: {
             checkTrialStatus: jest.fn(),
             activateTrial: jest.fn(),
+            grantIfEligible: jest
+              .fn()
+              .mockResolvedValue({ granted: false, userId: '' }),
+          },
+        },
+        {
+          provide: PaidConversionSlackService,
+          useValue: {
+            maybeNotifyStripePaidConversion: jest
+              .fn()
+              .mockResolvedValue(undefined),
           },
         },
       ],

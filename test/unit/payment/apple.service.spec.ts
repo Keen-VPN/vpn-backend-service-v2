@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AppleService } from '../../../src/payment/apple/apple.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { TrialService } from '../../../src/subscription/trial.service';
+import { PaidConversionSlackService } from '../../../src/notification/paid-conversion-slack.service';
 import {
   createMockPrismaClient,
   createMockConfigService,
@@ -23,16 +24,20 @@ describe('AppleService', () => {
   let service: AppleService;
   let mockPrisma: MockPrismaClient;
   let mockConfigService: ReturnType<typeof createMockConfigService>;
-  let mockTrialService: jest.Mocked<TrialService>;
+  let mockTrialService: { grantIfEligible: jest.Mock };
+  const mockPaidConversionSlack = {
+    maybeNotifyStripePaidConversion: jest.fn().mockResolvedValue(undefined),
+    maybeNotifyApplePaidConversion: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(async () => {
     mockPrisma = createMockPrismaClient();
     mockConfigService = createMockConfigService();
     mockTrialService = {
-      grantTrial: jest.fn(),
-      checkTrialEligibility: jest.fn(),
-      getTrialStatus: jest.fn(),
-    } as any;
+      grantIfEligible: jest
+        .fn()
+        .mockResolvedValue({ granted: false, userId: '' }),
+    };
 
     // AppleService uses Prisma transactions; run callback against the same mock client.
     (mockPrisma.$transaction as unknown as jest.Mock).mockImplementation(
@@ -56,7 +61,11 @@ describe('AppleService', () => {
         },
         {
           provide: TrialService,
-          useValue: mockTrialService,
+          useValue: mockTrialService as unknown as TrialService,
+        },
+        {
+          provide: PaidConversionSlackService,
+          useValue: mockPaidConversionSlack,
         },
       ],
     }).compile();

@@ -180,15 +180,26 @@ model SalesContact {
   @@map("sales_contacts")
 }
 
-model TrialGrant {
+model PaidConversionSlackNotification {
   id         String   @id @default(uuid())
-  userId     String   @unique @map("user_id")
-  deviceHash String   @map("device_hash")
-  grantedAt  DateTime @default(now()) @map("granted_at") @db.Timestamptz(6)
-  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
-  channel    String   @default("auto")
-  metadata   Json?
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dedupeKey  String   @unique @map("dedupe_key")
+  userId     String   @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("paid_conversion_slack_notifications")
+}
+
+model TrialGrant {
+  id                           String    @id @default(uuid())
+  userId                       String    @unique @map("user_id")
+  deviceHash                   String    @map("device_hash")
+  grantedAt                    DateTime  @default(now()) @map("granted_at") @db.Timestamptz(6)
+  expiresAt                    DateTime  @map("expires_at") @db.Timestamptz(6)
+  channel                      String    @default("auto")
+  metadata                     Json?
+  slackTrialStartedNotifiedAt  DateTime? @map("slack_trial_started_notified_at") @db.Timestamptz(6)
+  user                         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([deviceHash], map: "trial_grants_device_hash")
   @@map("trial_grants")
