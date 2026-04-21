@@ -15,6 +15,7 @@ import {
 import { getActiveSubscriptionForUser } from '../../subscription/subscription-lookup.util';
 import { SafeLogger } from '../../common/utils/logger.util';
 import { TrialService } from '../../subscription/trial.service';
+import { PaidConversionSlackService } from '../../notification/paid-conversion-slack.service';
 
 @Injectable()
 export class StripeService {
@@ -25,6 +26,7 @@ export class StripeService {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(forwardRef(() => TrialService))
     private trialService: TrialService,
+    private readonly paidConversionSlackService: PaidConversionSlackService,
   ) {
     const secretKey =
       this.configService?.get<string>('STRIPE_SECRET_KEY') ||
@@ -296,6 +298,8 @@ export class StripeService {
     const currentPeriodStart = new Date(periodStartTimestamp * 1000);
     const currentPeriodEnd = new Date(periodEndTimestamp * 1000);
 
+    const stripeRawStatus = subscription.status;
+
     // Check for existing subscription with same period
     const existing = await this.prisma.subscription.findFirst({
       where: {
@@ -305,6 +309,7 @@ export class StripeService {
     });
     /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
     if (existing) {
+      const previousDbStatus = existing.status;
       // Update existing
       const updatedSubscription = await this.prisma.subscription.update({
         where: { id: existing.id },
@@ -323,6 +328,27 @@ export class StripeService {
         },
       });
       await this.ensureSubscriptionUserMapping(updatedSubscription.id, user.id);
+
+      try {
+        await this.paidConversionSlackService.maybeNotifyStripePaidConversion({
+          user: { id: user.id, email: user.email },
+          stripeSubscriptionId: subscription.id,
+          previousDbStatus,
+          stripeRawStatus,
+          billingPeriod: planInfo.billingPeriod ?? null,
+        });
+      } catch (paidConvErr) {
+        SafeLogger.warn(
+          'Paid conversion Slack skipped (non-fatal)',
+          undefined,
+          {
+            error:
+              paidConvErr instanceof Error
+                ? paidConvErr.message
+                : String(paidConvErr),
+          },
+        );
+      }
     } else {
       // Create new
       const newSubscription = await this.prisma.subscription.create({
@@ -349,7 +375,14 @@ export class StripeService {
 
       // Grant trial if eligible (after subscription is created)
       try {
-        const trialResult = await this.trialService.grantIfEligible(user, null);
+        const trialResult = await this.trialService.grantIfEligible(
+          user,
+          null,
+          {
+            billingChannel: 'stripe',
+            planLabel: this.describeStripeTrialPlan(planInfo),
+          },
+        );
         if (trialResult.granted) {
           SafeLogger.info('Trial granted on subscription', {
             userId: trialResult.userId,
@@ -364,6 +397,27 @@ export class StripeService {
               ? trialError.message
               : String(trialError),
         });
+      }
+
+      try {
+        await this.paidConversionSlackService.maybeNotifyStripePaidConversion({
+          user: { id: user.id, email: user.email },
+          stripeSubscriptionId: subscription.id,
+          previousDbStatus: null,
+          stripeRawStatus,
+          billingPeriod: planInfo.billingPeriod ?? null,
+        });
+      } catch (paidConvErr) {
+        SafeLogger.warn(
+          'Paid conversion Slack skipped (non-fatal)',
+          undefined,
+          {
+            error:
+              paidConvErr instanceof Error
+                ? paidConvErr.message
+                : String(paidConvErr),
+          },
+        );
       }
     }
   }
@@ -449,6 +503,22 @@ export class StripeService {
       priceCurrency: price.currency || 'USD',
       billingPeriod,
     };
+  }
+
+  private describeStripeTrialPlan(planInfo: {
+    planName: string | null;
+    billingPeriod: string | null;
+  }): string {
+    if (planInfo.billingPeriod === 'month') {
+      return 'Monthly trial';
+    }
+    if (planInfo.billingPeriod === 'year') {
+      return 'Annual trial';
+    }
+    if (planInfo.planName) {
+      return `${planInfo.planName} (trial)`;
+    }
+    return 'Premium trial';
   }
 
   private getPriceIdForPlan(planId: string): string | null {

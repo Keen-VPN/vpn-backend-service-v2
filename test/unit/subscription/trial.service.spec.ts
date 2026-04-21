@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { TrialService } from '../../../src/subscription/trial.service';
+import { NotificationService } from '../../../src/notification/notification.service';
 import {
   createMockPrismaClient,
   createMockConfigService,
@@ -17,11 +18,16 @@ describe('TrialService', () => {
   let service: TrialService;
   let mockPrisma: MockPrismaClient;
   let mockConfigService: ReturnType<typeof createMockConfigService>;
+  const mockNotifyTrialStarted = jest.fn().mockResolvedValue(false);
 
   beforeEach(async () => {
     mockPrisma = createMockPrismaClient();
     mockConfigService = createMockConfigService();
     mockConfigService.get.mockReturnValue('true'); // Default enable trials
+    mockPrisma.linkedAccount.findMany.mockResolvedValue([]);
+    mockPrisma.trialGrant.findMany.mockResolvedValue([]);
+    mockPrisma.trialGrant.updateMany.mockResolvedValue({ count: 1 } as any);
+    mockNotifyTrialStarted.mockResolvedValue(false);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -33,6 +39,10 @@ describe('TrialService', () => {
         {
           provide: ConfigService,
           useValue: mockConfigService,
+        },
+        {
+          provide: NotificationService,
+          useValue: { notifyTrialStarted: mockNotifyTrialStarted },
         },
       ],
     }).compile();
@@ -188,6 +198,107 @@ describe('TrialService', () => {
           create: expect.objectContaining({ platform: undefined }),
         }),
       );
+    });
+
+    it('should send Slack trial context when granted and billing metadata provided', async () => {
+      const user = createMockUser();
+      mockNotifyTrialStarted.mockResolvedValueOnce(true);
+
+      mockPrisma.$transaction.mockImplementation(async (callback) => {
+        mockPrisma.trialGrant.findUnique.mockResolvedValue(null);
+        mockPrisma.subscription.findFirst.mockResolvedValue(
+          createMockSubscription(),
+        );
+        mockPrisma.trialGrant.create.mockResolvedValue({
+          id: 'new-grant',
+        } as any);
+        mockPrisma.user.update.mockResolvedValue(user);
+        return callback(mockPrisma);
+      });
+
+      const result = await service.grantIfEligible(user, null, {
+        billingChannel: 'stripe',
+        planLabel: 'Monthly trial',
+      });
+
+      expect(result.granted).toBe(true);
+      expect(mockNotifyTrialStarted).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: user.id,
+          userEmail: user.email,
+          billingChannel: 'stripe',
+          planLabel: 'Monthly trial',
+        }),
+      );
+      expect(mockPrisma.trialGrant.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId: user.id }),
+          data: expect.objectContaining({
+            slackTrialStartedNotifiedAt: expect.any(Date) as Date,
+          }),
+        }),
+      );
+    });
+
+    it('does not mark notified when Slack post fails', async () => {
+      const user = createMockUser();
+      mockNotifyTrialStarted.mockResolvedValueOnce(false);
+
+      mockPrisma.$transaction.mockImplementation(async (callback) => {
+        mockPrisma.trialGrant.findUnique.mockResolvedValue(null);
+        mockPrisma.subscription.findFirst.mockResolvedValue(
+          createMockSubscription(),
+        );
+        mockPrisma.trialGrant.create.mockResolvedValue({
+          id: 'new-grant',
+        } as any);
+        mockPrisma.user.update.mockResolvedValue(user);
+        return callback(mockPrisma);
+      });
+
+      await service.grantIfEligible(user, null, {
+        billingChannel: 'apple',
+        planLabel: 'Monthly trial',
+      });
+
+      expect(mockPrisma.trialGrant.updateMany).toHaveBeenCalledTimes(2);
+    });
+
+    it('skips Slack when a linked-cluster user was already notified', async () => {
+      const user = createMockUser();
+      mockPrisma.linkedAccount.findMany.mockResolvedValue([
+        {
+          id: 'la-1',
+          primaryUserId: user.id,
+          linkedUserId: 'other-user',
+          createdAt: new Date(),
+        },
+      ] as any);
+      mockPrisma.trialGrant.findMany.mockResolvedValueOnce([
+        {
+          userId: user.id,
+          slackTrialStartedNotifiedAt: new Date(),
+        },
+      ] as any);
+
+      mockPrisma.$transaction.mockImplementation(async (callback) => {
+        mockPrisma.trialGrant.findUnique.mockResolvedValue(null);
+        mockPrisma.subscription.findFirst.mockResolvedValue(
+          createMockSubscription(),
+        );
+        mockPrisma.trialGrant.create.mockResolvedValue({
+          id: 'new-grant',
+        } as any);
+        mockPrisma.user.update.mockResolvedValue(user);
+        return callback(mockPrisma);
+      });
+
+      await service.grantIfEligible(user, null, {
+        billingChannel: 'stripe',
+        planLabel: 'Monthly trial',
+      });
+
+      expect(mockNotifyTrialStarted).not.toHaveBeenCalled();
     });
   });
 
