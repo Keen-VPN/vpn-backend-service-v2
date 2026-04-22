@@ -26,6 +26,7 @@ export class StripeService {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(forwardRef(() => TrialService))
     private trialService: TrialService,
+    @Inject(PaidConversionSlackService)
     private readonly paidConversionSlackService: PaidConversionSlackService,
   ) {
     const secretKey =
