@@ -108,7 +108,8 @@ export class ConnectionController {
     return this.connectionService.getConnectionStats(user.uid);
   }
 
-  // Backward-compatible route for older clients.
+  // Backward-compatible route for older clients. `identifier` is ignored; stats are always
+  // for the authenticated user (JWT) to avoid leaking data by path.
   @Get('stats/:identifier')
   @UseGuards(SessionAuthGuard)
   @HttpCode(HttpStatus.OK)

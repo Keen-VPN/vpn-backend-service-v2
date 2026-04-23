@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
 import { NodesService } from '../nodes/nodes.service';
+import { normalizeServerLocationForStats } from './server-location-stats.util';
 
 const HEALTH_CHECK_FAILURE_REASON =
   'HEALTH_CHECK_FAILURE' as unknown as TerminationReason;
@@ -239,16 +240,17 @@ export class ConnectionService {
         )
       )`;
 
-      const [aggregateRows, platformRows, dailyRows] = await Promise.all([
-        this.prisma.$queryRaw<
-          Array<{
-            total_sessions: number;
-            total_duration_seconds: number | null;
-            average_duration_seconds: number | null;
-            total_bytes_transferred: bigint | null;
-            max_duration_seconds: number | null;
-          }>
-        >`
+      const [aggregateRows, platformRows, dailyRows, topLocationRows] =
+        await Promise.all([
+          this.prisma.$queryRaw<
+            Array<{
+              total_sessions: number;
+              total_duration_seconds: number | null;
+              average_duration_seconds: number | null;
+              total_bytes_transferred: bigint | null;
+              max_duration_seconds: number | null;
+            }>
+          >`
           SELECT
             COUNT(*)::int                                               AS total_sessions,
             COALESCE(SUM(${Prisma.raw(effectiveDurationSql)}), 0)::bigint AS total_duration_seconds,
@@ -258,13 +260,13 @@ export class ConnectionService {
           FROM connection_sessions
           WHERE user_id = ${userId}
         `,
-        this.prisma.$queryRaw<
-          Array<{
-            platform: string | null;
-            sessions: number;
-            total_duration_seconds: number | null;
-          }>
-        >`
+          this.prisma.$queryRaw<
+            Array<{
+              platform: string | null;
+              sessions: number;
+              total_duration_seconds: number | null;
+            }>
+          >`
           SELECT
             platform,
             COUNT(*)::int                                               AS sessions,
@@ -273,7 +275,7 @@ export class ConnectionService {
           WHERE user_id = ${userId}
           GROUP BY platform
         `,
-        this.prisma.$queryRaw<Array<{ day: Date; count: number }>>`
+          this.prisma.$queryRaw<Array<{ day: Date; count: number }>>`
           SELECT DATE(session_start) AS day, COUNT(*)::int AS count
           FROM connection_sessions
           WHERE session_start >= (CURRENT_DATE - INTERVAL '13 days')
@@ -281,7 +283,17 @@ export class ConnectionService {
           GROUP BY DATE(session_start)
           ORDER BY day ASC
         `,
-      ]);
+          this.prisma.$queryRaw<
+            Array<{ server_location: string; sessions: number }>
+          >`
+          SELECT server_location, COUNT(*)::int AS sessions
+          FROM connection_sessions
+          WHERE user_id = ${userId}
+            AND server_location IS NOT NULL
+            AND TRIM(BOTH FROM server_location) <> ''
+          GROUP BY server_location
+        `,
+        ]);
 
       const aggregate = aggregateRows[0] ?? {
         total_sessions: 0,
@@ -333,6 +345,32 @@ export class ConnectionService {
         });
       }
 
+      const byBucket = new Map<string, number>();
+      for (const row of topLocationRows) {
+        const bucket = normalizeServerLocationForStats(row.server_location);
+        if (bucket.length === 0) {
+          continue;
+        }
+        byBucket.set(
+          bucket,
+          (byBucket.get(bucket) ?? 0) + Number(row.sessions ?? 0),
+        );
+      }
+      const topServerLocations = [...byBucket.entries()]
+        .map(([displayName, count]) => ({ displayName, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
+        .map((row) => {
+          const c = row.count;
+          const rawPct = totalSessions > 0 ? (c / totalSessions) * 100 : 0;
+          const percentage = Math.round(rawPct * 10) / 10;
+          return {
+            display_name: row.displayName,
+            session_count: c,
+            percentage,
+          };
+        });
+
       return {
         success: true,
         data: {
@@ -343,6 +381,7 @@ export class ConnectionService {
           max_duration_seconds: maxDurationSeconds,
           platform_breakdown: platformBreakdown,
           daily_connection_frequency: dailyConnectionFrequency,
+          top_server_locations: topServerLocations,
         },
       };
     } catch (error) {
