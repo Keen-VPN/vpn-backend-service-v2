@@ -113,8 +113,8 @@ describe('ConnectionService', () => {
       const day2 = new Date(now);
       day2.setDate(now.getDate() - 2);
 
-      // getConnectionStats now issues three sequential $queryRaw calls
-      // (aggregate, per-platform, daily). Mock each call in order.
+      // getConnectionStats issues four $queryRaw calls in parallel
+      // (aggregate, per-platform, daily, top server locations). Mock in order.
       mockPrisma.$queryRaw
         .mockResolvedValueOnce([
           {
@@ -122,6 +122,7 @@ describe('ConnectionService', () => {
             total_duration_seconds: BigInt(900),
             average_duration_seconds: 300,
             total_bytes_transferred: BigInt(2048),
+            max_duration_seconds: 400,
           },
         ] as any)
         .mockResolvedValueOnce([
@@ -135,6 +136,10 @@ describe('ConnectionService', () => {
         .mockResolvedValueOnce([
           { day: day2, count: 1 },
           { day: day1, count: 2 },
+        ] as any)
+        .mockResolvedValueOnce([
+          { server_location: 'Nigeria - Lagos', sessions: 2 },
+          { server_location: 'US - Virginia', sessions: 1 },
         ] as any);
 
       const result = await service.getConnectionStats('user-123');
@@ -146,12 +151,58 @@ describe('ConnectionService', () => {
         total_duration_seconds: 900,
         average_duration_seconds: 300,
         total_bytes_transferred: 2048,
+        max_duration_seconds: 400,
         platform_breakdown: {
           ios: { sessions: 2, total_duration_seconds: 600 },
           macos: { sessions: 1, total_duration_seconds: 300 },
         },
         daily_connection_frequency: expect.any(Array),
+        top_server_locations: [
+          {
+            display_name: 'Nigeria - Lagos',
+            session_count: 2,
+            percentage: 66.7,
+          },
+          {
+            display_name: 'US - Virginia',
+            session_count: 1,
+            percentage: 33.3,
+          },
+        ],
       });
+    });
+
+    it('merges England and United Kingdom into one top location bucket', async () => {
+      const now = new Date();
+      mockPrisma.$queryRaw
+        .mockResolvedValueOnce([
+          {
+            total_sessions: 3,
+            total_duration_seconds: BigInt(100),
+            average_duration_seconds: 33,
+            total_bytes_transferred: BigInt(0),
+            max_duration_seconds: 50,
+          },
+        ] as any)
+        .mockResolvedValueOnce([
+          { platform: 'ios', sessions: 3, total_duration_seconds: BigInt(100) },
+        ] as any)
+        .mockResolvedValueOnce([{ day: now, count: 3 }] as any)
+        .mockResolvedValueOnce([
+          { server_location: 'England', sessions: 2 },
+          { server_location: 'United Kingdom', sessions: 1 },
+        ] as any);
+
+      const result = await service.getConnectionStats('user-123');
+
+      expect(result.success).toBe(true);
+      expect(result.data?.top_server_locations).toEqual([
+        {
+          display_name: 'United Kingdom',
+          session_count: 3,
+          percentage: 100,
+        },
+      ]);
     });
 
     it('should handle aggregation errors', async () => {
