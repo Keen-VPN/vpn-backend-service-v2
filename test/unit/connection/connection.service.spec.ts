@@ -172,6 +172,39 @@ describe('ConnectionService', () => {
       });
     });
 
+    it('merges England and United Kingdom into one top location bucket', async () => {
+      const now = new Date();
+      mockPrisma.$queryRaw
+        .mockResolvedValueOnce([
+          {
+            total_sessions: 3,
+            total_duration_seconds: BigInt(100),
+            average_duration_seconds: 33,
+            total_bytes_transferred: BigInt(0),
+            max_duration_seconds: 50,
+          },
+        ] as any)
+        .mockResolvedValueOnce([
+          { platform: 'ios', sessions: 3, total_duration_seconds: BigInt(100) },
+        ] as any)
+        .mockResolvedValueOnce([{ day: now, count: 3 }] as any)
+        .mockResolvedValueOnce([
+          { server_location: 'England', sessions: 2 },
+          { server_location: 'United Kingdom', sessions: 1 },
+        ] as any);
+
+      const result = await service.getConnectionStats('user-123');
+
+      expect(result.success).toBe(true);
+      expect(result.data?.top_server_locations).toEqual([
+        {
+          display_name: 'United Kingdom',
+          session_count: 3,
+          percentage: 100,
+        },
+      ]);
+    });
+
     it('should handle aggregation errors', async () => {
       mockPrisma.$queryRaw.mockRejectedValueOnce(new Error('aggregate failed'));
 

@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
 import { NodesService } from '../nodes/nodes.service';
+import { normalizeServerLocationForStats } from './server-location-stats.util';
 
 const HEALTH_CHECK_FAILURE_REASON =
   'HEALTH_CHECK_FAILURE' as unknown as TerminationReason;
@@ -291,8 +292,6 @@ export class ConnectionService {
             AND server_location IS NOT NULL
             AND TRIM(BOTH FROM server_location) <> ''
           GROUP BY server_location
-          ORDER BY sessions DESC
-          LIMIT 5
         `,
         ]);
 
@@ -346,16 +345,31 @@ export class ConnectionService {
         });
       }
 
-      const topServerLocations = topLocationRows.map((row) => {
-        const c = Number(row.sessions ?? 0);
-        const rawPct = totalSessions > 0 ? (c / totalSessions) * 100 : 0;
-        const percentage = Math.round(rawPct * 10) / 10;
-        return {
-          display_name: row.server_location,
-          session_count: c,
-          percentage,
-        };
-      });
+      const byBucket = new Map<string, number>();
+      for (const row of topLocationRows) {
+        const bucket = normalizeServerLocationForStats(row.server_location);
+        if (bucket.length === 0) {
+          continue;
+        }
+        byBucket.set(
+          bucket,
+          (byBucket.get(bucket) ?? 0) + Number(row.sessions ?? 0),
+        );
+      }
+      const topServerLocations = [...byBucket.entries()]
+        .map(([displayName, count]) => ({ displayName, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
+        .map((row) => {
+          const c = row.count;
+          const rawPct = totalSessions > 0 ? (c / totalSessions) * 100 : 0;
+          const percentage = Math.round(rawPct * 10) / 10;
+          return {
+            display_name: row.displayName,
+            session_count: c,
+            percentage,
+          };
+        });
 
       return {
         success: true,
