@@ -1187,5 +1187,155 @@ describe('AppleService', () => {
       // Should update linkedAt but not throw error
       expect(mockPrisma.appleIAPPurchase.update).toHaveBeenCalled();
     });
+
+    it('sends paid conversion after link when stored receipt verifies as non-trial', async () => {
+      const user = createMockUser();
+      const txInfo = {
+        transactionId: 'tx-paid',
+        originalTransactionId: 'orig-paid',
+        productId: 'com.keenvpn.premium.monthly',
+      };
+      const purchase = createMockAppleIAPPurchase({
+        transactionId: txInfo.transactionId,
+        originalTransactionId: txInfo.originalTransactionId,
+        productId: txInfo.productId,
+        linkedUserId: null,
+        expiresDate: new Date(Date.now() + 10000),
+        receiptData: 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=',
+      });
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: txInfo.transactionId,
+                original_transaction_id: txInfo.originalTransactionId,
+                product_id: txInfo.productId,
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+                is_trial_period: 'false',
+              },
+            ],
+          }),
+        ),
+      });
+
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(purchase);
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.appleIAPPurchase.update.mockResolvedValue(purchase);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      mockPrisma.subscription.create.mockResolvedValue(
+        createMockSubscription(),
+      );
+
+      await service.linkWithTransactionIds(user.id, 'token', [txInfo]);
+
+      expect(mockTrialService.grantIfEligible).toHaveBeenCalled();
+      expect(
+        mockPaidConversionSlack.maybeNotifyApplePaidConversion,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: user.id,
+          originalTransactionId: txInfo.originalTransactionId,
+        }),
+      );
+    });
+
+    it('does not send paid conversion after link when stored receipt is trial period', async () => {
+      const user = createMockUser();
+      const txInfo = {
+        transactionId: 'tx-trial',
+        originalTransactionId: 'orig-trial',
+        productId: 'com.keenvpn.premium.monthly',
+      };
+      const purchase = createMockAppleIAPPurchase({
+        transactionId: txInfo.transactionId,
+        originalTransactionId: txInfo.originalTransactionId,
+        productId: txInfo.productId,
+        linkedUserId: null,
+        expiresDate: new Date(Date.now() + 10000),
+        receiptData: 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=',
+      });
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: txInfo.transactionId,
+                original_transaction_id: txInfo.originalTransactionId,
+                product_id: txInfo.productId,
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+                is_trial_period: 'true',
+              },
+            ],
+          }),
+        ),
+      });
+
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(purchase);
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.appleIAPPurchase.update.mockResolvedValue(purchase);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      mockPrisma.subscription.create.mockResolvedValue(
+        createMockSubscription(),
+      );
+
+      await service.linkWithTransactionIds(user.id, 'token', [txInfo]);
+
+      expect(mockTrialService.grantIfEligible).toHaveBeenCalled();
+      expect(
+        mockPaidConversionSlack.maybeNotifyApplePaidConversion,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('still sends paid conversion when stored receipt verification fails', async () => {
+      const user = createMockUser();
+      const txInfo = {
+        transactionId: 'tx-verify-fail',
+        originalTransactionId: 'orig-verify-fail',
+        productId: 'com.keenvpn.premium.monthly',
+      };
+      const purchase = createMockAppleIAPPurchase({
+        transactionId: txInfo.transactionId,
+        originalTransactionId: txInfo.originalTransactionId,
+        productId: txInfo.productId,
+        linkedUserId: null,
+        expiresDate: new Date(Date.now() + 10000),
+        receiptData: 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=',
+      });
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ status: 21000 })),
+      });
+
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(purchase);
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.appleIAPPurchase.update.mockResolvedValue(purchase);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      mockPrisma.subscription.create.mockResolvedValue(
+        createMockSubscription(),
+      );
+
+      await service.linkWithTransactionIds(user.id, 'token', [txInfo]);
+
+      expect(
+        mockPaidConversionSlack.maybeNotifyApplePaidConversion,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: user.id,
+          originalTransactionId: txInfo.originalTransactionId,
+        }),
+      );
+    });
   });
 });
