@@ -409,10 +409,14 @@ export class NotificationService {
       payload.conversionType === 'trial_to_paid'
         ? 'Trial → Paid'
         : 'New paid user';
+    const titleLine =
+      payload.conversionType === 'trial_to_paid'
+        ? `💸 *Trial Converted to Paid*`
+        : `💰 *New Paid User*`;
     const when = this.formatTrialTimestampUtc(payload.occurredAt);
 
     const text = [
-      `💰 *New Paid User*`,
+      titleLine,
       '',
       `*User:* ${email}`,
       `*Source:* ${source}`,

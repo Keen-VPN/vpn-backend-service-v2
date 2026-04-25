@@ -118,11 +118,14 @@ describe('AppleService', () => {
     it('should handle REFUND event', async () => {
       const purchase = createMockAppleIAPPurchase();
       const event = {
-        notification_type: 'REFUND',
+        notification_type: 'REFUND' as const,
         unified_receipt: {
           latest_receipt_info: [
             {
               original_transaction_id: purchase.originalTransactionId,
+              transaction_id: purchase.transactionId,
+              product_id: purchase.productId,
+              purchase_date_ms: Date.now().toString(),
             },
           ],
         },
@@ -147,9 +150,9 @@ describe('AppleService', () => {
     it('should handle DID_RENEW event', async () => {
       const purchase = createMockAppleIAPPurchase();
       const event = {
-        notification_type: 'DID_RENEW',
+        notification_type: 'DID_RENEW' as const,
         unified_receipt: {
-          environment: 'Production',
+          environment: 'Production' as const,
           latest_receipt_info: [
             {
               original_transaction_id: purchase.originalTransactionId,
@@ -179,16 +182,96 @@ describe('AppleService', () => {
       expect(mockPrisma.subscription.create).toHaveBeenCalled();
     });
 
+    it('should not send paid conversion for Apple trial-period renewal item', async () => {
+      const purchase = createMockAppleIAPPurchase();
+      const event = {
+        notification_type: 'DID_RENEW' as const,
+        unified_receipt: {
+          environment: 'Production' as const,
+          latest_receipt_info: [
+            {
+              original_transaction_id: purchase.originalTransactionId,
+              transaction_id: 'trial-transaction-id',
+              product_id: 'com.keenvpn.premium.monthly',
+              purchase_date_ms: Date.now().toString(),
+              expires_date_ms: (
+                Date.now() +
+                30 * 24 * 60 * 60 * 1000
+              ).toString(),
+              is_trial_period: 'true',
+            },
+          ],
+        },
+      };
+
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue({
+        ...purchase,
+        linkedUser: { id: purchase.linkedUserId! },
+      } as any);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      mockPrisma.subscription.create.mockResolvedValue(
+        createMockSubscription(),
+      );
+
+      await service.handleWebhookEvent(event);
+
+      expect(
+        mockPaidConversionSlack.maybeNotifyApplePaidConversion,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should send paid conversion for non-trial Apple renewal item', async () => {
+      const purchase = createMockAppleIAPPurchase();
+      const event = {
+        notification_type: 'DID_RENEW' as const,
+        unified_receipt: {
+          environment: 'Production' as const,
+          latest_receipt_info: [
+            {
+              original_transaction_id: purchase.originalTransactionId,
+              transaction_id: 'paid-transaction-id',
+              product_id: 'com.keenvpn.premium.monthly',
+              purchase_date_ms: Date.now().toString(),
+              expires_date_ms: (
+                Date.now() +
+                30 * 24 * 60 * 60 * 1000
+              ).toString(),
+              is_trial_period: 'false',
+            },
+          ],
+        },
+      };
+
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue({
+        ...purchase,
+        linkedUser: { id: purchase.linkedUserId! },
+      } as any);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      mockPrisma.subscription.create.mockResolvedValue(
+        createMockSubscription(),
+      );
+      mockPrisma.user.findUnique.mockResolvedValue(createMockUser());
+
+      await service.handleWebhookEvent(event);
+
+      expect(
+        mockPaidConversionSlack.maybeNotifyApplePaidConversion,
+      ).toHaveBeenCalled();
+    });
+
     it('should handle DID_CHANGE_RENEWAL_STATUS event', async () => {
       const purchase = createMockAppleIAPPurchase();
       const subscription = createMockSubscription();
       const event = {
-        notification_type: 'DID_CHANGE_RENEWAL_STATUS',
+        notification_type: 'DID_CHANGE_RENEWAL_STATUS' as const,
         auto_renew_status: false,
         unified_receipt: {
           latest_receipt_info: [
             {
               original_transaction_id: purchase.originalTransactionId,
+              transaction_id: purchase.transactionId,
+              product_id: purchase.productId,
+              purchase_date_ms: Date.now().toString(),
             },
           ],
         },
@@ -210,19 +293,19 @@ describe('AppleService', () => {
         notification_type: 'UNKNOWN_EVENT',
       };
 
-      await service.handleWebhookEvent(event);
+      await service.handleWebhookEvent(event as any);
       // Verify no errors thrown and maybe log called (implicit)
     });
 
     it('should handle event without unified_receipt', async () => {
-      const event = { notification_type: 'DID_RENEW' };
+      const event = { notification_type: 'DID_RENEW' as const };
       await service.handleWebhookEvent(event);
       // specific expectations? currently just ensures no crash
     });
 
     it('should handle REFUND without latest_receipt_info', async () => {
       const event = {
-        notification_type: 'REFUND',
+        notification_type: 'REFUND' as const,
         unified_receipt: {},
       };
       await service.handleWebhookEvent(event);
@@ -231,7 +314,7 @@ describe('AppleService', () => {
 
     it('should handle DID_CHANGE_RENEWAL_STATUS without latest_receipt_info', async () => {
       const event = {
-        notification_type: 'DID_CHANGE_RENEWAL_STATUS',
+        notification_type: 'DID_CHANGE_RENEWAL_STATUS' as const,
         unified_receipt: {},
       };
       await service.handleWebhookEvent(event);
@@ -244,9 +327,9 @@ describe('AppleService', () => {
       subscription.currentPeriodEnd = new Date(Date.now() - 10000); // Expired
 
       const event = {
-        notification_type: 'DID_RENEW',
+        notification_type: 'DID_RENEW' as const,
         unified_receipt: {
-          environment: 'Production',
+          environment: 'Production' as const,
           latest_receipt_info: [
             {
               original_transaction_id: purchase.originalTransactionId,
@@ -274,9 +357,16 @@ describe('AppleService', () => {
 
     it('should handle processAppleReceipt with unlinked purchase', async () => {
       const event = {
-        notification_type: 'DID_RENEW',
+        notification_type: 'DID_RENEW' as const,
         unified_receipt: {
-          latest_receipt_info: [{ original_transaction_id: 'unlinked-id' }],
+          latest_receipt_info: [
+            {
+              original_transaction_id: 'unlinked-id',
+              transaction_id: 'unlinked-tx-id',
+              product_id: 'com.keenvpn.premium.monthly',
+              purchase_date_ms: Date.now().toString(),
+            },
+          ],
         },
       };
       // Mock purchase not found or not linked
@@ -729,7 +819,7 @@ describe('AppleService', () => {
       purchase.linkedUserId = user.id;
       // Ensure purchase is active but subscription is inactive to trigger update
       purchase.expiresDate = new Date(Date.now() + 10000); // Active
-      subscription.status = 'inactive';
+      subscription.status = 'INACTIVE';
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -1004,7 +1094,7 @@ describe('AppleService', () => {
 
       const existingSub = createMockSubscription();
       existingSub.appleOriginalTransactionId = txInfo.originalTransactionId;
-      existingSub.status = 'inactive';
+      existingSub.status = 'INACTIVE';
 
       mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(purchase);
       mockPrisma.user.findUnique.mockResolvedValue(user);
