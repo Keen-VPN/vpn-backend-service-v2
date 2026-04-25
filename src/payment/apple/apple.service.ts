@@ -25,6 +25,7 @@ interface AppleReceiptItem {
   product_id: string;
   purchase_date_ms: string;
   expires_date_ms?: string;
+  is_trial_period?: string;
 }
 
 interface AppleVerifyReceiptResponse {
@@ -347,7 +348,10 @@ export class AppleService {
       await this.maybeGrantTrialAfterAppleIap(userId, null, productId);
     }
 
-    if (nextStatus === SubscriptionStatus.ACTIVE) {
+    if (
+      nextStatus === SubscriptionStatus.ACTIVE &&
+      !this.isAppleTrialPeriodReceipt(receipt)
+    ) {
       try {
         await this.maybeNotifyApplePaidConversion(
           userId,
@@ -484,6 +488,10 @@ export class AppleService {
       if (aExp !== bExp) return bExp - aExp;
       return parseInt(b.purchase_date_ms) - parseInt(a.purchase_date_ms);
     })[0];
+  }
+
+  private isAppleTrialPeriodReceipt(receipt: AppleReceiptItem): boolean {
+    return receipt.is_trial_period === 'true';
   }
 
   private extractVerifiedReceiptItem(
@@ -1021,7 +1029,11 @@ export class AppleService {
         );
       }
 
-      if (result.subscription.status === SubscriptionStatus.ACTIVE) {
+      if (
+        result.subscription.status === SubscriptionStatus.ACTIVE &&
+        verifiedItem &&
+        !this.isAppleTrialPeriodReceipt(verifiedItem)
+      ) {
         try {
           await this.maybeNotifyApplePaidConversion(
             userId,
@@ -1352,28 +1364,6 @@ export class AppleService {
               deviceFingerprint,
               purchase.productId,
             );
-          }
-
-          if (status === SubscriptionStatus.ACTIVE) {
-            try {
-              await this.maybeNotifyApplePaidConversion(
-                userId,
-                purchase.originalTransactionId,
-                purchase.productId,
-              );
-            } catch (paidErr) {
-              SafeLogger.warn(
-                'Apple paid-conversion Slack skipped (non-fatal)',
-                undefined,
-                {
-                  userId,
-                  error:
-                    paidErr instanceof Error
-                      ? paidErr.message
-                      : String(paidErr),
-                },
-              );
-            }
           }
 
           linkedPurchases.push({

@@ -400,7 +400,7 @@ describe('NotificationService', () => {
 
       expect(ok).toBe(true);
       const text = mockHttpService.post.mock.calls[0][1].text as string;
-      expect(text).toContain('New Paid User');
+      expect(text).toContain('Trial Converted to Paid');
       expect(text).toContain('*Source:* Stripe');
       expect(text).toContain('*Plan:* Annual');
       expect(text).toContain('Trial → Paid');
