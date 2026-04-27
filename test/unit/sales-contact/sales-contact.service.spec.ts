@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SalesContactService } from '../../../src/sales-contact/sales-contact.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { EmailService } from '../../../src/email/email.service';
 import { ConflictException } from '@nestjs/common';
 import { ContactStatus } from '@prisma/client';
 
@@ -22,6 +23,13 @@ describe('SalesContactService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendSalesContactConfirmation: jest.fn().mockResolvedValue(true),
+            notifySalesTeam: jest.fn().mockResolvedValue(true),
+          },
         },
       ],
     }).compile();
