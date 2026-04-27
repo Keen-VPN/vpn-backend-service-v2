@@ -1,13 +1,25 @@
-import { ConflictException, Injectable, Logger, Inject } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  Inject,
+  Optional,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSalesContactDto } from './dto/create-sales-contact.dto';
 import { ContactStatus } from '@prisma/client';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class SalesContactService {
   private readonly logger = new Logger(SalesContactService.name);
 
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Optional()
+    @Inject(EmailService)
+    private readonly emailService?: EmailService,
+  ) {}
 
   async submitContact(dto: CreateSalesContactDto) {
     const { workEmail } = dto;
@@ -58,8 +70,24 @@ export class SalesContactService {
         `Sales contact created: ${contact.id} (Ref: ${referenceId})`,
       );
 
-      // TODO: Trigger email notifications here in a real scenario
-      // For now, we manually return the contact info to the controller
+      try {
+        await Promise.all([
+          this.emailService?.sendSalesContactConfirmation({
+            ...dto,
+            referenceId: contact.referenceId,
+          }),
+          this.emailService?.notifySalesTeam({
+            ...dto,
+            referenceId: contact.referenceId,
+          }),
+        ]);
+      } catch (error) {
+        this.logger.warn(
+          `Sales contact ${contact.id} created, but email notification failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
 
       return {
         success: true,

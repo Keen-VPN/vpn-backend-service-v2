@@ -3,15 +3,22 @@ import {
   NotFoundException,
   ForbiddenException,
   Inject,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { getActiveSubscriptionForUser } from '../subscription/subscription-lookup.util';
 import { SafeLogger } from '../common/utils/logger.util';
+import { EmailService } from '../email/email.service';
 import PDFDocument from 'pdfkit';
 
 @Injectable()
 export class AccountService {
-  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Optional()
+    @Inject(EmailService)
+    private readonly emailService?: EmailService,
+  ) {}
 
   async getProfileByFirebaseUid(firebaseUid: string) {
     const user = await this.prisma.user.findUnique({
@@ -128,6 +135,11 @@ export class AccountService {
     // TODO: Optionally delete Stripe customer data
 
     SafeLogger.info('Account deleted successfully', { userId });
+
+    await this.emailService?.sendAccountDeletedEmail({
+      email: user.email,
+      displayName: user.displayName,
+    });
 
     return {
       success: true,
