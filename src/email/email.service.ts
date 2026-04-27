@@ -333,6 +333,13 @@ export class EmailService {
   private async sendEmail(
     payload: Omit<ResendEmailRequest, 'from'>,
   ): Promise<boolean> {
+    if (this.hasSyntheticAppleFallbackRecipient(payload.to)) {
+      this.logger.warn(
+        `Email skipped for synthetic Apple fallback recipient: ${payload.subject}`,
+      );
+      return true;
+    }
+
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
     if (!apiKey) {
       this.logger.warn('RESEND_API_KEY not configured; email skipped');
@@ -368,6 +375,13 @@ export class EmailService {
       );
       return false;
     }
+  }
+
+  private hasSyntheticAppleFallbackRecipient(to: string | string[]): boolean {
+    const recipients = Array.isArray(to) ? to : [to];
+    return recipients.some((recipient) =>
+      /^apple_.+@temp\.com$/i.test(recipient),
+    );
   }
 
   private displayName(user: UserEmailPayload): string {
