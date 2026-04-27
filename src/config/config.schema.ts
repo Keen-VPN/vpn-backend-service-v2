@@ -63,7 +63,13 @@ export const configValidationSchema = Joi.object({
 
   // Resend transactional email (optional; emails are skipped when unset)
   RESEND_API_KEY: Joi.string().optional(),
-  EMAIL_FROM: Joi.string().optional(),
+  EMAIL_FROM: Joi.alternatives()
+    .try(
+      Joi.string().email(),
+      Joi.string().pattern(/^.+<[^<>@\s]+@[^<>@\s]+>$/),
+    )
+    .optional(),
+  RESEND_TIMEOUT_MS: Joi.number().integer().min(1000).max(60000).default(10000),
   SUPPORT_EMAIL: Joi.string().email().optional(),
   SALES_EMAIL: Joi.string().email().optional(),
   ACCOUNT_URL: Joi.string().uri().optional(),

@@ -1254,8 +1254,18 @@ export class AuthService {
     email: string;
     displayName?: string | null;
   }): Promise<void> {
+    if (this.isSyntheticAppleFallbackEmail(user.email)) {
+      return;
+    }
+
     try {
-      await this.emailService.sendWelcomeEmail(user);
+      const sent = await this.emailService.sendWelcomeEmail(user);
+      if (!sent) {
+        SafeLogger.warn(
+          'Welcome email could not be delivered after account creation',
+          { service: 'AuthService' },
+        );
+      }
     } catch (error) {
       SafeLogger.warn(
         'Welcome email skipped after account creation',
@@ -1263,5 +1273,9 @@ export class AuthService {
         { error: error instanceof Error ? error.message : String(error) },
       );
     }
+  }
+
+  private isSyntheticAppleFallbackEmail(email: string): boolean {
+    return /^apple_.+@temp\.com$/i.test(email);
   }
 }

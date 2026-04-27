@@ -342,6 +342,8 @@ export class EmailService {
     const from =
       this.configService.get<string>('EMAIL_FROM') ||
       'KeenVPN <no-reply@vpnkeen.com>';
+    const timeout =
+      this.configService.get<number>('RESEND_TIMEOUT_MS') ?? 10000;
 
     try {
       await firstValueFrom(
@@ -353,6 +355,7 @@ export class EmailService {
               Authorization: `Bearer ${apiKey}`,
               'Content-Type': 'application/json',
             },
+            timeout,
           },
         ),
       );

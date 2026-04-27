@@ -135,10 +135,16 @@ export class AccountService {
     SafeLogger.info('Account deleted successfully', { userId });
 
     try {
-      await this.emailService.sendAccountDeletedEmail({
+      const sent = await this.emailService.sendAccountDeletedEmail({
         email: user.email,
         displayName: user.displayName,
       });
+      if (!sent) {
+        SafeLogger.warn('Account deleted email could not be delivered', {
+          service: 'AccountService',
+          userId,
+        });
+      }
     } catch (emailError) {
       SafeLogger.warn(
         'Account deleted email skipped',

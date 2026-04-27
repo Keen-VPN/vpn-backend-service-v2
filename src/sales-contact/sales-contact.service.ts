@@ -64,7 +64,7 @@ export class SalesContactService {
       );
 
       try {
-        await Promise.all([
+        const [confirmationSent, salesSent] = await Promise.all([
           this.emailService.sendSalesContactConfirmation({
             ...dto,
             referenceId: contact.referenceId,
@@ -74,6 +74,11 @@ export class SalesContactService {
             referenceId: contact.referenceId,
           }),
         ]);
+        if (!confirmationSent || !salesSent) {
+          this.logger.warn(
+            `Sales contact ${contact.id}: one or more email notifications could not be delivered`,
+          );
+        }
       } catch (error) {
         this.logger.warn(
           `Sales contact ${contact.id} created, but email notification failed: ${

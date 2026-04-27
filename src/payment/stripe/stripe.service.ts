@@ -347,8 +347,9 @@ export class StripeService {
         this.isSubscriptionEmailEligible(previousDbStatus);
       if (subscriptionIsEmailEligible && !previousStatusWasEmailEligible) {
         try {
+          let sent = false;
           if (priorSubscription) {
-            await this.emailService.sendSubscriptionRenewedEmail({
+            sent = await this.emailService.sendSubscriptionRenewedEmail({
               email: user.email,
               displayName: user.displayName,
               planName: updatedSubscription.planName,
@@ -356,13 +357,19 @@ export class StripeService {
               currentPeriodEnd: updatedSubscription.currentPeriodEnd,
             });
           } else {
-            await this.emailService.sendSubscriptionStartedEmail({
+            sent = await this.emailService.sendSubscriptionStartedEmail({
               email: user.email,
               displayName: user.displayName,
               planName: updatedSubscription.planName,
               billingPeriod: updatedSubscription.billingPeriod,
               currentPeriodEnd: updatedSubscription.currentPeriodEnd,
             });
+          }
+          if (!sent) {
+            SafeLogger.warn(
+              'Stripe subscription email could not be delivered after update',
+              { service: 'StripeService', userId: user.id },
+            );
           }
         } catch (emailError) {
           SafeLogger.warn(
@@ -424,8 +431,9 @@ export class StripeService {
 
       if (subscriptionIsEmailEligible) {
         try {
+          let sent = false;
           if (priorSubscription) {
-            await this.emailService.sendSubscriptionRenewedEmail({
+            sent = await this.emailService.sendSubscriptionRenewedEmail({
               email: user.email,
               displayName: user.displayName,
               planName: newSubscription.planName,
@@ -433,13 +441,19 @@ export class StripeService {
               currentPeriodEnd: newSubscription.currentPeriodEnd,
             });
           } else {
-            await this.emailService.sendSubscriptionStartedEmail({
+            sent = await this.emailService.sendSubscriptionStartedEmail({
               email: user.email,
               displayName: user.displayName,
               planName: newSubscription.planName,
               billingPeriod: newSubscription.billingPeriod,
               currentPeriodEnd: newSubscription.currentPeriodEnd,
             });
+          }
+          if (!sent) {
+            SafeLogger.warn(
+              'Stripe subscription email could not be delivered after create',
+              { service: 'StripeService', userId: user.id },
+            );
           }
         } catch (emailError) {
           SafeLogger.warn(
@@ -526,13 +540,19 @@ export class StripeService {
       });
       if (user && !wasAlreadyCancelled) {
         try {
-          await this.emailService.sendSubscriptionCancelledEmail({
+          const sent = await this.emailService.sendSubscriptionCancelledEmail({
             email: user.email,
             displayName: user.displayName,
             planName: cancelledSubscription.planName,
             billingPeriod: cancelledSubscription.billingPeriod,
             currentPeriodEnd: cancelledSubscription.currentPeriodEnd,
           });
+          if (!sent) {
+            SafeLogger.warn(
+              'Stripe cancellation email could not be delivered',
+              { service: 'StripeService', userId: user.id },
+            );
+          }
         } catch (emailError) {
           SafeLogger.warn(
             'Stripe cancellation email skipped',
