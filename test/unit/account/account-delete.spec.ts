@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountService } from '../../../src/account/account.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { EmailService } from '../../../src/email/email.service';
 import { createMockPrismaClient } from '../../setup/mocks';
 import {
   createMockUser,
@@ -14,7 +15,16 @@ describe('AccountService.deleteAccount - linked accounts', () => {
   beforeEach(async () => {
     prisma = createMockPrismaClient();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [AccountService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        AccountService,
+        { provide: PrismaService, useValue: prisma },
+        {
+          provide: EmailService,
+          useValue: {
+            sendAccountDeletedEmail: jest.fn().mockResolvedValue(true),
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<AccountService>(AccountService);

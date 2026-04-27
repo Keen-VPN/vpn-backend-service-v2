@@ -16,6 +16,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SubscriptionUserRole } from '@prisma/client';
 import { AppleTokenVerifierService } from '../../../src/auth/apple-token-verifier.service';
 import { FirebaseConfig } from '../../../src/config/firebase.config';
+import { EmailService } from '../../../src/email/email.service';
 
 describe('AuthService.unlinkProvider', () => {
   let service: AuthService;
@@ -33,6 +34,12 @@ describe('AuthService.unlinkProvider', () => {
         {
           provide: AppleTokenVerifierService,
           useValue: { verifyIdentityToken: jest.fn() },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendWelcomeEmail: jest.fn().mockResolvedValue(true),
+          },
         },
       ],
     }).compile();
