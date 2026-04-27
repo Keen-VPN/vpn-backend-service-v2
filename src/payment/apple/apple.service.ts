@@ -524,7 +524,16 @@ export class AppleService {
       }
 
       return !this.isAppleTrialPeriodReceipt(latest);
-    } catch {
+    } catch (error) {
+      SafeLogger.warn(
+        'Apple stored receipt verification failed while deciding paid-conversion notification; defaulting to notify',
+        {
+          originalTransactionId: purchase.originalTransactionId,
+        },
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
       return true;
     }
   }
