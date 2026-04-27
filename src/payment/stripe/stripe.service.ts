@@ -316,12 +316,13 @@ export class StripeService {
         currentPeriodStart,
       },
     });
-    const priorSubscription = existing
-      ? existing
-      : await this.prisma.subscription.findFirst({
-          where: { stripeSubscriptionId: subscription.id },
-          orderBy: { currentPeriodStart: 'desc' },
-        });
+    const priorSubscription = await this.prisma.subscription.findFirst({
+      where: {
+        stripeSubscriptionId: subscription.id,
+        ...(existing ? { id: { not: existing.id } } : {}),
+      },
+      orderBy: { currentPeriodStart: 'desc' },
+    });
     /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
     if (existing) {
       const previousDbStatus = existing.status;
@@ -347,13 +348,23 @@ export class StripeService {
       const previousStatusWasEmailEligible =
         this.isSubscriptionEmailEligible(previousDbStatus);
       if (subscriptionIsEmailEligible && !previousStatusWasEmailEligible) {
-        await this.emailService?.sendSubscriptionStartedEmail({
-          email: user.email,
-          displayName: user.displayName,
-          planName: updatedSubscription.planName,
-          billingPeriod: updatedSubscription.billingPeriod,
-          currentPeriodEnd: updatedSubscription.currentPeriodEnd,
-        });
+        if (priorSubscription) {
+          await this.emailService?.sendSubscriptionRenewedEmail({
+            email: user.email,
+            displayName: user.displayName,
+            planName: updatedSubscription.planName,
+            billingPeriod: updatedSubscription.billingPeriod,
+            currentPeriodEnd: updatedSubscription.currentPeriodEnd,
+          });
+        } else {
+          await this.emailService?.sendSubscriptionStartedEmail({
+            email: user.email,
+            displayName: user.displayName,
+            planName: updatedSubscription.planName,
+            billingPeriod: updatedSubscription.billingPeriod,
+            currentPeriodEnd: updatedSubscription.currentPeriodEnd,
+          });
+        }
       }
 
       try {
