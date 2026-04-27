@@ -1255,7 +1255,7 @@ export class AuthService {
     displayName?: string | null;
   }): Promise<void> {
     try {
-      await this.emailService?.sendWelcomeEmail(user);
+      await this.emailService.sendWelcomeEmail(user);
     } catch (error) {
       SafeLogger.warn(
         'Welcome email skipped after account creation',

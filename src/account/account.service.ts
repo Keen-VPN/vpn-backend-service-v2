@@ -134,7 +134,7 @@ export class AccountService {
 
     SafeLogger.info('Account deleted successfully', { userId });
 
-    await this.emailService?.sendAccountDeletedEmail({
+    await this.emailService.sendAccountDeletedEmail({
       email: user.email,
       displayName: user.displayName,
     });

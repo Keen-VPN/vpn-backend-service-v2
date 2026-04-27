@@ -65,11 +65,11 @@ export class SalesContactService {
 
       try {
         await Promise.all([
-          this.emailService?.sendSalesContactConfirmation({
+          this.emailService.sendSalesContactConfirmation({
             ...dto,
             referenceId: contact.referenceId,
           }),
-          this.emailService?.notifySalesTeam({
+          this.emailService.notifySalesTeam({
             ...dto,
             referenceId: contact.referenceId,
           }),
