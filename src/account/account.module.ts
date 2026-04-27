@@ -6,9 +6,10 @@ import {
 import { AccountService } from './account.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => AuthModule)],
+  imports: [PrismaModule, forwardRef(() => AuthModule), EmailModule],
   controllers: [AccountController, AccountPaymentsController],
   providers: [AccountService],
   exports: [AccountService],

@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FirebaseConfig } from '../config/firebase.config';
@@ -17,6 +18,7 @@ import {
 import { getActiveSubscriptionForUser } from '../subscription/subscription-lookup.util';
 import { SafeLogger } from '../common/utils/logger.util';
 import { AppleTokenVerifierService } from './apple-token-verifier.service';
+import { EmailService } from '../email/email.service';
 import * as jwt from 'jsonwebtoken';
 
 @Injectable()
@@ -27,6 +29,9 @@ export class AuthService {
     @Inject(ConfigService) private configService: ConfigService,
     @Inject(AppleTokenVerifierService)
     private appleTokenVerifier: AppleTokenVerifierService,
+    @Optional()
+    @Inject(EmailService)
+    private readonly emailService?: EmailService,
   ) {}
 
   private normalizeProvider(
@@ -91,6 +96,7 @@ export class AuthService {
         });
       }
 
+      let createdUser = false;
       if (!user) {
         // No existing user found — create new
         user = await this.prisma.user.create({
@@ -102,6 +108,7 @@ export class AuthService {
             emailVerified,
           },
         });
+        createdUser = true;
       } else {
         // Block sign-in if the token provider doesn't match the registered provider.
         // This catches cases where Firebase auto-merged accounts (same email) but
@@ -147,6 +154,13 @@ export class AuthService {
         { service: 'AuthService', userId },
         { hasActiveSubscription: !!activeSubscription },
       );
+
+      if (createdUser) {
+        await this.emailService?.sendWelcomeEmail({
+          email: user.email,
+          displayName: user.displayName,
+        });
+      }
 
       const sessionToken = this.generateSessionToken(user.id);
       return {
@@ -240,6 +254,7 @@ export class AuthService {
         });
       }
 
+      let createdUser = false;
       if (!user) {
         // Create new user
         user = await this.prisma.user.create({
@@ -251,6 +266,7 @@ export class AuthService {
             emailVerified,
           },
         });
+        createdUser = true;
       } else {
         // Block sign-in if this account is registered with a different provider
         if (user.provider === 'apple') {
@@ -369,6 +385,13 @@ export class AuthService {
         service: 'AuthService',
         userId: user.id,
       });
+
+      if (createdUser) {
+        await this.emailService?.sendWelcomeEmail({
+          email: user.email,
+          displayName: user.displayName,
+        });
+      }
 
       return {
         success: true,
@@ -536,6 +559,7 @@ export class AuthService {
         where: { appleUserId },
       });
 
+      let createdUser = false;
       if (!user) {
         // Check if user exists by email
         if (emailFromToken) {
@@ -579,6 +603,7 @@ export class AuthService {
               emailVerified,
             },
           });
+          createdUser = true;
         }
       } else {
         // User found by appleUserId — returning Apple user
@@ -657,6 +682,13 @@ export class AuthService {
         { service: 'AuthService', userId: user.id },
         { devicePlatform, hasActiveSubscription: !!activeSubscription },
       );
+
+      if (createdUser) {
+        await this.emailService?.sendWelcomeEmail({
+          email: user.email,
+          displayName: user.displayName,
+        });
+      }
 
       return {
         success: true,

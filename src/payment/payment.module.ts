@@ -8,12 +8,14 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { SubscriptionModule } from '../subscription/subscription.module';
 import { NotificationModule } from '../notification/notification.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
     PrismaModule,
     AuthModule,
     NotificationModule,
+    EmailModule,
     forwardRef(() => SubscriptionModule),
   ],
   controllers: [

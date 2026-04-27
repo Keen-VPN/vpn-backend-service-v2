@@ -60,4 +60,10 @@ export const configValidationSchema = Joi.object({
   SLACK_WEBHOOK_URL: Joi.string().uri().optional(),
   // Free-trial growth notifications (optional; dedicated webhook recommended)
   SLACK_TRIAL_WEBHOOK_URL: Joi.string().uri().optional(),
+
+  // Resend transactional email (optional; emails are skipped when unset)
+  RESEND_API_KEY: Joi.string().optional(),
+  EMAIL_FROM: Joi.string().optional(),
+  SUPPORT_EMAIL: Joi.string().email().optional(),
+  SALES_EMAIL: Joi.string().email().optional(),
 });

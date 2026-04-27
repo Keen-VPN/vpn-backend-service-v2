@@ -3,6 +3,7 @@ import {
   Inject,
   forwardRef,
   ConflictException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
@@ -16,6 +17,7 @@ import { getActiveSubscriptionForUser } from '../../subscription/subscription-lo
 import { SafeLogger } from '../../common/utils/logger.util';
 import { TrialService } from '../../subscription/trial.service';
 import { PaidConversionSlackService } from '../../notification/paid-conversion-slack.service';
+import { EmailService } from '../../email/email.service';
 
 @Injectable()
 export class StripeService {
@@ -28,6 +30,9 @@ export class StripeService {
     private trialService: TrialService,
     @Inject(PaidConversionSlackService)
     private readonly paidConversionSlackService: PaidConversionSlackService,
+    @Optional()
+    @Inject(EmailService)
+    private readonly emailService?: EmailService,
   ) {
     const secretKey =
       this.configService?.get<string>('STRIPE_SECRET_KEY') ||
@@ -308,6 +313,12 @@ export class StripeService {
         currentPeriodStart,
       },
     });
+    const priorSubscription = existing
+      ? existing
+      : await this.prisma.subscription.findFirst({
+          where: { stripeSubscriptionId: subscription.id },
+          orderBy: { currentPeriodStart: 'desc' },
+        });
     /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
     if (existing) {
       const previousDbStatus = existing.status;
@@ -374,6 +385,24 @@ export class StripeService {
       });
       await this.ensureSubscriptionUserMapping(newSubscription.id, user.id);
 
+      if (priorSubscription) {
+        await this.emailService?.sendSubscriptionRenewedEmail({
+          email: user.email,
+          displayName: user.displayName,
+          planName: newSubscription.planName,
+          billingPeriod: newSubscription.billingPeriod,
+          currentPeriodEnd: newSubscription.currentPeriodEnd,
+        });
+      } else {
+        await this.emailService?.sendSubscriptionStartedEmail({
+          email: user.email,
+          displayName: user.displayName,
+          planName: newSubscription.planName,
+          billingPeriod: newSubscription.billingPeriod,
+          currentPeriodEnd: newSubscription.currentPeriodEnd,
+        });
+      }
+
       // Grant trial if eligible (after subscription is created)
       try {
         const trialResult = await this.trialService.grantIfEligible(
@@ -429,7 +458,7 @@ export class StripeService {
     });
 
     if (existing) {
-      await this.prisma.subscription.update({
+      const cancelledSubscription = await this.prisma.subscription.update({
         where: { id: existing.id },
         data: {
           status: SubscriptionStatus.CANCELLED,
@@ -437,6 +466,18 @@ export class StripeService {
           cancelAtPeriodEnd: false,
         },
       });
+      const user = await this.prisma.user.findUnique({
+        where: { id: cancelledSubscription.userId },
+      });
+      if (user) {
+        await this.emailService?.sendSubscriptionCancelledEmail({
+          email: user.email,
+          displayName: user.displayName,
+          planName: cancelledSubscription.planName,
+          billingPeriod: cancelledSubscription.billingPeriod,
+          currentPeriodEnd: cancelledSubscription.currentPeriodEnd,
+        });
+      }
     }
   }
 
