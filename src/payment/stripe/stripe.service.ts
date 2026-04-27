@@ -385,22 +385,28 @@ export class StripeService {
       });
       await this.ensureSubscriptionUserMapping(newSubscription.id, user.id);
 
-      if (priorSubscription) {
-        await this.emailService?.sendSubscriptionRenewedEmail({
-          email: user.email,
-          displayName: user.displayName,
-          planName: newSubscription.planName,
-          billingPeriod: newSubscription.billingPeriod,
-          currentPeriodEnd: newSubscription.currentPeriodEnd,
-        });
-      } else {
-        await this.emailService?.sendSubscriptionStartedEmail({
-          email: user.email,
-          displayName: user.displayName,
-          planName: newSubscription.planName,
-          billingPeriod: newSubscription.billingPeriod,
-          currentPeriodEnd: newSubscription.currentPeriodEnd,
-        });
+      const emailEligibleStatuses: Stripe.Subscription.Status[] = [
+        'active',
+        'trialing',
+      ];
+      if (emailEligibleStatuses.includes(subscription.status)) {
+        if (priorSubscription) {
+          await this.emailService?.sendSubscriptionRenewedEmail({
+            email: user.email,
+            displayName: user.displayName,
+            planName: newSubscription.planName,
+            billingPeriod: newSubscription.billingPeriod,
+            currentPeriodEnd: newSubscription.currentPeriodEnd,
+          });
+        } else {
+          await this.emailService?.sendSubscriptionStartedEmail({
+            email: user.email,
+            displayName: user.displayName,
+            planName: newSubscription.planName,
+            billingPeriod: newSubscription.billingPeriod,
+            currentPeriodEnd: newSubscription.currentPeriodEnd,
+          });
+        }
       }
 
       // Grant trial if eligible (after subscription is created)

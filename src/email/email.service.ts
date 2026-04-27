@@ -333,9 +333,7 @@ export class EmailService {
   private async sendEmail(
     payload: Omit<ResendEmailRequest, 'from'>,
   ): Promise<boolean> {
-    const apiKey =
-      this.configService.get<string>('RESEND_API_KEY') ||
-      process.env.RESEND_API_KEY;
+    const apiKey = this.configService.get<string>('RESEND_API_KEY');
     if (!apiKey) {
       this.logger.warn('RESEND_API_KEY not configured; email skipped');
       return false;
@@ -343,7 +341,6 @@ export class EmailService {
 
     const from =
       this.configService.get<string>('EMAIL_FROM') ||
-      process.env.EMAIL_FROM ||
       'KeenVPN <no-reply@vpnkeen.com>';
 
     try {
@@ -454,9 +451,7 @@ export class EmailService {
 
   private supportEmail(): string {
     return (
-      this.configService.get<string>('SUPPORT_EMAIL') ||
-      process.env.SUPPORT_EMAIL ||
-      'support@vpnkeen.com'
+      this.configService.get<string>('SUPPORT_EMAIL') || 'support@vpnkeen.com'
     );
   }
 
@@ -467,7 +462,6 @@ export class EmailService {
   private accountUrl(): string {
     return (
       this.configService.get<string>('ACCOUNT_URL') ||
-      process.env.ACCOUNT_URL ||
       'https://vpnkeen.com/account'
     );
   }
