@@ -4,7 +4,10 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { CryptoService } from '../../../src/crypto/crypto.service';
 import { NodeStatus } from '@prisma/client';
-import { ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
@@ -228,6 +231,49 @@ describe('VPNConfigService', () => {
         service.processVpnConnection('token', 'sig', 's1', 'client-pk'),
       ).rejects.toThrow(ServiceUnavailableException);
       expect(axios.post).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.nodeClient.upsert).not.toHaveBeenCalled();
+    });
+
+    it('should not retry on deterministic 4xx node daemon failures', async () => {
+      (axios.post as jest.Mock).mockClear();
+      const mockNode = {
+        id: 's1',
+        ip: '1.2.3.4',
+        publicKey: 'node-pk',
+        status: NodeStatus.ONLINE,
+      };
+      mockPrisma.node.findUnique.mockResolvedValue(mockNode);
+      mockPrisma.nodeClient.findUnique.mockResolvedValue(null);
+      mockPrisma.nodeClient.count.mockResolvedValue(0);
+      (axios.post as jest.Mock).mockRejectedValue({
+        response: { status: 401, data: { message: 'unauthorized' } },
+        message: 'Request failed with status code 401',
+      });
+
+      await expect(
+        service.processVpnConnection('token', 'sig', 's1', 'client-pk'),
+      ).rejects.toThrow(BadRequestException);
+      expect(axios.post).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.nodeClient.upsert).not.toHaveBeenCalled();
+    });
+
+    it('should treat unexpected 2xx status as deterministic failure', async () => {
+      (axios.post as jest.Mock).mockClear();
+      const mockNode = {
+        id: 's1',
+        ip: '1.2.3.4',
+        publicKey: 'node-pk',
+        status: NodeStatus.ONLINE,
+      };
+      mockPrisma.node.findUnique.mockResolvedValue(mockNode);
+      mockPrisma.nodeClient.findUnique.mockResolvedValue(null);
+      mockPrisma.nodeClient.count.mockResolvedValue(0);
+      (axios.post as jest.Mock).mockResolvedValue({ status: 202 });
+
+      await expect(
+        service.processVpnConnection('token', 'sig', 's1', 'client-pk'),
+      ).rejects.toThrow(BadRequestException);
+      expect(axios.post).toHaveBeenCalledTimes(1);
       expect(mockPrisma.nodeClient.upsert).not.toHaveBeenCalled();
     });
   });

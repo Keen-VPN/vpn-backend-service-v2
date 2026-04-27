@@ -64,11 +64,19 @@ export class VPNConfigService {
         );
 
         if (response.status !== 201 && response.status !== 200) {
-          throw new Error(`Node daemon returned status ${response.status}`);
+          throw Object.assign(
+            new Error(`Node daemon returned status ${response.status}`),
+            { response: { status: response.status } },
+          );
         }
 
         return;
       } catch (error) {
+        const isConnectivityError = this.isNodeConnectivityError(error);
+        if (!isConnectivityError) {
+          throw error;
+        }
+
         lastError = error;
         SafeLogger.warn('Node daemon peer registration attempt failed', {
           nodeIp: params.nodeIp,
