@@ -1064,27 +1064,32 @@ export class AppleService {
         );
       }
 
-      if (
-        result.subscription.status === SubscriptionStatus.ACTIVE &&
-        verifiedItem &&
-        !this.isAppleTrialPeriodReceipt(verifiedItem)
-      ) {
-        try {
-          await this.maybeNotifyApplePaidConversion(
-            userId,
-            verifiedOriginalTransactionId,
-            verifiedProductId,
-          );
-        } catch (paidErr) {
-          SafeLogger.warn(
-            'Apple paid-conversion Slack skipped (non-fatal)',
-            undefined,
-            {
+      if (result.subscription.status === SubscriptionStatus.ACTIVE) {
+        const canNotifyPaid = verifiedItem
+          ? !this.isAppleTrialPeriodReceipt(verifiedItem)
+          : await this.shouldNotifyPaidFromStoredAppleReceipt({
+              receiptData: normalizedReceipt,
+              originalTransactionId: verifiedOriginalTransactionId,
+            });
+
+        if (canNotifyPaid) {
+          try {
+            await this.maybeNotifyApplePaidConversion(
               userId,
-              error:
-                paidErr instanceof Error ? paidErr.message : String(paidErr),
-            },
-          );
+              verifiedOriginalTransactionId,
+              verifiedProductId,
+            );
+          } catch (paidErr) {
+            SafeLogger.warn(
+              'Apple paid-conversion Slack skipped (non-fatal)',
+              undefined,
+              {
+                userId,
+                error:
+                  paidErr instanceof Error ? paidErr.message : String(paidErr),
+              },
+            );
+          }
         }
       }
 

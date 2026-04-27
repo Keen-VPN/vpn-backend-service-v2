@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { CryptoService } from '../../../src/crypto/crypto.service';
 import { NodeStatus } from '@prisma/client';
+import { ServiceUnavailableException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
@@ -172,6 +173,62 @@ describe('VPNConfigService', () => {
           }),
         }),
       );
+    });
+
+    it('should retry node daemon registration after timeout and then succeed', async () => {
+      (axios.post as jest.Mock).mockClear();
+      const mockNode = {
+        id: 's1',
+        ip: '1.2.3.4',
+        publicKey: 'node-pk',
+        status: NodeStatus.ONLINE,
+      };
+      mockPrisma.node.findUnique.mockResolvedValue(mockNode);
+      mockPrisma.nodeClient.findUnique.mockResolvedValue(null);
+      mockPrisma.nodeClient.count.mockResolvedValue(0);
+      mockPrisma.nodeClient.upsert.mockResolvedValue({ id: 'c1' });
+      (axios.post as jest.Mock)
+        .mockRejectedValueOnce(new Error('timeout of 5000ms exceeded'))
+        .mockResolvedValueOnce({ status: 201 });
+
+      const result = await service.processVpnConnection(
+        'token',
+        'sig',
+        's1',
+        'client-pk',
+      );
+
+      expect(result).toEqual({
+        publicKey: 'node-pk',
+        ip: '1.2.3.4',
+        internalIp: '10.66.0.2/32',
+      });
+      expect(axios.post).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.nodeClient.upsert).toHaveBeenCalled();
+    });
+
+    it('should throw 503 when node daemon is unreachable after retries', async () => {
+      (axios.post as jest.Mock).mockClear();
+      const mockNode = {
+        id: 's1',
+        ip: '1.2.3.4',
+        publicKey: 'node-pk',
+        status: NodeStatus.ONLINE,
+      };
+      mockPrisma.node.findUnique.mockResolvedValue(mockNode);
+      mockPrisma.nodeClient.findUnique.mockResolvedValue(null);
+      mockPrisma.nodeClient.count.mockResolvedValue(0);
+      (axios.post as jest.Mock).mockRejectedValue(
+        Object.assign(new Error('timeout of 5000ms exceeded'), {
+          code: 'ECONNABORTED',
+        }),
+      );
+
+      await expect(
+        service.processVpnConnection('token', 'sig', 's1', 'client-pk'),
+      ).rejects.toThrow(ServiceUnavailableException);
+      expect(axios.post).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.nodeClient.upsert).not.toHaveBeenCalled();
     });
   });
 });
