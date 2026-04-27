@@ -156,7 +156,7 @@ export class AuthService {
       );
 
       if (createdUser) {
-        await this.emailService?.sendWelcomeEmail({
+        await this.sendWelcomeEmailNonFatal({
           email: user.email,
           displayName: user.displayName,
         });
@@ -387,7 +387,7 @@ export class AuthService {
       });
 
       if (createdUser) {
-        await this.emailService?.sendWelcomeEmail({
+        await this.sendWelcomeEmailNonFatal({
           email: user.email,
           displayName: user.displayName,
         });
@@ -684,7 +684,7 @@ export class AuthService {
       );
 
       if (createdUser) {
-        await this.emailService?.sendWelcomeEmail({
+        await this.sendWelcomeEmailNonFatal({
           email: user.email,
           displayName: user.displayName,
         });
@@ -1250,5 +1250,20 @@ export class AuthService {
     }
 
     throw new NotFoundException('This provider is not linked to your account.');
+  }
+
+  private async sendWelcomeEmailNonFatal(user: {
+    email: string;
+    displayName?: string | null;
+  }): Promise<void> {
+    try {
+      await this.emailService?.sendWelcomeEmail(user);
+    } catch (error) {
+      SafeLogger.warn(
+        'Welcome email skipped after account creation',
+        { service: 'AuthService' },
+        { error: error instanceof Error ? error.message : String(error) },
+      );
+    }
   }
 }

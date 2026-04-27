@@ -70,14 +70,24 @@ export class SalesContactService {
         `Sales contact created: ${contact.id} (Ref: ${referenceId})`,
       );
 
-      await this.emailService?.sendSalesContactConfirmation({
-        ...dto,
-        referenceId: contact.referenceId,
-      });
-      await this.emailService?.notifySalesTeam({
-        ...dto,
-        referenceId: contact.referenceId,
-      });
+      try {
+        await Promise.all([
+          this.emailService?.sendSalesContactConfirmation({
+            ...dto,
+            referenceId: contact.referenceId,
+          }),
+          this.emailService?.notifySalesTeam({
+            ...dto,
+            referenceId: contact.referenceId,
+          }),
+        ]);
+      } catch (error) {
+        this.logger.warn(
+          `Sales contact ${contact.id} created, but email notification failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
 
       return {
         success: true,

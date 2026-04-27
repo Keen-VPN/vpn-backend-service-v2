@@ -348,22 +348,35 @@ export class StripeService {
       const previousStatusWasEmailEligible =
         this.isSubscriptionEmailEligible(previousDbStatus);
       if (subscriptionIsEmailEligible && !previousStatusWasEmailEligible) {
-        if (priorSubscription) {
-          await this.emailService?.sendSubscriptionRenewedEmail({
-            email: user.email,
-            displayName: user.displayName,
-            planName: updatedSubscription.planName,
-            billingPeriod: updatedSubscription.billingPeriod,
-            currentPeriodEnd: updatedSubscription.currentPeriodEnd,
-          });
-        } else {
-          await this.emailService?.sendSubscriptionStartedEmail({
-            email: user.email,
-            displayName: user.displayName,
-            planName: updatedSubscription.planName,
-            billingPeriod: updatedSubscription.billingPeriod,
-            currentPeriodEnd: updatedSubscription.currentPeriodEnd,
-          });
+        try {
+          if (priorSubscription) {
+            await this.emailService?.sendSubscriptionRenewedEmail({
+              email: user.email,
+              displayName: user.displayName,
+              planName: updatedSubscription.planName,
+              billingPeriod: updatedSubscription.billingPeriod,
+              currentPeriodEnd: updatedSubscription.currentPeriodEnd,
+            });
+          } else {
+            await this.emailService?.sendSubscriptionStartedEmail({
+              email: user.email,
+              displayName: user.displayName,
+              planName: updatedSubscription.planName,
+              billingPeriod: updatedSubscription.billingPeriod,
+              currentPeriodEnd: updatedSubscription.currentPeriodEnd,
+            });
+          }
+        } catch (emailError) {
+          SafeLogger.warn(
+            'Stripe subscription email skipped after update',
+            { service: 'StripeService', userId: user.id },
+            {
+              error:
+                emailError instanceof Error
+                  ? emailError.message
+                  : String(emailError),
+            },
+          );
         }
       }
 
@@ -412,22 +425,35 @@ export class StripeService {
       await this.ensureSubscriptionUserMapping(newSubscription.id, user.id);
 
       if (subscriptionIsEmailEligible) {
-        if (priorSubscription) {
-          await this.emailService?.sendSubscriptionRenewedEmail({
-            email: user.email,
-            displayName: user.displayName,
-            planName: newSubscription.planName,
-            billingPeriod: newSubscription.billingPeriod,
-            currentPeriodEnd: newSubscription.currentPeriodEnd,
-          });
-        } else {
-          await this.emailService?.sendSubscriptionStartedEmail({
-            email: user.email,
-            displayName: user.displayName,
-            planName: newSubscription.planName,
-            billingPeriod: newSubscription.billingPeriod,
-            currentPeriodEnd: newSubscription.currentPeriodEnd,
-          });
+        try {
+          if (priorSubscription) {
+            await this.emailService?.sendSubscriptionRenewedEmail({
+              email: user.email,
+              displayName: user.displayName,
+              planName: newSubscription.planName,
+              billingPeriod: newSubscription.billingPeriod,
+              currentPeriodEnd: newSubscription.currentPeriodEnd,
+            });
+          } else {
+            await this.emailService?.sendSubscriptionStartedEmail({
+              email: user.email,
+              displayName: user.displayName,
+              planName: newSubscription.planName,
+              billingPeriod: newSubscription.billingPeriod,
+              currentPeriodEnd: newSubscription.currentPeriodEnd,
+            });
+          }
+        } catch (emailError) {
+          SafeLogger.warn(
+            'Stripe subscription email skipped after create',
+            { service: 'StripeService', userId: user.id },
+            {
+              error:
+                emailError instanceof Error
+                  ? emailError.message
+                  : String(emailError),
+            },
+          );
         }
       }
 
@@ -486,6 +512,8 @@ export class StripeService {
     });
 
     if (existing) {
+      const wasAlreadyCancelled =
+        existing.status === SubscriptionStatus.CANCELLED;
       const cancelledSubscription = await this.prisma.subscription.update({
         where: { id: existing.id },
         data: {
@@ -497,14 +525,27 @@ export class StripeService {
       const user = await this.prisma.user.findUnique({
         where: { id: cancelledSubscription.userId },
       });
-      if (user) {
-        await this.emailService?.sendSubscriptionCancelledEmail({
-          email: user.email,
-          displayName: user.displayName,
-          planName: cancelledSubscription.planName,
-          billingPeriod: cancelledSubscription.billingPeriod,
-          currentPeriodEnd: cancelledSubscription.currentPeriodEnd,
-        });
+      if (user && !wasAlreadyCancelled) {
+        try {
+          await this.emailService?.sendSubscriptionCancelledEmail({
+            email: user.email,
+            displayName: user.displayName,
+            planName: cancelledSubscription.planName,
+            billingPeriod: cancelledSubscription.billingPeriod,
+            currentPeriodEnd: cancelledSubscription.currentPeriodEnd,
+          });
+        } catch (emailError) {
+          SafeLogger.warn(
+            'Stripe cancellation email skipped',
+            { service: 'StripeService', userId: user.id },
+            {
+              error:
+                emailError instanceof Error
+                  ? emailError.message
+                  : String(emailError),
+            },
+          );
+        }
       }
     }
   }
