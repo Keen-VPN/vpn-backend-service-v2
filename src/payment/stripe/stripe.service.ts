@@ -305,6 +305,9 @@ export class StripeService {
     const currentPeriodEnd = new Date(periodEndTimestamp * 1000);
 
     const stripeRawStatus = subscription.status;
+    const subscriptionIsEmailEligible = this.isSubscriptionEmailEligible(
+      subscription.status,
+    );
 
     // Check for existing subscription with same period
     const existing = await this.prisma.subscription.findFirst({
@@ -340,6 +343,18 @@ export class StripeService {
         },
       });
       await this.ensureSubscriptionUserMapping(updatedSubscription.id, user.id);
+
+      const previousStatusWasEmailEligible =
+        this.isSubscriptionEmailEligible(previousDbStatus);
+      if (subscriptionIsEmailEligible && !previousStatusWasEmailEligible) {
+        await this.emailService?.sendSubscriptionStartedEmail({
+          email: user.email,
+          displayName: user.displayName,
+          planName: updatedSubscription.planName,
+          billingPeriod: updatedSubscription.billingPeriod,
+          currentPeriodEnd: updatedSubscription.currentPeriodEnd,
+        });
+      }
 
       try {
         await this.paidConversionSlackService.maybeNotifyStripePaidConversion({
@@ -385,11 +400,7 @@ export class StripeService {
       });
       await this.ensureSubscriptionUserMapping(newSubscription.id, user.id);
 
-      const emailEligibleStatuses: Stripe.Subscription.Status[] = [
-        'active',
-        'trialing',
-      ];
-      if (emailEligibleStatuses.includes(subscription.status)) {
+      if (subscriptionIsEmailEligible) {
         if (priorSubscription) {
           await this.emailService?.sendSubscriptionRenewedEmail({
             email: user.email,
@@ -567,6 +578,14 @@ export class StripeService {
       return `${planInfo.planName} (trial)`;
     }
     return 'Premium trial';
+  }
+
+  private isSubscriptionEmailEligible(
+    status: Stripe.Subscription.Status | SubscriptionStatus,
+  ): boolean {
+    return (
+      status.toLowerCase() === 'active' || status.toLowerCase() === 'trialing'
+    );
   }
 
   private getPriceIdForPlan(planId: string): string | null {
