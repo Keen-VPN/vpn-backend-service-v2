@@ -3,7 +3,6 @@ import {
   NotFoundException,
   ForbiddenException,
   Inject,
-  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { getActiveSubscriptionForUser } from '../subscription/subscription-lookup.util';
@@ -15,9 +14,8 @@ import PDFDocument from 'pdfkit';
 export class AccountService {
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
-    @Optional()
     @Inject(EmailService)
-    private readonly emailService?: EmailService,
+    private readonly emailService: EmailService,
   ) {}
 
   async getProfileByFirebaseUid(firebaseUid: string) {

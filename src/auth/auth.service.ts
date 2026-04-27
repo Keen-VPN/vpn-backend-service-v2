@@ -5,7 +5,6 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
-  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FirebaseConfig } from '../config/firebase.config';
@@ -29,9 +28,8 @@ export class AuthService {
     @Inject(ConfigService) private configService: ConfigService,
     @Inject(AppleTokenVerifierService)
     private appleTokenVerifier: AppleTokenVerifierService,
-    @Optional()
     @Inject(EmailService)
-    private readonly emailService?: EmailService,
+    private readonly emailService: EmailService,
   ) {}
 
   private normalizeProvider(
@@ -156,7 +154,7 @@ export class AuthService {
       );
 
       if (createdUser) {
-        await this.sendWelcomeEmailNonFatal({
+        void this.sendWelcomeEmailNonFatal({
           email: user.email,
           displayName: user.displayName,
         });
@@ -387,7 +385,7 @@ export class AuthService {
       });
 
       if (createdUser) {
-        await this.sendWelcomeEmailNonFatal({
+        void this.sendWelcomeEmailNonFatal({
           email: user.email,
           displayName: user.displayName,
         });
@@ -684,7 +682,7 @@ export class AuthService {
       );
 
       if (createdUser) {
-        await this.sendWelcomeEmailNonFatal({
+        void this.sendWelcomeEmailNonFatal({
           email: user.email,
           displayName: user.displayName,
         });

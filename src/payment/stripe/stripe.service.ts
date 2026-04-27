@@ -3,7 +3,6 @@ import {
   Inject,
   forwardRef,
   ConflictException,
-  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
@@ -30,9 +29,8 @@ export class StripeService {
     private trialService: TrialService,
     @Inject(PaidConversionSlackService)
     private readonly paidConversionSlackService: PaidConversionSlackService,
-    @Optional()
     @Inject(EmailService)
-    private readonly emailService?: EmailService,
+    private readonly emailService: EmailService,
   ) {
     const secretKey =
       this.configService?.get<string>('STRIPE_SECRET_KEY') ||
@@ -512,8 +510,7 @@ export class StripeService {
     });
 
     if (existing) {
-      const wasAlreadyCancelled =
-        existing.status === SubscriptionStatus.CANCELLED;
+      const wasAlreadyCancelled = existing.cancelledAt !== null;
       const cancelledSubscription = await this.prisma.subscription.update({
         where: { id: existing.id },
         data: {
