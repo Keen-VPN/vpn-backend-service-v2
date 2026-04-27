@@ -67,14 +67,18 @@ describe('TrialService', () => {
 
     it('should return false if user already has a trial grant', async () => {
       const user = createMockUser();
+      const grant = {
+        id: 'grant-1',
+        userId: user.id,
+        grantedAt: new Date(Date.now() - 3600_000),
+        expiresAt: new Date(Date.now() + 86400_000),
+      };
 
       // Mock transaction to return existing grant
       mockPrisma.$transaction.mockImplementation(async (callback) => {
         // Mock existing grant
-        mockPrisma.trialGrant.findUnique.mockResolvedValue({
-          id: 'grant-1',
-          userId: user.id,
-        } as any);
+        mockPrisma.trialGrant.findUnique.mockResolvedValue(grant as any);
+        mockPrisma.user.update.mockResolvedValue(user as any);
         return callback(mockPrisma);
       });
 
@@ -82,6 +86,20 @@ describe('TrialService', () => {
 
       expect(result.granted).toBe(false);
       expect(result.reason).toBe('existing_grant');
+      expect(result.trialEndsAt?.toISOString()).toBe(
+        grant.expiresAt.toISOString(),
+      );
+      expect(mockPrisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: user.id },
+          data: expect.objectContaining({
+            trialActive: true,
+            trialStartsAt: grant.grantedAt,
+            trialEndsAt: grant.expiresAt,
+            trialTier: 'free_trial',
+          }),
+        }),
+      );
     });
 
     it('should return false if user has no active subscription', async () => {
@@ -442,6 +460,45 @@ describe('TrialService', () => {
       expect(result.tier).toBeNull();
       expect(result.daysRemaining).toBe(0);
       expect(result.isPaid).toBe(false);
+    });
+
+    it('should reconcile status from trial grant when user trial fields drift', async () => {
+      const user = {
+        id: 'user-1',
+        trialActive: false,
+        trialEndsAt: null,
+        trialTier: null,
+      };
+      const grant = {
+        grantedAt: new Date(Date.now() - 1000),
+        expiresAt: new Date(Date.now() + 86400000),
+      };
+
+      mockPrisma.$transaction.mockImplementation(async (cb) => cb(mockPrisma));
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user as any); // expireIfNeeded
+      mockPrisma.user.findUnique.mockResolvedValueOnce(user as any); // status()
+      mockPrisma.trialGrant.findUnique.mockResolvedValueOnce(grant as any);
+      mockPrisma.user.update.mockResolvedValue({} as any);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+
+      const result = await service.status('user-1');
+
+      expect(result.trialActive).toBe(true);
+      expect(result.trialEndsAt?.toISOString()).toBe(
+        grant.expiresAt.toISOString(),
+      );
+      expect(result.tier).toBe('free_trial');
+      expect(mockPrisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'user-1' },
+          data: expect.objectContaining({
+            trialActive: true,
+            trialStartsAt: grant.grantedAt,
+            trialEndsAt: grant.expiresAt,
+            trialTier: 'free_trial',
+          }),
+        }),
+      );
     });
   });
 });

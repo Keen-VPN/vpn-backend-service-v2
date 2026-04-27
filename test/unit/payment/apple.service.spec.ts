@@ -770,6 +770,49 @@ describe('AppleService', () => {
       expect(mockPrisma.subscription.create).toHaveBeenCalled();
     });
 
+    it('should still send paid conversion when receipt verification fails during linkPurchase', async () => {
+      const user = createMockUser();
+      const purchase = createMockAppleIAPPurchase({
+        linkedUserId: null,
+        expiresDate: new Date(Date.now() + 10000),
+      });
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=';
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ status: 21004 })),
+      });
+
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValueOnce(purchase);
+      mockPrisma.appleIAPPurchase.update.mockResolvedValue({
+        ...purchase,
+        linkedUserId: user.id,
+      } as any);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      mockPrisma.subscription.create.mockResolvedValue(
+        createMockSubscription(),
+      );
+
+      await service.linkPurchase(
+        user.id,
+        'token',
+        purchase.transactionId,
+        purchase.originalTransactionId,
+        purchase.productId,
+        receiptData,
+      );
+
+      expect(
+        mockPaidConversionSlack.maybeNotifyApplePaidConversion,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: user.id,
+          originalTransactionId: purchase.originalTransactionId,
+        }),
+      );
+    });
+
     it('should throw error if already linked to another user', async () => {
       const user = createMockUser();
       const purchase = createMockAppleIAPPurchase();
