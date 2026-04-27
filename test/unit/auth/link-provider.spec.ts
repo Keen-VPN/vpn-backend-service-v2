@@ -17,6 +17,7 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { SubscriptionUserRole, Prisma } from '@prisma/client';
 import { AppleTokenVerifierService } from '../../../src/auth/apple-token-verifier.service';
 import { FirebaseConfig } from '../../../src/config/firebase.config';
+import { EmailService } from '../../../src/email/email.service';
 
 jest.mock('../../../src/subscription/subscription-lookup.util', () => ({
   getActiveSubscriptionForUser: jest.fn(),
@@ -48,6 +49,12 @@ describe('AuthService.linkProvider', () => {
         {
           provide: AppleTokenVerifierService,
           useValue: { verifyIdentityToken: jest.fn() },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendWelcomeEmail: jest.fn().mockResolvedValue(true),
+          },
         },
       ],
     }).compile();
