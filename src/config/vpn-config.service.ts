@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  Inject,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { NodeStatus } from '@prisma/client';
@@ -20,6 +25,102 @@ export class VPNConfigService {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(CryptoService) private cryptoService: CryptoService,
   ) {}
+
+  private getNumberConfig(key: string, fallback: number): number {
+    const raw = this.configService.get<string>(key) ?? process.env[key];
+    const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  }
+
+  private async registerPeerOnNodeDaemon(params: {
+    nodeIp: string;
+    clientPublicKey: string;
+    assignedIp: string;
+  }): Promise<void> {
+    const nodeDaemonUrl = `http://${params.nodeIp}:8080/peers`;
+    const timeoutMs = this.getNumberConfig('NODE_DAEMON_TIMEOUT_MS', 8000);
+    const maxAttempts = this.getNumberConfig(
+      'NODE_DAEMON_REGISTER_ATTEMPTS',
+      2,
+    );
+    const token =
+      this.configService.get<string>('NODE_TOKEN') ?? process.env.NODE_TOKEN;
+
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const response = await axios.post(
+          nodeDaemonUrl,
+          {
+            publicKey: params.clientPublicKey,
+            allowedIps: params.assignedIp,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            timeout: timeoutMs,
+          },
+        );
+
+        if (response.status !== 201 && response.status !== 200) {
+          throw Object.assign(
+            new Error(`Node daemon returned status ${response.status}`),
+            { response: { status: response.status } },
+          );
+        }
+
+        return;
+      } catch (error) {
+        const isConnectivityError = this.isNodeConnectivityError(error);
+        if (!isConnectivityError) {
+          throw error;
+        }
+
+        lastError = error;
+        SafeLogger.warn('Node daemon peer registration attempt failed', {
+          nodeIp: params.nodeIp,
+          attempt,
+          maxAttempts,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
+  private isNodeConnectivityError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+      return false;
+    }
+
+    const axiosLike = error as {
+      code?: string;
+      message?: string;
+      response?: { status?: number };
+    };
+
+    if (!axiosLike.response) {
+      // Network-level failures (timeout, refused, DNS, etc.) have no HTTP response.
+      return true;
+    }
+
+    const status = axiosLike.response.status;
+    if (typeof status === 'number' && status >= 500) {
+      return true;
+    }
+
+    const code = axiosLike.code ?? '';
+    const msg = (axiosLike.message ?? '').toLowerCase();
+    return (
+      code === 'ECONNABORTED' ||
+      code === 'ECONNREFUSED' ||
+      code === 'ETIMEDOUT' ||
+      code === 'ENOTFOUND' ||
+      msg.includes('timeout')
+    );
+  }
 
   async getActiveNodesSimplified(): Promise<any[]> {
     const nodes = await this.prisma.node.findMany({
@@ -93,24 +194,11 @@ export class VPNConfigService {
 
     // 5. Register client on node daemon
     try {
-      const nodeDaemonUrl = `http://${node.ip}:8080/peers`;
-      const response = await axios.post(
-        nodeDaemonUrl,
-        {
-          publicKey: clientPublicKey,
-          allowedIps: assignedIp,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.NODE_TOKEN}`,
-          },
-          timeout: 5000,
-        },
-      );
-
-      if (response.status !== 201 && response.status !== 200) {
-        throw new Error(`Node daemon returned status ${response.status}`);
-      }
+      await this.registerPeerOnNodeDaemon({
+        nodeIp: node.ip,
+        clientPublicKey,
+        assignedIp,
+      });
 
       // 5. Update or Create node-client relationship (1:1 mapping)
       await this.prisma.nodeClient.upsert({
@@ -133,6 +221,11 @@ export class VPNConfigService {
         nodeIp: node.ip,
         error: error instanceof Error ? error.message : String(error),
       });
+      if (this.isNodeConnectivityError(error)) {
+        throw new ServiceUnavailableException(
+          'VPN node is temporarily unavailable',
+        );
+      }
       throw new BadRequestException(
         'Failed to establish connection with VPN node',
       );

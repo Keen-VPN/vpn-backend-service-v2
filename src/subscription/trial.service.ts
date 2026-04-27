@@ -90,11 +90,27 @@ export class TrialService {
       });
 
       if (existingGrant) {
+        const grantStillActive = isBeforeUtc(now, existingGrant.expiresAt);
+        await tx.user.update({
+          where: { id: user.id },
+          data: {
+            trialActive: grantStillActive,
+            trialStartsAt: existingGrant.grantedAt,
+            trialEndsAt: existingGrant.expiresAt,
+            trialTier: grantStillActive ? TRIAL_TIER_NAME : null,
+          },
+        });
+
         SafeLogger.debug('Trial blocked: User already has a trial grant', {
           service: 'TrialService',
           userId: user.id,
         });
-        return { granted: false, reason: 'existing_grant', userId: user.id };
+        return {
+          granted: false,
+          reason: 'existing_grant',
+          userId: user.id,
+          trialEndsAt: existingGrant.expiresAt,
+        };
       }
 
       // Free trial is one-time only per user (regardless of IAP or Stripe subscription)
@@ -323,10 +339,37 @@ export class TrialService {
     }
 
     const now = new Date();
-    const trialEndsAt = user.trialEndsAt ?? null;
-    const trialActive = Boolean(
+    let trialEndsAt = user.trialEndsAt ?? null;
+    let trialActive = Boolean(
       user.trialActive && trialEndsAt && isBeforeUtc(now, trialEndsAt),
     );
+    let trialTier = user.trialTier ?? null;
+
+    // Reconcile from source-of-truth trial grant when user fields drift.
+    if (!trialActive && !trialEndsAt) {
+      const existingGrant = await this.prisma.trialGrant.findUnique({
+        where: { userId },
+        select: { grantedAt: true, expiresAt: true },
+      });
+
+      if (existingGrant) {
+        const grantStillActive = isBeforeUtc(now, existingGrant.expiresAt);
+        trialEndsAt = existingGrant.expiresAt;
+        trialActive = grantStillActive;
+        trialTier = grantStillActive ? TRIAL_TIER_NAME : null;
+
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: {
+            trialActive: grantStillActive,
+            trialStartsAt: existingGrant.grantedAt,
+            trialEndsAt: existingGrant.expiresAt,
+            trialTier: grantStillActive ? TRIAL_TIER_NAME : null,
+          },
+        });
+      }
+    }
+
     const daysRemaining = trialEndsAt
       ? computeTrialDaysRemaining(trialEndsAt, now)
       : 0;
@@ -339,7 +382,7 @@ export class TrialService {
       trialEndsAt,
       daysRemaining,
       isPaid: hasActiveSubscription,
-      tier: user.trialTier ?? null,
+      tier: trialTier,
     };
   }
 
