@@ -1,10 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  Inject,
-  Optional,
-} from '@nestjs/common';
+import { ConflictException, Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSalesContactDto } from './dto/create-sales-contact.dto';
 import { ContactStatus } from '@prisma/client';
@@ -16,9 +10,8 @@ export class SalesContactService {
 
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Optional()
     @Inject(EmailService)
-    private readonly emailService?: EmailService,
+    private readonly emailService: EmailService,
   ) {}
 
   async submitContact(dto: CreateSalesContactDto) {
@@ -72,11 +65,11 @@ export class SalesContactService {
 
       try {
         await Promise.all([
-          this.emailService?.sendSalesContactConfirmation({
+          this.emailService.sendSalesContactConfirmation({
             ...dto,
             referenceId: contact.referenceId,
           }),
-          this.emailService?.notifySalesTeam({
+          this.emailService.notifySalesTeam({
             ...dto,
             referenceId: contact.referenceId,
           }),

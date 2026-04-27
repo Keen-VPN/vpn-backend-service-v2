@@ -3,7 +3,6 @@ import {
   Inject,
   forwardRef,
   ConflictException,
-  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
@@ -30,9 +29,8 @@ export class StripeService {
     private trialService: TrialService,
     @Inject(PaidConversionSlackService)
     private readonly paidConversionSlackService: PaidConversionSlackService,
-    @Optional()
     @Inject(EmailService)
-    private readonly emailService?: EmailService,
+    private readonly emailService: EmailService,
   ) {
     const secretKey =
       this.configService?.get<string>('STRIPE_SECRET_KEY') ||
@@ -350,7 +348,7 @@ export class StripeService {
       if (subscriptionIsEmailEligible && !previousStatusWasEmailEligible) {
         try {
           if (priorSubscription) {
-            await this.emailService?.sendSubscriptionRenewedEmail({
+            await this.emailService.sendSubscriptionRenewedEmail({
               email: user.email,
               displayName: user.displayName,
               planName: updatedSubscription.planName,
@@ -358,7 +356,7 @@ export class StripeService {
               currentPeriodEnd: updatedSubscription.currentPeriodEnd,
             });
           } else {
-            await this.emailService?.sendSubscriptionStartedEmail({
+            await this.emailService.sendSubscriptionStartedEmail({
               email: user.email,
               displayName: user.displayName,
               planName: updatedSubscription.planName,
@@ -427,7 +425,7 @@ export class StripeService {
       if (subscriptionIsEmailEligible) {
         try {
           if (priorSubscription) {
-            await this.emailService?.sendSubscriptionRenewedEmail({
+            await this.emailService.sendSubscriptionRenewedEmail({
               email: user.email,
               displayName: user.displayName,
               planName: newSubscription.planName,
@@ -435,7 +433,7 @@ export class StripeService {
               currentPeriodEnd: newSubscription.currentPeriodEnd,
             });
           } else {
-            await this.emailService?.sendSubscriptionStartedEmail({
+            await this.emailService.sendSubscriptionStartedEmail({
               email: user.email,
               displayName: user.displayName,
               planName: newSubscription.planName,
@@ -513,6 +511,7 @@ export class StripeService {
 
     if (existing) {
       const wasAlreadyCancelled =
+        existing.cancelledAt !== null ||
         existing.status === SubscriptionStatus.CANCELLED;
       const cancelledSubscription = await this.prisma.subscription.update({
         where: { id: existing.id },
@@ -527,7 +526,7 @@ export class StripeService {
       });
       if (user && !wasAlreadyCancelled) {
         try {
-          await this.emailService?.sendSubscriptionCancelledEmail({
+          await this.emailService.sendSubscriptionCancelledEmail({
             email: user.email,
             displayName: user.displayName,
             planName: cancelledSubscription.planName,

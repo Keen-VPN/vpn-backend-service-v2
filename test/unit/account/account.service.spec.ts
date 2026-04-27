@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { AccountService } from '../../../src/account/account.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { EmailService } from '../../../src/email/email.service';
 import { createMockPrismaClient, MockPrismaClient } from '../../setup/mocks';
 import {
   createMockUser,
@@ -21,6 +22,12 @@ describe('AccountService', () => {
         {
           provide: PrismaService,
           useValue: mockPrisma,
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendAccountDeletedEmail: jest.fn().mockResolvedValue(true),
+          },
         },
       ],
     }).compile();

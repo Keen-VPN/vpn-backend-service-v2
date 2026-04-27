@@ -419,7 +419,7 @@ export class EmailService {
       cta,
       '</td></tr>',
       '<tr><td style="padding:24px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;">',
-      `<p style="margin:0;color:#64748b;font-size:12px;line-height:1.6;">Need help? Contact <a href="${this.supportMailtoUrl()}" style="color:#2563eb;text-decoration:none;">${this.escapeHtml(this.supportEmail())}</a>.</p>`,
+      `<p style="margin:0;color:#64748b;font-size:12px;line-height:1.6;">Need help? Contact <a href="${this.escapeHtml(this.supportMailtoUrl())}" style="color:#2563eb;text-decoration:none;">${this.escapeHtml(this.supportEmail())}</a>.</p>`,
       '<p style="margin:10px 0 0;color:#94a3b8;font-size:11px;line-height:1.5;">You received this email because you have a KeenVPN account or submitted a request to KeenVPN.</p>',
       '</td></tr>',
       '</table>',
