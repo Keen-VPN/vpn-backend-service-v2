@@ -66,4 +66,5 @@ export const configValidationSchema = Joi.object({
   EMAIL_FROM: Joi.string().optional(),
   SUPPORT_EMAIL: Joi.string().email().optional(),
   SALES_EMAIL: Joi.string().email().optional(),
+  ACCOUNT_URL: Joi.string().uri().optional(),
 });
