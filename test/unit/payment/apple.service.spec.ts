@@ -218,6 +218,22 @@ describe('AppleService', () => {
       expect(
         mockPaidConversionSlack.maybeNotifyApplePaidConversion,
       ).not.toHaveBeenCalled();
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: purchase.linkedUserId!,
+            trialActive: false,
+            trialEndsAt: null,
+            trialStartsAt: null,
+          }),
+          data: expect.objectContaining({
+            trialActive: true,
+            trialStartsAt: expect.any(Date) as Date,
+            trialEndsAt: expect.any(Date) as Date,
+            trialTier: 'free_trial',
+          }),
+        }),
+      );
     });
 
     it('should send paid conversion for non-trial Apple renewal item', async () => {
@@ -770,7 +786,128 @@ describe('AppleService', () => {
       expect(mockPrisma.subscription.create).toHaveBeenCalled();
     });
 
-    it('should still send paid conversion when receipt verification fails during linkPurchase', async () => {
+    it('should accept StoreKit test transaction IDs "0" in non-production', async () => {
+      // Ensure non-production behavior
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'NODE_ENV') return 'development';
+        return 'test-token';
+      });
+
+      const user = createMockUser();
+      const purchase = createMockAppleIAPPurchase();
+      purchase.linkedUserId = null;
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
+
+      // Verified receipt has real transaction IDs, but input uses "0"
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: purchase.transactionId,
+                original_transaction_id: purchase.originalTransactionId,
+                product_id: purchase.productId,
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+              },
+            ],
+          }),
+        ),
+      });
+
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.appleIAPPurchase.create.mockResolvedValue({
+        ...purchase,
+        linkedUserId: user.id,
+      } as any);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      mockPrisma.subscription.create.mockResolvedValue(
+        createMockSubscription(),
+      );
+
+      const result = await service.linkPurchase(
+        user.id,
+        'session-token',
+        '0',
+        '0',
+        purchase.productId,
+        receiptData,
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.subscription.create).toHaveBeenCalled();
+    });
+
+    it('should populate user trial fields when linking a trial-period Apple receipt', async () => {
+      const user = createMockUser();
+      const purchase = createMockAppleIAPPurchase();
+      purchase.linkedUserId = null;
+      const receiptData = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='; // base64-ish
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            status: 0,
+            environment: 'Production',
+            latest_receipt_info: [
+              {
+                transaction_id: purchase.transactionId,
+                original_transaction_id: purchase.originalTransactionId,
+                product_id: purchase.productId,
+                purchase_date_ms: Date.now().toString(),
+                expires_date_ms: (Date.now() + 10000).toString(),
+                is_trial_period: 'true',
+              },
+            ],
+          }),
+        ),
+      });
+
+      mockPrisma.appleIAPPurchase.findUnique.mockResolvedValue(null);
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.appleIAPPurchase.create.mockResolvedValue({
+        ...purchase,
+        linkedUserId: user.id,
+      } as any);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      mockPrisma.subscription.create.mockResolvedValue(
+        createMockSubscription(),
+      );
+
+      const result = await service.linkPurchase(
+        user.id,
+        'session-token',
+        purchase.transactionId,
+        purchase.originalTransactionId,
+        purchase.productId,
+        receiptData,
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: user.id,
+            trialActive: false,
+            trialEndsAt: null,
+            trialStartsAt: null,
+          }),
+          data: expect.objectContaining({
+            trialActive: true,
+            trialStartsAt: expect.any(Date) as Date,
+            trialEndsAt: expect.any(Date) as Date,
+            trialTier: 'free_trial',
+          }),
+        }),
+      );
+    });
+
+    it('should NOT send paid conversion when receipt verification fails during linkPurchase', async () => {
       const user = createMockUser();
       const purchase = createMockAppleIAPPurchase({
         linkedUserId: null,
@@ -805,12 +942,7 @@ describe('AppleService', () => {
 
       expect(
         mockPaidConversionSlack.maybeNotifyApplePaidConversion,
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: user.id,
-          originalTransactionId: purchase.originalTransactionId,
-        }),
-      );
+      ).not.toHaveBeenCalled();
     });
 
     it('should throw error if already linked to another user', async () => {
@@ -1340,7 +1472,7 @@ describe('AppleService', () => {
       ).not.toHaveBeenCalled();
     });
 
-    it('still sends paid conversion when stored receipt verification fails', async () => {
+    it('does not send paid conversion when stored receipt verification fails', async () => {
       const user = createMockUser();
       const txInfo = {
         transactionId: 'tx-verify-fail',
@@ -1373,12 +1505,7 @@ describe('AppleService', () => {
 
       expect(
         mockPaidConversionSlack.maybeNotifyApplePaidConversion,
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: user.id,
-          originalTransactionId: txInfo.originalTransactionId,
-        }),
-      );
+      ).not.toHaveBeenCalled();
     });
   });
 });
