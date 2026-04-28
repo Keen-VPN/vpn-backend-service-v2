@@ -19,6 +19,8 @@ model User {
   createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
   stripeCustomerId        String?                  @unique @map("stripe_customer_id")
+  stripeTrialUsedAt       DateTime?                @map("stripe_trial_used_at") @db.Timestamptz(6)
+  stripeTrialSubscriptionId String?                @map("stripe_trial_subscription_id")
   trialActive             Boolean                  @default(false) @map("trial_active")
   trialStartsAt           DateTime?                @map("trial_starts_at") @db.Timestamptz(6)
   trialEndsAt             DateTime?                @map("trial_ends_at") @db.Timestamptz(6)

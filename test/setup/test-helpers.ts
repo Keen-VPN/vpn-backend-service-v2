@@ -13,7 +13,7 @@ import type {
 } from '@prisma/client';
 
 export function createMockUser(overrides?: Partial<User>): User {
-  return {
+  const base: any = {
     id: faker.string.uuid(),
     firebaseUid: faker.string.alphanumeric(28),
     appleUserId: null,
@@ -29,8 +29,12 @@ export function createMockUser(overrides?: Partial<User>): User {
     trialStartsAt: null,
     trialEndsAt: null,
     trialTier: null,
-    ...overrides,
   };
+
+  base.stripeTrialUsedAt = null;
+  base.stripeTrialSubscriptionId = null;
+
+  return { ...base, ...overrides } as User;
 }
 
 export function createMockSubscription(
