@@ -94,6 +94,9 @@ describe('StripeService', () => {
       };
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
+      // Reservation attempt occurs when user appears eligible; default to "not reserved"
+      // so the checkout is created without trial settings in this base test.
+      mockPrisma.user.updateMany.mockResolvedValueOnce({ count: 0 } as any);
       // 1) getActiveSubscriptionForUser(direct) 2) existingStripeSubscription check
       mockPrisma.subscription.findFirst
         .mockResolvedValueOnce(null)
@@ -127,6 +130,8 @@ describe('StripeService', () => {
       };
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
+      // Reserve the one-time trial during checkout creation
+      mockPrisma.user.updateMany.mockResolvedValueOnce({ count: 1 } as any);
       mockPrisma.subscription.findFirst
         .mockResolvedValueOnce(null) // active-sub check
         .mockResolvedValueOnce(null); // any stripe subscription history check
@@ -150,6 +155,7 @@ describe('StripeService', () => {
               userId: user.id,
               provider: 'stripe',
               trialType: 'first_time_30_days',
+              trialReservationKey: expect.any(String) as string,
             }),
           }),
         }),
@@ -225,6 +231,7 @@ describe('StripeService', () => {
       };
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.user.updateMany.mockResolvedValueOnce({ count: 0 } as any);
       mockPrisma.subscription.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null);
@@ -368,7 +375,6 @@ describe('StripeService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             id: user.id,
-            stripeTrialUsedAt: null,
           }),
           data: expect.objectContaining({
             stripeTrialUsedAt: expect.any(Date) as Date,

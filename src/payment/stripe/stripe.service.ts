@@ -17,6 +17,16 @@ import { SafeLogger } from '../../common/utils/logger.util';
 import { TrialService } from '../../subscription/trial.service';
 import { PaidConversionSlackService } from '../../notification/paid-conversion-slack.service';
 import { EmailService } from '../../email/email.service';
+import { randomUUID } from 'crypto';
+
+type BatchPayload = { count: number };
+type UserUpdateManyDelegate = {
+  updateMany(args: unknown): Promise<BatchPayload>;
+};
+
+function userUpdateMany(prisma: PrismaService): UserUpdateManyDelegate {
+  return prisma.user as unknown as UserUpdateManyDelegate;
+}
 
 @Injectable()
 export class StripeService {
@@ -108,15 +118,36 @@ export class StripeService {
         select: { id: true },
       },
     );
-    const stripeTrialUsedAtValue =
-      typeof (user as { stripeTrialUsedAt?: unknown }).stripeTrialUsedAt !==
-      'undefined'
-        ? ((user as { stripeTrialUsedAt?: Date | null }).stripeTrialUsedAt ??
-          null)
-        : null;
+    // NOTE: `stripeTrialUsedAt` is a first-class Prisma field; when Prisma types are up-to-date
+    // this can be `!user.stripeTrialUsedAt`. In some dev environments the generated client types
+    // can lag, so we avoid blocking compilation by reading it via a narrow cast.
+    const stripeTrialUsedAt = (user as { stripeTrialUsedAt?: Date | null })
+      .stripeTrialUsedAt;
+    const eligibleBySnapshot =
+      !stripeTrialUsedAt && !existingStripeSubscription;
 
-    const eligibleForStripeTrial =
-      !stripeTrialUsedAtValue && !existingStripeSubscription;
+    // Close the eligibility race window by reserving the one-time Stripe trial at checkout creation time.
+    // This prevents two concurrent checkout sessions from both receiving `trial_period_days`.
+    let eligibleForStripeTrial = false;
+    let trialReservationKey: string | null = null;
+    if (eligibleBySnapshot) {
+      trialReservationKey = `pending:${randomUUID()}`;
+      const reserve = await userUpdateMany(this.prisma).updateMany({
+        where: {
+          id: userId,
+          stripeTrialUsedAt: null,
+          stripeTrialSubscriptionId: null,
+        },
+        data: {
+          stripeTrialUsedAt: new Date(),
+          stripeTrialSubscriptionId: trialReservationKey,
+        },
+      });
+      eligibleForStripeTrial = reserve.count === 1;
+      if (!eligibleForStripeTrial) {
+        trialReservationKey = null;
+      }
+    }
 
     // Get price ID for plan
     const priceId = this.getPriceIdForPlan(planId);
@@ -144,6 +175,7 @@ export class StripeService {
                   userId,
                   provider: 'stripe',
                   trialType: 'first_time_30_days',
+                  trialReservationKey: trialReservationKey ?? '',
                 },
               },
             }
@@ -156,6 +188,20 @@ export class StripeService {
         },
       });
     } catch (err: unknown) {
+      // If we reserved the trial but failed to create the checkout session, release the reservation.
+      if (trialReservationKey) {
+        try {
+          await userUpdateMany(this.prisma).updateMany({
+            where: {
+              id: userId,
+              stripeTrialSubscriptionId: trialReservationKey,
+            },
+            data: { stripeTrialUsedAt: null, stripeTrialSubscriptionId: null },
+          });
+        } catch {
+          // non-fatal
+        }
+      }
       const stripeError = err as { code?: string; message?: string };
       const isNoSuchCustomer =
         stripeError?.code === 'resource_missing' ||
@@ -186,6 +232,7 @@ export class StripeService {
                     userId,
                     provider: 'stripe',
                     trialType: 'first_time_30_days',
+                    trialReservationKey: trialReservationKey ?? '',
                   },
                 },
               }
@@ -364,8 +411,10 @@ export class StripeService {
           : null;
 
       try {
-        await this.prisma.user.updateMany({
-          where: { id: user.id, stripeTrialUsedAt: null },
+        // Checkout may have pre-reserved the trial (stripeTrialUsedAt non-null, stripeTrialSubscriptionId = pending:*).
+        // Always write the real Stripe subscription id once observed.
+        await userUpdateMany(this.prisma).updateMany({
+          where: { id: user.id },
           data: {
             stripeTrialUsedAt: new Date(),
             stripeTrialSubscriptionId: subscription.id,

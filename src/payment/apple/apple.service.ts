@@ -610,10 +610,9 @@ export class AppleService {
       inputProductId,
       verified,
     } = params;
-    const ignoreTxIdMismatch =
-      !isProduction && inputTransactionId === '0' ? true : false;
+    const ignoreTxIdMismatch = !isProduction && inputTransactionId === '0';
     const ignoreOrigTxIdMismatch =
-      !isProduction && inputOriginalTransactionId === '0' ? true : false;
+      !isProduction && inputOriginalTransactionId === '0';
 
     if (
       inputTransactionId &&
