@@ -54,11 +54,35 @@ export class VPNConfigService {
       if (idx <= 0) continue;
       const ip = entry.slice(0, idx).trim();
       const base = entry.slice(idx + 1).trim();
-      if (!ip || !base) continue;
       if (ip !== nodeIp) continue;
-      return base.endsWith('/peers')
-        ? base
-        : `${base.replace(/\/+$/, '')}/peers`;
+      if (!base) {
+        SafeLogger.warn('NODE_DAEMON_URL_OVERRIDES entry has empty base URL', {
+          nodeIp,
+          entry,
+        });
+        continue;
+      }
+      try {
+        const url = new URL(base);
+
+        // Normalize /peers on the pathname only (preserve query/hash).
+        const normalizedPath = url.pathname.replace(/\/+$/, '');
+        if (normalizedPath.endsWith('/peers')) {
+          url.pathname = normalizedPath;
+        } else {
+          url.pathname = `${normalizedPath || ''}/peers`;
+        }
+
+        return url.toString();
+      } catch (error) {
+        SafeLogger.warn('NODE_DAEMON_URL_OVERRIDES entry has invalid URL', {
+          nodeIp,
+          entry,
+          base,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        continue;
+      }
     }
 
     return `http://${nodeIp}:8080/peers`;
