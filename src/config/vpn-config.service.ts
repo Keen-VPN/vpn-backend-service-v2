@@ -105,6 +105,17 @@ export class VPNConfigService {
     let lastError: unknown = null;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
+        if (attempt === 1) {
+          SafeLogger.info('Registering peer on node daemon', {
+            nodeIp: params.nodeIp,
+            nodeDaemonUrl,
+            timeoutMs,
+            maxAttempts,
+            hasToken: Boolean(token && token.trim()),
+            tokenSuffix: token ? token.trim().slice(-6) : null,
+          });
+        }
+
         const response = await axios.post(
           nodeDaemonUrl,
           {
@@ -130,6 +141,20 @@ export class VPNConfigService {
       } catch (error) {
         const isConnectivityError = this.isNodeConnectivityError(error);
         if (!isConnectivityError) {
+          const axiosLike = error as {
+            message?: string;
+            response?: { status?: number; data?: unknown; headers?: unknown };
+          };
+          SafeLogger.warn(
+            'Node daemon peer registration failed (non-retryable)',
+            {
+              nodeIp: params.nodeIp,
+              nodeDaemonUrl,
+              status: axiosLike.response?.status ?? null,
+              error: axiosLike.message ?? String(error),
+              responseBody: axiosLike.response?.data ?? null,
+            },
+          );
           throw error;
         }
 
