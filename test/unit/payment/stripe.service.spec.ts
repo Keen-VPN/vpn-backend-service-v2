@@ -375,6 +375,7 @@ describe('StripeService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             id: user.id,
+            stripeTrialUsedAt: null,
           }),
           data: expect.objectContaining({
             stripeTrialUsedAt: expect.any(Date) as Date,

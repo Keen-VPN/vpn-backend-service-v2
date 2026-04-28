@@ -412,9 +412,22 @@ export class StripeService {
 
       try {
         // Checkout may have pre-reserved the trial (stripeTrialUsedAt non-null, stripeTrialSubscriptionId = pending:*).
+        // Keep `stripeTrialUsedAt` stable across webhook retries.
+
         // Always write the real Stripe subscription id once observed.
         await userUpdateMany(this.prisma).updateMany({
-          where: { id: user.id },
+          where: {
+            id: user.id,
+            stripeTrialSubscriptionId: { not: subscription.id },
+          },
+          data: {
+            stripeTrialSubscriptionId: subscription.id,
+          },
+        });
+
+        // If the trial was not pre-reserved (or is coming from an older flow), stamp usedAt once.
+        await userUpdateMany(this.prisma).updateMany({
+          where: { id: user.id, stripeTrialUsedAt: null },
           data: {
             stripeTrialUsedAt: new Date(),
             stripeTrialSubscriptionId: subscription.id,
