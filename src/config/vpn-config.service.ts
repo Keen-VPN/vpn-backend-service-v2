@@ -32,12 +32,44 @@ export class VPNConfigService {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
   }
 
+  /**
+   * Optional override to route specific node IPs through a tunnel/reverse-proxy.
+   *
+   * Format:
+   *   NODE_DAEMON_URL_OVERRIDES="169.255.57.34=https://vegetation-tabs-....trycloudflare.com"
+   * Multiple entries can be comma-separated.
+   */
+  private resolveNodeDaemonPeersUrl(nodeIp: string): string {
+    const raw =
+      this.configService.get<string>('NODE_DAEMON_URL_OVERRIDES') ??
+      process.env.NODE_DAEMON_URL_OVERRIDES ??
+      '';
+    const entries = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    for (const entry of entries) {
+      const idx = entry.indexOf('=');
+      if (idx <= 0) continue;
+      const ip = entry.slice(0, idx).trim();
+      const base = entry.slice(idx + 1).trim();
+      if (!ip || !base) continue;
+      if (ip !== nodeIp) continue;
+      return base.endsWith('/peers')
+        ? base
+        : `${base.replace(/\/+$/, '')}/peers`;
+    }
+
+    return `http://${nodeIp}:8080/peers`;
+  }
+
   private async registerPeerOnNodeDaemon(params: {
     nodeIp: string;
     clientPublicKey: string;
     assignedIp: string;
   }): Promise<void> {
-    const nodeDaemonUrl = `http://${params.nodeIp}:8080/peers`;
+    const nodeDaemonUrl = this.resolveNodeDaemonPeersUrl(params.nodeIp);
     const timeoutMs = this.getNumberConfig('NODE_DAEMON_TIMEOUT_MS', 8000);
     const maxAttempts = this.getNumberConfig(
       'NODE_DAEMON_REGISTER_ATTEMPTS',
