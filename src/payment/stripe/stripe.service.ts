@@ -198,8 +198,18 @@ export class StripeService {
             },
             data: { stripeTrialUsedAt: null, stripeTrialSubscriptionId: null },
           });
-        } catch {
-          // non-fatal
+        } catch (rollbackErr) {
+          SafeLogger.warn(
+            'Stripe trial reservation rollback failed; user may be stuck as ineligible for trial',
+            { userId },
+            {
+              trialReservationKey,
+              error:
+                rollbackErr instanceof Error
+                  ? rollbackErr.message
+                  : String(rollbackErr),
+            },
+          );
         }
       }
       const stripeError = err as { code?: string; message?: string };
