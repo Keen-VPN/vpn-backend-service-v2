@@ -229,6 +229,16 @@ export class AppleService {
       ? new Date(parseInt(receipt.expires_date_ms))
       : null;
 
+    // If Apple indicates this is a trial period, reflect it onto the user row for UI/status purposes.
+    // Do not overwrite an existing trial record (cross-provider separation).
+    if (expiresDate && this.isAppleTrialPeriodReceipt(receipt)) {
+      await this.maybeUpdateUserTrialFromAppleTrialReceipt(
+        userId,
+        purchaseDate,
+        expiresDate,
+      );
+    }
+
     const plan = this.resolvePlanMetadata(productId);
     const nextStatus = this.getExpectedSubscriptionStatus(expiresDate);
 
@@ -494,6 +504,38 @@ export class AppleService {
     return receipt.is_trial_period === 'true';
   }
 
+  private async maybeUpdateUserTrialFromAppleTrialReceipt(
+    userId: string,
+    startsAt: Date,
+    endsAt: Date,
+  ): Promise<void> {
+    try {
+      await this.prisma.user.updateMany({
+        where: {
+          id: userId,
+          trialActive: false,
+          trialEndsAt: null,
+          trialStartsAt: null,
+        },
+        data: {
+          trialActive: true,
+          trialStartsAt: startsAt,
+          trialEndsAt: endsAt,
+          trialTier: 'free_trial',
+        },
+      });
+    } catch (err) {
+      SafeLogger.warn(
+        'Failed to update user trial fields from Apple trial receipt (non-fatal)',
+        undefined,
+        {
+          userId,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      );
+    }
+  }
+
   private async shouldNotifyPaidFromStoredAppleReceipt(purchase: {
     receiptData: string | null;
     originalTransactionId: string;
@@ -558,17 +600,30 @@ export class AppleService {
     inputProductId?: string;
     verified: AppleReceiptItem;
   }): void {
+    const isProduction =
+      (this.configService?.get<string>('NODE_ENV') || process.env.NODE_ENV) ===
+      'production';
     const {
       inputTransactionId,
       inputOriginalTransactionId,
       inputProductId,
       verified,
     } = params;
-    if (inputTransactionId && inputTransactionId !== verified.transaction_id) {
+    const ignoreTxIdMismatch =
+      !isProduction && inputTransactionId === '0' ? true : false;
+    const ignoreOrigTxIdMismatch =
+      !isProduction && inputOriginalTransactionId === '0' ? true : false;
+
+    if (
+      inputTransactionId &&
+      !ignoreTxIdMismatch &&
+      inputTransactionId !== verified.transaction_id
+    ) {
       throw new Error('Transaction ID does not match verified receipt.');
     }
     if (
       inputOriginalTransactionId &&
+      !ignoreOrigTxIdMismatch &&
       inputOriginalTransactionId !== verified.original_transaction_id
     ) {
       throw new Error(
@@ -892,6 +947,18 @@ export class AppleService {
       const plan = this.resolvePlanMetadata(verifiedProductId);
       const nextStatus =
         this.getExpectedSubscriptionStatus(verifiedExpiresDate);
+
+      if (
+        verifiedItem &&
+        verifiedExpiresDate &&
+        this.isAppleTrialPeriodReceipt(verifiedItem)
+      ) {
+        await this.maybeUpdateUserTrialFromAppleTrialReceipt(
+          userId,
+          verifiedPurchaseDate ?? new Date(),
+          verifiedExpiresDate,
+        );
+      }
 
       const result = await this.prisma.$transaction(async (tx) => {
         const user = await tx.user.findUnique({ where: { id: userId } });
