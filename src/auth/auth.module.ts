@@ -7,9 +7,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AccountModule } from '../account/account.module';
 import { SessionAuthGuard } from './guards/session-auth.guard';
 import { OptionalSessionGuard } from './guards/optional-session.guard';
+import { EmailModule } from '../email/email.module';
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => AccountModule)],
+  imports: [PrismaModule, forwardRef(() => AccountModule), EmailModule],
   controllers: [AuthController],
   providers: [
     AuthService,

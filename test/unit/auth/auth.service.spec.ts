@@ -6,6 +6,7 @@ import { AuthService } from '../../../src/auth/auth.service';
 import { FirebaseConfig } from '../../../src/config/firebase.config';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { AppleTokenVerifierService } from '../../../src/auth/apple-token-verifier.service';
+import { EmailService } from '../../../src/email/email.service';
 import {
   createMockFirebaseAuth,
   createMockPrismaClient,
@@ -58,6 +59,12 @@ describe('AuthService', () => {
         {
           provide: AppleTokenVerifierService,
           useValue: mockAppleTokenVerifierService,
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendWelcomeEmail: jest.fn().mockResolvedValue(true),
+          },
         },
       ],
     }).compile();

@@ -16,6 +16,7 @@ import { getActiveSubscriptionForUser } from '../../subscription/subscription-lo
 import { SafeLogger } from '../../common/utils/logger.util';
 import { TrialService } from '../../subscription/trial.service';
 import { PaidConversionSlackService } from '../../notification/paid-conversion-slack.service';
+import { EmailService } from '../../email/email.service';
 
 @Injectable()
 export class StripeService {
@@ -28,6 +29,8 @@ export class StripeService {
     private trialService: TrialService,
     @Inject(PaidConversionSlackService)
     private readonly paidConversionSlackService: PaidConversionSlackService,
+    @Inject(EmailService)
+    private readonly emailService: EmailService,
   ) {
     const secretKey =
       this.configService?.get<string>('STRIPE_SECRET_KEY') ||
@@ -342,6 +345,9 @@ export class StripeService {
     const currentPeriodEnd = new Date(periodEndTimestamp * 1000);
 
     const stripeRawStatus = subscription.status;
+    const subscriptionIsEmailEligible = this.isSubscriptionEmailEligible(
+      subscription.status,
+    );
 
     // Mark Stripe trial as used as soon as a trialing subscription is observed.
     // Idempotent: webhook retries must not duplicate or reset.
@@ -424,6 +430,13 @@ export class StripeService {
         currentPeriodStart,
       },
     });
+    const priorSubscription = await this.prisma.subscription.findFirst({
+      where: {
+        stripeSubscriptionId: subscription.id,
+        ...(existing ? { id: { not: existing.id } } : {}),
+      },
+      orderBy: { currentPeriodStart: 'desc' },
+    });
     /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
     if (existing) {
       const previousDbStatus = existing.status;
@@ -445,6 +458,48 @@ export class StripeService {
         },
       });
       await this.ensureSubscriptionUserMapping(updatedSubscription.id, user.id);
+
+      const previousStatusWasEmailEligible =
+        this.isSubscriptionEmailEligible(previousDbStatus);
+      if (subscriptionIsEmailEligible && !previousStatusWasEmailEligible) {
+        try {
+          let sent = false;
+          if (priorSubscription) {
+            sent = await this.emailService.sendSubscriptionRenewedEmail({
+              email: user.email,
+              displayName: user.displayName,
+              planName: updatedSubscription.planName,
+              billingPeriod: updatedSubscription.billingPeriod,
+              currentPeriodEnd: updatedSubscription.currentPeriodEnd,
+            });
+          } else {
+            sent = await this.emailService.sendSubscriptionStartedEmail({
+              email: user.email,
+              displayName: user.displayName,
+              planName: updatedSubscription.planName,
+              billingPeriod: updatedSubscription.billingPeriod,
+              currentPeriodEnd: updatedSubscription.currentPeriodEnd,
+            });
+          }
+          if (!sent) {
+            SafeLogger.warn(
+              'Stripe subscription email could not be delivered after update',
+              { service: 'StripeService', userId: user.id },
+            );
+          }
+        } catch (emailError) {
+          SafeLogger.warn(
+            'Stripe subscription email skipped after update',
+            { service: 'StripeService', userId: user.id },
+            {
+              error:
+                emailError instanceof Error
+                  ? emailError.message
+                  : String(emailError),
+            },
+          );
+        }
+      }
 
       try {
         await this.paidConversionSlackService.maybeNotifyStripePaidConversion({
@@ -489,6 +544,46 @@ export class StripeService {
         },
       });
       await this.ensureSubscriptionUserMapping(newSubscription.id, user.id);
+
+      if (subscriptionIsEmailEligible) {
+        try {
+          let sent = false;
+          if (priorSubscription) {
+            sent = await this.emailService.sendSubscriptionRenewedEmail({
+              email: user.email,
+              displayName: user.displayName,
+              planName: newSubscription.planName,
+              billingPeriod: newSubscription.billingPeriod,
+              currentPeriodEnd: newSubscription.currentPeriodEnd,
+            });
+          } else {
+            sent = await this.emailService.sendSubscriptionStartedEmail({
+              email: user.email,
+              displayName: user.displayName,
+              planName: newSubscription.planName,
+              billingPeriod: newSubscription.billingPeriod,
+              currentPeriodEnd: newSubscription.currentPeriodEnd,
+            });
+          }
+          if (!sent) {
+            SafeLogger.warn(
+              'Stripe subscription email could not be delivered after create',
+              { service: 'StripeService', userId: user.id },
+            );
+          }
+        } catch (emailError) {
+          SafeLogger.warn(
+            'Stripe subscription email skipped after create',
+            { service: 'StripeService', userId: user.id },
+            {
+              error:
+                emailError instanceof Error
+                  ? emailError.message
+                  : String(emailError),
+            },
+          );
+        }
+      }
 
       // Grant trial if eligible (after subscription is created)
       try {
@@ -545,7 +640,10 @@ export class StripeService {
     });
 
     if (existing) {
-      await this.prisma.subscription.update({
+      const wasAlreadyCancelled =
+        existing.cancelledAt !== null ||
+        existing.status === SubscriptionStatus.CANCELLED;
+      const cancelledSubscription = await this.prisma.subscription.update({
         where: { id: existing.id },
         data: {
           status: SubscriptionStatus.CANCELLED,
@@ -553,6 +651,37 @@ export class StripeService {
           cancelAtPeriodEnd: false,
         },
       });
+      const user = await this.prisma.user.findUnique({
+        where: { id: cancelledSubscription.userId },
+      });
+      if (user && !wasAlreadyCancelled) {
+        try {
+          const sent = await this.emailService.sendSubscriptionCancelledEmail({
+            email: user.email,
+            displayName: user.displayName,
+            planName: cancelledSubscription.planName,
+            billingPeriod: cancelledSubscription.billingPeriod,
+            currentPeriodEnd: cancelledSubscription.currentPeriodEnd,
+          });
+          if (!sent) {
+            SafeLogger.warn(
+              'Stripe cancellation email could not be delivered',
+              { service: 'StripeService', userId: user.id },
+            );
+          }
+        } catch (emailError) {
+          SafeLogger.warn(
+            'Stripe cancellation email skipped',
+            { service: 'StripeService', userId: user.id },
+            {
+              error:
+                emailError instanceof Error
+                  ? emailError.message
+                  : String(emailError),
+            },
+          );
+        }
+      }
     }
   }
 
@@ -636,6 +765,14 @@ export class StripeService {
       return `${planInfo.planName} (trial)`;
     }
     return 'Premium trial';
+  }
+
+  private isSubscriptionEmailEligible(
+    status: Stripe.Subscription.Status | SubscriptionStatus,
+  ): boolean {
+    return (
+      status.toLowerCase() === 'active' || status.toLowerCase() === 'trialing'
+    );
   }
 
   private getPriceIdForPlan(planId: string): string | null {

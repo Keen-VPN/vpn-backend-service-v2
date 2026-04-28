@@ -4,6 +4,7 @@ import { StripeService } from '../../../src/payment/stripe/stripe.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { TrialService } from '../../../src/subscription/trial.service';
 import { PaidConversionSlackService } from '../../../src/notification/paid-conversion-slack.service';
+import { EmailService } from '../../../src/email/email.service';
 import { SubscriptionStatus } from '@prisma/client';
 import { ConflictException } from '@nestjs/common';
 import {
@@ -63,6 +64,14 @@ describe('StripeService', () => {
             maybeNotifyStripePaidConversion: jest
               .fn()
               .mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendSubscriptionStartedEmail: jest.fn().mockResolvedValue(true),
+            sendSubscriptionRenewedEmail: jest.fn().mockResolvedValue(true),
+            sendSubscriptionCancelledEmail: jest.fn().mockResolvedValue(true),
           },
         },
       ],
