@@ -68,7 +68,7 @@ export const configValidationSchema = Joi.object({
   EMAIL_FROM: Joi.alternatives()
     .try(
       Joi.string().email(),
-      Joi.string().pattern(/^.+<[^<>@\\s]+@[^<>@\\s]+>$/),
+      Joi.string().pattern(/^.+<[^<>@\s]+@[^<>@\s]+>$/),
     )
     .optional(),
   RESEND_TIMEOUT_MS: Joi.number().integer().min(1000).max(60000).default(10000),
