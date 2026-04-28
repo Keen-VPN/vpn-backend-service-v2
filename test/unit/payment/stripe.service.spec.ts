@@ -85,7 +85,10 @@ describe('StripeService', () => {
       };
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
-      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      // 1) getActiveSubscriptionForUser(direct) 2) existingStripeSubscription check
+      mockPrisma.subscription.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
       (mockStripeInstance.customers.create as jest.Mock).mockResolvedValue(
         customer,
       );
@@ -104,6 +107,106 @@ describe('StripeService', () => {
       expect(mockStripeInstance.checkout.sessions.create).toHaveBeenCalled();
     });
 
+    it('should include 30-day Stripe trial for first-time user only', async () => {
+      const user = createMockUser({
+        stripeCustomerId: 'cus_test_123',
+        stripeTrialUsedAt: null,
+      });
+      const session = {
+        id: 'cs_test_trial',
+        url: 'https://checkout.stripe.com/test-trial',
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.subscription.findFirst
+        .mockResolvedValueOnce(null) // active-sub check
+        .mockResolvedValueOnce(null); // any stripe subscription history check
+      (
+        mockStripeInstance.checkout.sessions.create as jest.Mock
+      ).mockResolvedValue(session);
+
+      await service.createCheckoutSession(
+        user.id,
+        'individual-annual',
+        'https://success.com',
+        'https://cancel.com',
+      );
+
+      expect(mockStripeInstance.checkout.sessions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mode: 'subscription',
+          subscription_data: expect.objectContaining({
+            trial_period_days: 30,
+            metadata: expect.objectContaining({
+              userId: user.id,
+              provider: 'stripe',
+              trialType: 'first_time_30_days',
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('should NOT include Stripe trial when user already used Stripe trial', async () => {
+      const user = createMockUser({
+        stripeCustomerId: 'cus_test_123',
+        stripeTrialUsedAt: new Date(),
+      });
+      const session = {
+        id: 'cs_test_no_trial_used',
+        url: 'https://checkout.stripe.com/test-no-trial-used',
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.subscription.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+      (
+        mockStripeInstance.checkout.sessions.create as jest.Mock
+      ).mockResolvedValue(session);
+
+      await service.createCheckoutSession(
+        user.id,
+        'individual-annual',
+        'https://success.com',
+        'https://cancel.com',
+      );
+
+      const call = (mockStripeInstance.checkout.sessions.create as jest.Mock)
+        .mock.calls[0][0];
+      expect(call.subscription_data).toBeUndefined();
+    });
+
+    it('should NOT include Stripe trial when user has previous Stripe subscription history', async () => {
+      const user = createMockUser({
+        stripeCustomerId: 'cus_test_123',
+        stripeTrialUsedAt: null,
+      });
+      const session = {
+        id: 'cs_test_no_trial_history',
+        url: 'https://checkout.stripe.com/test-no-trial-history',
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.subscription.findFirst
+        .mockResolvedValueOnce(null) // active-sub check
+        .mockResolvedValueOnce({ id: 'sub_row_1' } as any); // stripe history exists
+      (
+        mockStripeInstance.checkout.sessions.create as jest.Mock
+      ).mockResolvedValue(session);
+
+      await service.createCheckoutSession(
+        user.id,
+        'individual-annual',
+        'https://success.com',
+        'https://cancel.com',
+      );
+
+      const call = (mockStripeInstance.checkout.sessions.create as jest.Mock)
+        .mock.calls[0][0];
+      expect(call.subscription_data).toBeUndefined();
+    });
+
     it('should create Stripe customer if missing', async () => {
       const user = createMockUser({ stripeCustomerId: null });
       const customer = createMockStripeCustomer();
@@ -113,7 +216,9 @@ describe('StripeService', () => {
       };
 
       mockPrisma.user.findUnique.mockResolvedValue(user);
-      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      mockPrisma.subscription.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
       (mockStripeInstance.customers.create as jest.Mock).mockResolvedValue(
         customer,
       );
@@ -215,6 +320,71 @@ describe('StripeService', () => {
       await service.handleWebhookEvent(event);
 
       expect(mockPrisma.subscription.create).toHaveBeenCalled();
+    });
+
+    it('marks Stripe trial used immediately when subscription is trialing (idempotent)', async () => {
+      const user = createMockUser();
+      const subscription = createMockStripeSubscription();
+      subscription.status = 'trialing';
+      subscription.trial_start = Math.floor(Date.now() / 1000);
+      subscription.trial_end = Math.floor(
+        (Date.now() + 30 * 24 * 60 * 60 * 1000) / 1000,
+      );
+      const event = createMockStripeEvent(
+        'customer.subscription.created',
+        subscription,
+      );
+
+      (mockStripeInstance.customers.retrieve as jest.Mock).mockResolvedValue({
+        ...createMockStripeCustomer(),
+        metadata: { userId: user.id },
+        email: user.email,
+      });
+      mockPrisma.user.findUnique.mockResolvedValue(user);
+      mockPrisma.user.updateMany
+        .mockResolvedValueOnce({ count: 1 } as any)
+        .mockResolvedValueOnce({ count: 1 } as any)
+        .mockResolvedValueOnce({ count: 0 } as any);
+      mockPrisma.subscription.findFirst.mockResolvedValue(null);
+      mockPrisma.subscription.create.mockResolvedValue(
+        createMockSubscription(),
+      );
+      mockPrisma.subscriptionUser.create.mockResolvedValue({} as any);
+      mockPrisma.linkedAccount.findMany.mockResolvedValue([]);
+
+      await service.handleWebhookEvent(event);
+      await service.handleWebhookEvent(event); // replay
+
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: user.id,
+            stripeTrialUsedAt: null,
+          }),
+          data: expect.objectContaining({
+            stripeTrialUsedAt: expect.any(Date) as Date,
+            stripeTrialSubscriptionId: subscription.id,
+          }),
+        }),
+      );
+
+      // User trial fields should be updated (but only if empty/false)
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: user.id,
+            trialActive: false,
+            trialEndsAt: null,
+            trialStartsAt: null,
+          }),
+          data: expect.objectContaining({
+            trialActive: true,
+            trialStartsAt: expect.any(Date) as Date,
+            trialEndsAt: expect.any(Date) as Date,
+            trialTier: 'free_trial',
+          }),
+        }),
+      );
     });
 
     it('should handle customer.subscription.deleted event', async () => {

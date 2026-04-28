@@ -97,6 +97,24 @@ export class StripeService {
       customerId = await ensureCustomer();
     }
 
+    // Stripe trial eligibility (DB-enforced, one-time per user)
+    // Eligible only when user has never had a Stripe subscription row and has never been marked as having used a Stripe trial.
+    const existingStripeSubscription = await this.prisma.subscription.findFirst(
+      {
+        where: { userId, subscriptionType: 'stripe' },
+        select: { id: true },
+      },
+    );
+    const stripeTrialUsedAtValue =
+      typeof (user as { stripeTrialUsedAt?: unknown }).stripeTrialUsedAt !==
+      'undefined'
+        ? ((user as { stripeTrialUsedAt?: Date | null }).stripeTrialUsedAt ??
+          null)
+        : null;
+
+    const eligibleForStripeTrial =
+      !stripeTrialUsedAtValue && !existingStripeSubscription;
+
     // Get price ID for plan
     const priceId = this.getPriceIdForPlan(planId);
     if (!priceId) {
@@ -115,6 +133,18 @@ export class StripeService {
             quantity: 1,
           },
         ],
+        ...(eligibleForStripeTrial
+          ? {
+              subscription_data: {
+                trial_period_days: 30,
+                metadata: {
+                  userId,
+                  provider: 'stripe',
+                  trialType: 'first_time_30_days',
+                },
+              },
+            }
+          : {}),
         success_url: successUrl,
         cancel_url: cancelUrl,
         metadata: {
@@ -145,6 +175,18 @@ export class StripeService {
               quantity: 1,
             },
           ],
+          ...(eligibleForStripeTrial
+            ? {
+                subscription_data: {
+                  trial_period_days: 30,
+                  metadata: {
+                    userId,
+                    provider: 'stripe',
+                    trialType: 'first_time_30_days',
+                  },
+                },
+              }
+            : {}),
           success_url: successUrl,
           cancel_url: cancelUrl,
           metadata: {
@@ -300,6 +342,80 @@ export class StripeService {
     const currentPeriodEnd = new Date(periodEndTimestamp * 1000);
 
     const stripeRawStatus = subscription.status;
+
+    // Mark Stripe trial as used as soon as a trialing subscription is observed.
+    // Idempotent: webhook retries must not duplicate or reset.
+    if (stripeRawStatus === 'trialing') {
+      const trialStartSeconds =
+        typeof (subscriptionAny as { trial_start?: unknown }).trial_start ===
+        'number'
+          ? (subscriptionAny as { trial_start: number }).trial_start
+          : null;
+      const trialEndSeconds =
+        typeof (subscriptionAny as { trial_end?: unknown }).trial_end ===
+        'number'
+          ? (subscriptionAny as { trial_end: number }).trial_end
+          : null;
+
+      try {
+        await this.prisma.user.updateMany({
+          where: { id: user.id, stripeTrialUsedAt: null },
+          data: {
+            stripeTrialUsedAt: new Date(),
+            stripeTrialSubscriptionId: subscription.id,
+          },
+        });
+      } catch (trialMarkErr) {
+        SafeLogger.warn(
+          'Failed to mark Stripe trial used (non-fatal)',
+          undefined,
+          {
+            userId: user.id,
+            subscriptionId: subscription.id,
+            error:
+              trialMarkErr instanceof Error
+                ? trialMarkErr.message
+                : String(trialMarkErr),
+          },
+        );
+      }
+
+      // Also reflect the Stripe trial on the user row for UI/status purposes.
+      // Do not overwrite an existing trial record (cross-provider separation).
+      if (trialEndSeconds) {
+        try {
+          await this.prisma.user.updateMany({
+            where: {
+              id: user.id,
+              trialActive: false,
+              trialEndsAt: null,
+              trialStartsAt: null,
+            },
+            data: {
+              trialActive: true,
+              trialStartsAt: trialStartSeconds
+                ? new Date(trialStartSeconds * 1000)
+                : new Date(),
+              trialEndsAt: new Date(trialEndSeconds * 1000),
+              trialTier: 'free_trial',
+            },
+          });
+        } catch (trialUserErr) {
+          SafeLogger.warn(
+            'Failed to update user trial fields from Stripe trialing subscription (non-fatal)',
+            undefined,
+            {
+              userId: user.id,
+              subscriptionId: subscription.id,
+              error:
+                trialUserErr instanceof Error
+                  ? trialUserErr.message
+                  : String(trialUserErr),
+            },
+          );
+        }
+      }
+    }
 
     // Check for existing subscription with same period
     const existing = await this.prisma.subscription.findFirst({
