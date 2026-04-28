@@ -55,6 +55,10 @@ export const configValidationSchema = Joi.object({
     then: Joi.string().optional(),
     otherwise: Joi.string().optional().default('dev-token-locally'),
   }),
+  // Optional mapping to override node-daemon base URLs per node IP.
+  // Example:
+  //   NODE_DAEMON_URL_OVERRIDES="169.255.57.34=https://vegetation-tabs-....trycloudflare.com"
+  NODE_DAEMON_URL_OVERRIDES: Joi.string().optional(),
 
   // Slack error reporting (optional)
   SLACK_WEBHOOK_URL: Joi.string().uri().optional(),
