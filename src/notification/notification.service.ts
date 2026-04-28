@@ -82,6 +82,17 @@ export class NotificationService {
     return nodeEnv === 'production';
   }
 
+  /**
+   * Override to allow Slack notifications outside production (useful for local/staging verification).
+   * Defaults to false to avoid accidental spam.
+   */
+  private allowSlackInNonProd(): boolean {
+    const raw =
+      this.configService.get<string>('SLACK_ALLOW_NON_PROD') ||
+      process.env.SLACK_ALLOW_NON_PROD;
+    return raw === 'true';
+  }
+
   private getRuntimeEnvironment(): string {
     return (
       this.configService.get<string>('APP_ENV') ||
@@ -327,10 +338,9 @@ export class NotificationService {
   async notifyTrialStarted(
     payload: TrialStartedSlackPayload,
   ): Promise<boolean> {
-    if (this.isDevelopment()) return false;
-
-    if (!this.isProductionRuntime()) {
-      return false;
+    if (!this.allowSlackInNonProd()) {
+      if (this.isDevelopment()) return false;
+      if (!this.isProductionRuntime()) return false;
     }
 
     const webhookUrl = this.configService.get<string>(
@@ -383,12 +393,9 @@ export class NotificationService {
   async notifyPaidConversion(
     payload: PaidConversionSlackPayload,
   ): Promise<boolean> {
-    if (this.isDevelopment()) {
-      return false;
-    }
-
-    if (!this.isProductionRuntime()) {
-      return false;
+    if (!this.allowSlackInNonProd()) {
+      if (this.isDevelopment()) return false;
+      if (!this.isProductionRuntime()) return false;
     }
 
     const webhookUrl = this.configService.get<string>(

@@ -540,9 +540,10 @@ export class AppleService {
     receiptData: string | null;
     originalTransactionId: string;
   }): Promise<boolean> {
-    // Verification is best-effort only; it should not block notifications.
+    // Only notify when we can confidently determine this is NOT a trial.
+    // If verification fails, we should *not* assume paid conversion, to avoid false positives.
     if (!purchase.receiptData) {
-      return true;
+      return false;
     }
 
     try {
@@ -550,25 +551,25 @@ export class AppleService {
         this.normalizeReceiptData(purchase.receiptData),
       );
       if (verify.status !== 0) {
-        return true;
+        return false;
       }
 
       const latest =
         this.findLatestReceiptItem(verify.latest_receipt_info) ??
         this.findLatestReceiptItem(verify.receipt?.in_app);
       if (!latest) {
-        return true;
+        return false;
       }
 
       // Ensure we are evaluating the same subscription lineage.
       if (latest.original_transaction_id !== purchase.originalTransactionId) {
-        return true;
+        return false;
       }
 
       return !this.isAppleTrialPeriodReceipt(latest);
     } catch (error) {
       SafeLogger.warn(
-        'Apple stored receipt verification failed while deciding paid-conversion notification; defaulting to notify',
+        'Apple stored receipt verification failed while deciding paid-conversion notification; skipping paid notification',
         {
           originalTransactionId: purchase.originalTransactionId,
         },
@@ -576,7 +577,7 @@ export class AppleService {
           error: error instanceof Error ? error.message : String(error),
         },
       );
-      return true;
+      return false;
     }
   }
 

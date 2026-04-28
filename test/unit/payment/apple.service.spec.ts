@@ -907,7 +907,7 @@ describe('AppleService', () => {
       );
     });
 
-    it('should still send paid conversion when receipt verification fails during linkPurchase', async () => {
+    it('should NOT send paid conversion when receipt verification fails during linkPurchase', async () => {
       const user = createMockUser();
       const purchase = createMockAppleIAPPurchase({
         linkedUserId: null,
@@ -942,12 +942,7 @@ describe('AppleService', () => {
 
       expect(
         mockPaidConversionSlack.maybeNotifyApplePaidConversion,
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: user.id,
-          originalTransactionId: purchase.originalTransactionId,
-        }),
-      );
+      ).not.toHaveBeenCalled();
     });
 
     it('should throw error if already linked to another user', async () => {
@@ -1477,7 +1472,7 @@ describe('AppleService', () => {
       ).not.toHaveBeenCalled();
     });
 
-    it('still sends paid conversion when stored receipt verification fails', async () => {
+    it('does not send paid conversion when stored receipt verification fails', async () => {
       const user = createMockUser();
       const txInfo = {
         transactionId: 'tx-verify-fail',
@@ -1510,12 +1505,7 @@ describe('AppleService', () => {
 
       expect(
         mockPaidConversionSlack.maybeNotifyApplePaidConversion,
-      ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: user.id,
-          originalTransactionId: txInfo.originalTransactionId,
-        }),
-      );
+      ).not.toHaveBeenCalled();
     });
   });
 });

@@ -68,6 +68,8 @@ export class PaidConversionSlackService {
     originalTransactionId: string;
     billingPeriod: string | null;
   }): Promise<void> {
+    const now = new Date();
+
     const dedupeKey = `apple:${params.originalTransactionId}:paid`;
     const notificationId = await this.tryAcquireDedupeKey(
       dedupeKey,
@@ -80,6 +82,15 @@ export class PaidConversionSlackService {
     const trialGrant = await this.prisma.trialGrant.findUnique({
       where: { userId: params.userId },
     });
+    // If the user is currently in an active trial window, do not send any "paid conversion"
+    // notification. This prevents false "trial → paid" notifications during Apple trial flows.
+    if (trialGrant && trialGrant.expiresAt && trialGrant.expiresAt > now) {
+      await this.prisma.paidConversionSlackNotification.delete({
+        where: { id: notificationId },
+      });
+      return;
+    }
+
     const conversionType = trialGrant ? 'trial_to_paid' : 'new_paid';
 
     const planDisplay = this.planDisplayFromBilling(params.billingPeriod);
