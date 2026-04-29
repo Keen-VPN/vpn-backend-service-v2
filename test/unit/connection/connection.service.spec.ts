@@ -76,6 +76,47 @@ describe('ConnectionService', () => {
           where: { clientSessionId: sessionDto.client_session_id },
           create: expect.objectContaining({
             clientSessionId: sessionDto.client_session_id,
+            serverLocation: 'US',
+          }),
+        }),
+      );
+    });
+
+    it('should derive server_location from nodes when server_id is set', async () => {
+      const sessionDto = {
+        client_session_id: 'sess_node',
+        event_type: 'END' as const,
+        session_start: '2024-01-01T00:00:00Z',
+        session_end: '2024-01-01T01:00:00Z',
+        duration_seconds: 60,
+        platform: 'ios',
+        app_version: '1.0.0',
+        server_id: 'node-abc',
+        server_location: 'Legacy Label',
+        subscription_tier: 'premium',
+        bytes_transferred: 0,
+      };
+
+      mockPrisma.node.findUnique.mockResolvedValue({
+        country: 'England',
+        city: 'London',
+      } as any);
+      mockPrisma.connectionSession.upsert.mockResolvedValue({} as any);
+
+      const result = await service.recordSession(sessionDto);
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.node.findUnique).toHaveBeenCalledWith({
+        where: { id: 'node-abc' },
+        select: { country: true, city: true },
+      });
+      expect(mockPrisma.connectionSession.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            serverLocation: 'United Kingdom · London',
+          }),
+          update: expect.objectContaining({
+            serverLocation: 'United Kingdom · London',
           }),
         }),
       );
@@ -227,6 +268,7 @@ describe('ConnectionService', () => {
           durationSeconds: 300,
           platform: 'ios',
           appVersion: '1.2.3',
+          serverLocation: 'Nigeria · Lagos',
         },
       ] as any);
 
@@ -242,6 +284,7 @@ describe('ConnectionService', () => {
             duration_seconds: 300,
             platform: 'ios',
             app_version: '1.2.3',
+            server_location: 'Nigeria · Lagos',
           },
         ],
       });
