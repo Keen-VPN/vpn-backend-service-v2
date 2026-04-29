@@ -62,6 +62,8 @@ describe('VPNConfigService', () => {
           id: 'n1',
           region: 'US',
           status: NodeStatus.ONLINE,
+          country: 'United States',
+          city: 'Virginia',
         },
       ];
       mockPrisma.node.findMany.mockResolvedValue(mockNodes);
@@ -72,6 +74,37 @@ describe('VPNConfigService', () => {
       expect(result).toHaveLength(1);
       expect(result[0].node_id).toBe('n1');
       expect(result[0].region).toBe('US');
+    });
+
+    it('should sort nodes alphabetically by country then city', async () => {
+      const mockNodes = [
+        {
+          id: 'n1',
+          region: 'US',
+          status: NodeStatus.ONLINE,
+          country: 'Nigeria',
+          city: 'Lagos',
+        },
+        {
+          id: 'n2',
+          region: 'NG',
+          status: NodeStatus.ONLINE,
+          country: 'Australia',
+          city: 'Sydney',
+        },
+        {
+          id: 'n3',
+          region: 'US',
+          status: NodeStatus.ONLINE,
+          country: 'Nigeria',
+          city: 'Abuja',
+        },
+      ];
+      mockPrisma.node.findMany.mockResolvedValue(mockNodes);
+
+      const result = await service.getActiveNodesSimplified();
+
+      expect(result.map((n) => n.node_id)).toEqual(['n2', 'n3', 'n1']);
     });
   });
 

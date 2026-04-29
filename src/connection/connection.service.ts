@@ -5,6 +5,7 @@ import { SafeLogger } from '../common/utils/logger.util';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
 import { NodesService } from '../nodes/nodes.service';
 import { normalizeServerLocationForStats } from './server-location-stats.util';
+import { formatNodeServerLocationDisplay } from './server-location-display.util';
 
 const HEALTH_CHECK_FAILURE_REASON =
   'HEALTH_CHECK_FAILURE' as unknown as TerminationReason;
@@ -17,6 +18,33 @@ export class ConnectionService {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(NodesService) private nodesService: NodesService,
   ) {}
+
+  /**
+   * Prefer canonical label from `nodes` when `server_id` is sent; otherwise use client
+   * `server_location`. Always run through `normalizeServerLocationForStats` before persist.
+   */
+  private async resolveStoredServerLocation(
+    sessionDto: ConnectionSessionDto,
+  ): Promise<string | null> {
+    const sid = sessionDto.server_id?.trim();
+    let fromNode = '';
+    if (sid) {
+      const node = await this.prisma.node.findUnique({
+        where: { id: sid },
+        select: { country: true, city: true },
+      });
+      if (node) {
+        fromNode = formatNodeServerLocationDisplay(node.country, node.city);
+      }
+    }
+    const client = sessionDto.server_location?.trim() ?? '';
+    const raw = fromNode.length > 0 ? fromNode : client;
+    if (!raw) {
+      return null;
+    }
+    const normalized = normalizeServerLocationForStats(raw);
+    return normalized.length > 0 ? normalized : null;
+  }
 
   async getRecommendedNode(region: string) {
     const nodes = await this.nodesService.getActiveNodesInRegion(region);
@@ -91,6 +119,9 @@ export class ConnectionService {
         ? BigInt(sessionDto.bytes_transferred)
         : BigInt(0);
 
+      const storedServerLocation =
+        await this.resolveStoredServerLocation(sessionDto);
+
       const updatePayload: Record<string, unknown> = {
         heartbeatTimestamp: new Date(),
         eventType: eventType,
@@ -101,6 +132,9 @@ export class ConnectionService {
       if (sessionDto.event_type === 'END') {
         updatePayload.sessionEnd = sessionEnd;
         updatePayload.terminationReason = terminationReasonForEnd;
+      }
+      if (storedServerLocation) {
+        updatePayload.serverLocation = storedServerLocation;
       }
 
       await this.prisma.connectionSession.upsert({
@@ -114,7 +148,7 @@ export class ConnectionService {
           durationSeconds: incomingDuration,
           platform: sessionDto.platform,
           appVersion: sessionDto.app_version,
-          serverLocation: sessionDto.server_location,
+          serverLocation: storedServerLocation ?? undefined,
           subscriptionTier: sessionDto.subscription_tier,
           bytesTransferred: incomingBytes,
           eventType: eventType,
@@ -414,6 +448,7 @@ export class ConnectionService {
           durationSeconds: true,
           platform: true,
           appVersion: true,
+          serverLocation: true,
         },
       });
 
@@ -426,6 +461,7 @@ export class ConnectionService {
           duration_seconds: session.durationSeconds ?? 0,
           platform: session.platform,
           app_version: session.appVersion ?? null,
+          server_location: session.serverLocation ?? null,
         })),
       };
     } catch (error) {
