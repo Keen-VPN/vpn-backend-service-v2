@@ -215,9 +215,36 @@ export class VPNConfigService {
         city: true,
         flagUrl: true,
       },
-      orderBy: {
-        healthScore: 'desc',
-      },
+    });
+
+    // Ensure stable, user-friendly ordering for the apps:
+    // alphabetize by country, then city, with empty/missing labels last.
+    // This array order becomes `RemoteVPNServer.sortOrder` on the client.
+    const norm = (v: string | null | undefined): string => (v ?? '').trim();
+    const compareNullable = (
+      a: string | null | undefined,
+      b: string | null | undefined,
+    ): number => {
+      const aa = norm(a);
+      const bb = norm(b);
+      const aMissing = aa.length === 0;
+      const bMissing = bb.length === 0;
+      if (aMissing && !bMissing) return 1;
+      if (!aMissing && bMissing) return -1;
+      if (!aa && !bb) return 0;
+      return aa.localeCompare(bb, undefined, { sensitivity: 'base' });
+    };
+
+    nodes.sort((a, b) => {
+      const countryCmp = compareNullable(a.country, b.country);
+      if (countryCmp !== 0) return countryCmp;
+      const cityCmp = compareNullable(a.city, b.city);
+      if (cityCmp !== 0) return cityCmp;
+
+      // Tiebreakers for determinism.
+      const regionCmp = compareNullable(a.region, b.region);
+      if (regionCmp !== 0) return regionCmp;
+      return a.id.localeCompare(b.id, undefined, { sensitivity: 'base' });
     });
 
     return nodes.map((n) => ({

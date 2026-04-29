@@ -76,7 +76,17 @@ export class ConnectionSessionDto {
 
   @ApiPropertyOptional({
     type: 'string',
-    description: 'Server location (Country/City)',
+    description:
+      'VPN node id (`nodes.id`). When set, `server_location` stored for this session is derived from `nodes.country` and `nodes.city` (normalized).',
+  })
+  @IsString()
+  @IsOptional()
+  server_id?: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    description:
+      'Optional client-provided label; ignored when `server_id` resolves to a node row.',
     example: 'United States',
   })
   @IsString()
