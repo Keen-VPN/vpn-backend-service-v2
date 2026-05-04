@@ -1,4 +1,8 @@
-import { Injectable, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { Prisma, TerminationReason } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
@@ -7,7 +11,6 @@ import { IpAddressClickEventDto } from '../common/dto/product-event.dto';
 import { NodesService } from '../nodes/nodes.service';
 import { normalizeServerLocationForStats } from './server-location-stats.util';
 import { formatNodeServerLocationDisplay } from './server-location-display.util';
-import { randomUUID } from 'crypto';
 
 const HEALTH_CHECK_FAILURE_REASON =
   'HEALTH_CHECK_FAILURE' as unknown as TerminationReason;
@@ -196,35 +199,19 @@ export class ConnectionService {
 
   async recordIpAddressClick(eventDto: IpAddressClickEventDto, userId: string) {
     try {
-      const properties = eventDto.app_version
-        ? { app_version: eventDto.app_version }
-        : null;
-      const propertiesJson = properties ? JSON.stringify(properties) : null;
-
-      await this.prisma.$executeRaw`
-        INSERT INTO product_events (
-          id,
-          user_id,
-          event_name,
-          platform,
-          server_location,
-          connection_status,
-          ip_address_present,
-          properties,
-          created_at
-        )
-        VALUES (
-          ${randomUUID()},
-          ${userId},
-          ${'ip_address_clicked'},
-          ${eventDto.platform ?? null},
-          ${eventDto.server_location ?? null},
-          ${eventDto.connection_status ?? null},
-          ${eventDto.ip_address_present ?? null},
-          ${propertiesJson}::jsonb,
-          NOW()
-        )
-      `;
+      await this.prisma.productEvent.create({
+        data: {
+          userId,
+          eventName: 'ip_address_clicked',
+          platform: eventDto.platform ?? null,
+          serverLocation: eventDto.server_location ?? null,
+          connectionStatus: eventDto.connection_status ?? null,
+          ipAddressPresent: eventDto.ip_address_present ?? null,
+          properties: eventDto.app_version
+            ? { app_version: eventDto.app_version }
+            : Prisma.DbNull,
+        },
+      });
 
       SafeLogger.info(
         'Product event recorded',
@@ -240,10 +227,7 @@ export class ConnectionService {
       return { success: true };
     } catch (error) {
       SafeLogger.error('Error recording IP address click event', error);
-      return {
-        success: false,
-        error: 'Failed to record event',
-      };
+      throw new InternalServerErrorException('Failed to record event');
     }
   }
 
