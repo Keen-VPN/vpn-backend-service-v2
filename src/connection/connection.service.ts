@@ -196,9 +196,10 @@ export class ConnectionService {
 
   async recordIpAddressClick(eventDto: IpAddressClickEventDto, userId: string) {
     try {
-      const properties = {
-        app_version: eventDto.app_version ?? null,
-      };
+      const properties = eventDto.app_version
+        ? { app_version: eventDto.app_version }
+        : null;
+      const propertiesJson = properties ? JSON.stringify(properties) : null;
 
       await this.prisma.$executeRaw`
         INSERT INTO product_events (
@@ -220,7 +221,7 @@ export class ConnectionService {
           ${eventDto.server_location ?? null},
           ${eventDto.connection_status ?? null},
           ${eventDto.ip_address_present ?? null},
-          ${JSON.stringify(properties)}::jsonb,
+          ${propertiesJson}::jsonb,
           NOW()
         )
       `;

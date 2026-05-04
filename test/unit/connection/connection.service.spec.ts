@@ -165,6 +165,22 @@ describe('ConnectionService', () => {
       expect(mockPrisma.$executeRaw).toHaveBeenCalled();
     });
 
+    it('should store null properties when no app version is provided', async () => {
+      mockPrisma.$executeRaw.mockResolvedValue(1 as any);
+
+      const result = await service.recordIpAddressClick(
+        {
+          platform: 'ios',
+          connection_status: 'connected',
+          ip_address_present: true,
+        },
+        'user-123',
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.$executeRaw.mock.calls[0][8]).toBeNull();
+    });
+
     it('should handle errors when recording IP address click event', async () => {
       mockPrisma.$executeRaw.mockRejectedValue(new Error('Database error'));
 
