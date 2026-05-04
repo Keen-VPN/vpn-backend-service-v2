@@ -146,6 +146,42 @@ describe('ConnectionService', () => {
     });
   });
 
+  describe('recordIpAddressClick', () => {
+    it('should record a privacy-safe IP address click event', async () => {
+      mockPrisma.$executeRaw.mockResolvedValue(1 as any);
+
+      const result = await service.recordIpAddressClick(
+        {
+          platform: 'ios',
+          server_location: 'United States',
+          connection_status: 'connected',
+          ip_address_present: true,
+          app_version: '1.0.0',
+        },
+        'user-123',
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.$executeRaw).toHaveBeenCalled();
+    });
+
+    it('should handle errors when recording IP address click event', async () => {
+      mockPrisma.$executeRaw.mockRejectedValue(new Error('Database error'));
+
+      const result = await service.recordIpAddressClick(
+        {
+          platform: 'macos',
+          connection_status: 'connected',
+          ip_address_present: true,
+        },
+        'user-123',
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+  });
+
   describe('getConnectionStats', () => {
     it('should return aggregated stats with platform breakdown', async () => {
       const now = new Date();

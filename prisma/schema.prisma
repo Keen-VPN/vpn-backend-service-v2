@@ -35,6 +35,7 @@ model User {
   primaryLinks            LinkedAccount[]      @relation("primaryLinks")
   linkedLinks             LinkedAccount[]      @relation("linkedLinks")
   connectionSessions      ConnectionSession[]
+  productEvents           ProductEvent[]
 
   @@index([provider])
   @@map("users")
@@ -154,6 +155,25 @@ model SessionAggregate {
   @@index([serverLocation])
   @@index([subscriptionTier])
   @@map("session_aggregates")
+}
+
+model ProductEvent {
+  id               String   @id
+  userId           String?  @map("user_id")
+  eventName        String   @map("event_name")
+  platform         String?
+  serverLocation   String?  @map("server_location")
+  connectionStatus String?  @map("connection_status")
+  ipAddressPresent Boolean? @map("ip_address_present")
+  properties       Json?
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([eventName, createdAt])
+  @@index([userId])
+  @@index([platform])
+  @@index([serverLocation])
+  @@map("product_events")
 }
 
 model SalesContact {
