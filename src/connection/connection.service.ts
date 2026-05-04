@@ -3,9 +3,11 @@ import { Prisma, TerminationReason } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
+import { IpAddressClickEventDto } from '../common/dto/product-event.dto';
 import { NodesService } from '../nodes/nodes.service';
 import { normalizeServerLocationForStats } from './server-location-stats.util';
 import { formatNodeServerLocationDisplay } from './server-location-display.util';
+import { randomUUID } from 'crypto';
 
 const HEALTH_CHECK_FAILURE_REASON =
   'HEALTH_CHECK_FAILURE' as unknown as TerminationReason;
@@ -188,6 +190,59 @@ export class ConnectionService {
       return {
         success: false,
         error: errorMessage,
+      };
+    }
+  }
+
+  async recordIpAddressClick(eventDto: IpAddressClickEventDto, userId: string) {
+    try {
+      const properties = eventDto.app_version
+        ? { app_version: eventDto.app_version }
+        : null;
+      const propertiesJson = properties ? JSON.stringify(properties) : null;
+
+      await this.prisma.$executeRaw`
+        INSERT INTO product_events (
+          id,
+          user_id,
+          event_name,
+          platform,
+          server_location,
+          connection_status,
+          ip_address_present,
+          properties,
+          created_at
+        )
+        VALUES (
+          ${randomUUID()},
+          ${userId},
+          ${'ip_address_clicked'},
+          ${eventDto.platform ?? null},
+          ${eventDto.server_location ?? null},
+          ${eventDto.connection_status ?? null},
+          ${eventDto.ip_address_present ?? null},
+          ${propertiesJson}::jsonb,
+          NOW()
+        )
+      `;
+
+      SafeLogger.info(
+        'Product event recorded',
+        { service: 'ConnectionService', userId },
+        {
+          eventName: 'ip_address_clicked',
+          platform: eventDto.platform,
+          connectionStatus: eventDto.connection_status,
+          serverLocation: eventDto.server_location,
+        },
+      );
+
+      return { success: true };
+    } catch (error) {
+      SafeLogger.error('Error recording IP address click event', error);
+      return {
+        success: false,
+        error: 'Failed to record event',
       };
     }
   }
