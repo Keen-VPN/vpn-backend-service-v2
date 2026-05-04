@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsISO8601,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -13,6 +14,7 @@ export class VpnSessionUpsertDto {
   id!: string;
 
   @ApiProperty({ example: '2026-05-04T12:00:00.000Z' })
+  @IsISO8601()
   @IsString()
   @IsNotEmpty()
   startAt!: string;
@@ -22,10 +24,12 @@ export class VpnSessionUpsertDto {
     description: 'Omitted or null while tunnel is open',
   })
   @IsOptional()
+  @IsISO8601()
   @IsString()
   endAt?: string | null;
 
   @ApiProperty({ example: '2026-05-04T12:00:45.000Z' })
+  @IsISO8601()
   @IsString()
   @IsNotEmpty()
   lastSeenAt!: string;

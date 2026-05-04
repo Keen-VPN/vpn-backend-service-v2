@@ -125,7 +125,7 @@ export class VpnSessionService {
           subscriptionTier: null,
           terminationReason:
             sessionEnd != null
-              ? TerminationReason.CONNECTION_LOST
+              ? TerminationReason.USER_TERMINATION
               : TerminationReason.USER_TERMINATION,
           disconnectReason,
           eventType,
@@ -140,7 +140,7 @@ export class VpnSessionService {
           disconnectReason,
           eventType,
           terminationReason:
-            sessionEnd != null ? TerminationReason.CONNECTION_LOST : undefined,
+            sessionEnd != null ? TerminationReason.USER_TERMINATION : undefined,
         },
       });
 
@@ -203,6 +203,7 @@ export class VpnSessionService {
         "termination_reason" = 'connection_lost'::termination_reason,
         "disconnect_reason" = COALESCE("disconnect_reason", 'server_inferred_last_seen_timeout')
       WHERE "session_end" IS NULL
+        AND "platform" = 'ios_extension'
         AND "heartbeat_timestamp" IS NOT NULL
         AND "heartbeat_timestamp" < ${cutoff}
     `;

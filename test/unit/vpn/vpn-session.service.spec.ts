@@ -13,6 +13,7 @@ describe('VpnSessionService', () => {
   const t0 = '2026-05-04T10:00:00.000Z';
   const t1 = '2026-05-04T10:01:00.000Z';
   const t2 = '2026-05-04T10:02:00.000Z';
+  const now = new Date('2026-05-04T10:03:00.000Z');
 
   beforeEach(async () => {
     mockPrisma = createMockPrismaClient();
@@ -45,6 +46,7 @@ describe('VpnSessionService', () => {
       sessionEnd: null,
       heartbeatTimestamp: new Date(t0),
       disconnectReason: null,
+      updatedAt: now,
     } as any);
 
     const res = await service.upsertSession(userId, {
@@ -72,11 +74,13 @@ describe('VpnSessionService', () => {
       heartbeatTimestamp: new Date(t1),
       disconnectReason: null,
       eventType: 'HEARTBEAT',
+      updatedAt: now,
     };
     mockPrisma.connectionSession.findUnique.mockResolvedValue(existing as any);
     mockPrisma.connectionSession.upsert.mockResolvedValue({
       ...existing,
       heartbeatTimestamp: new Date(t2),
+      updatedAt: now,
     } as any);
 
     await service.upsertSession(userId, {
@@ -105,6 +109,7 @@ describe('VpnSessionService', () => {
       heartbeatTimestamp: new Date(t2),
       disconnectReason: null,
       eventType: 'HEARTBEAT',
+      updatedAt: now,
     };
     mockPrisma.connectionSession.findUnique.mockResolvedValue(existing as any);
     mockPrisma.connectionSession.upsert.mockResolvedValue(existing as any);
@@ -135,12 +140,14 @@ describe('VpnSessionService', () => {
       heartbeatTimestamp: new Date(t1),
       disconnectReason: null,
       eventType: 'HEARTBEAT',
+      updatedAt: now,
     };
     mockPrisma.connectionSession.findUnique.mockResolvedValue(existing as any);
     mockPrisma.connectionSession.upsert.mockResolvedValue({
       ...existing,
       sessionEnd: new Date(t2),
       disconnectReason: 'ne_stop_reason_1',
+      updatedAt: now,
     } as any);
 
     await service.upsertSession(userId, {
@@ -206,10 +213,16 @@ describe('VpnSessionService', () => {
       sessionEnd: null,
       heartbeatTimestamp: new Date(t1),
       eventType: 'HEARTBEAT',
+      updatedAt: now,
     } as any);
     mockPrisma.connectionSession.upsert.mockResolvedValue({
       id: 'row-1',
       clientSessionId: sessionId,
+      sessionStart: new Date(t0),
+      sessionEnd: null,
+      heartbeatTimestamp: new Date(t2),
+      eventType: 'HEARTBEAT',
+      updatedAt: now,
     } as any);
 
     await service.upsertSession(userId, {

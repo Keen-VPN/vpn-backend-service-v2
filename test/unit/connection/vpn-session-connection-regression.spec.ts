@@ -129,6 +129,8 @@ describe('VPN session regression: canonical connection_sessions', () => {
             sessionStart: r.sessionStart,
             sessionEnd: r.sessionEnd,
             durationSeconds: r.durationSeconds,
+            heartbeatTimestamp: r.heartbeatTimestamp,
+            updatedAt: r.updatedAt,
             platform: r.platform,
             appVersion: r.appVersion,
             serverLocation: r.serverLocation,
