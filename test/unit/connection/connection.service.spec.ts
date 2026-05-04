@@ -178,7 +178,9 @@ describe('ConnectionService', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(mockPrisma.$executeRaw.mock.calls[0][8]).toBeNull();
+      const [, , , , , , , , propertiesJson] =
+        mockPrisma.$executeRaw.mock.calls[0];
+      expect(propertiesJson).toBeNull();
     });
 
     it('should handle errors when recording IP address click event', async () => {
