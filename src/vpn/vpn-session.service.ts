@@ -126,7 +126,7 @@ export class VpnSessionService {
           terminationReason:
             sessionEnd != null
               ? TerminationReason.USER_TERMINATION
-              : TerminationReason.USER_TERMINATION,
+              : TerminationReason.CONNECTION_LOST,
           disconnectReason,
           eventType,
           protocol: 'wireguard',
