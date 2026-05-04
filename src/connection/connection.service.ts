@@ -1,8 +1,13 @@
-import { Injectable, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { Prisma, TerminationReason } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SafeLogger } from '../common/utils/logger.util';
 import { ConnectionSessionDto } from '../common/dto/connection-session.dto';
+import { IpAddressClickEventDto } from '../common/dto/product-event.dto';
 import { NodesService } from '../nodes/nodes.service';
 import { normalizeServerLocationForStats } from './server-location-stats.util';
 import { formatNodeServerLocationDisplay } from './server-location-display.util';
@@ -189,6 +194,40 @@ export class ConnectionService {
         success: false,
         error: errorMessage,
       };
+    }
+  }
+
+  async recordIpAddressClick(eventDto: IpAddressClickEventDto, userId: string) {
+    try {
+      await this.prisma.productEvent.create({
+        data: {
+          userId,
+          eventName: 'ip_address_clicked',
+          platform: eventDto.platform ?? null,
+          serverLocation: eventDto.server_location ?? null,
+          connectionStatus: eventDto.connection_status ?? null,
+          ipAddressPresent: eventDto.ip_address_present ?? null,
+          properties: eventDto.app_version
+            ? { app_version: eventDto.app_version }
+            : Prisma.DbNull,
+        },
+      });
+
+      SafeLogger.info(
+        'Product event recorded',
+        { service: 'ConnectionService', userId },
+        {
+          eventName: 'ip_address_clicked',
+          platform: eventDto.platform,
+          connectionStatus: eventDto.connection_status,
+          serverLocation: eventDto.server_location,
+        },
+      );
+
+      return { success: true };
+    } catch (error) {
+      SafeLogger.error('Error recording IP address click event', error);
+      throw new InternalServerErrorException('Failed to record event');
     }
   }
 

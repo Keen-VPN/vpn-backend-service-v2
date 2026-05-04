@@ -19,6 +19,7 @@ describe('ConnectionController', () => {
   beforeEach(async () => {
     const mockConnectionService = {
       recordSession: jest.fn(),
+      recordIpAddressClick: jest.fn(),
       getConnectionStats: jest.fn(),
       getConnectionSessions: jest.fn(),
     };
@@ -84,6 +85,31 @@ describe('ConnectionController', () => {
       expect(result.success).toBe(true);
       expect(connectionService.recordSession).toHaveBeenCalledWith(
         sessionDto,
+        mockUser.uid,
+      );
+    });
+  });
+
+  describe('POST /connection/events/ip-address-click', () => {
+    it('should record IP address click event', async () => {
+      const eventDto = {
+        platform: 'ios',
+        server_location: 'United States',
+        connection_status: 'connected',
+        ip_address_present: true,
+        app_version: '1.0.0',
+      };
+
+      connectionService.recordIpAddressClick.mockResolvedValue({
+        success: true,
+      });
+
+      const mockUser = { uid: 'user-123' };
+      const result = await controller.recordIpAddressClick(mockUser, eventDto);
+
+      expect(result.success).toBe(true);
+      expect(connectionService.recordIpAddressClick).toHaveBeenCalledWith(
+        eventDto,
         mockUser.uid,
       );
     });
