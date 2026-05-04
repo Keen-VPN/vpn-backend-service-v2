@@ -3,6 +3,7 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
+  Inject,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -21,7 +22,10 @@ import { Throttle } from '@nestjs/throttler';
 @ApiTags('Vpn')
 @Controller('vpn')
 export class VpnController {
-  constructor(private readonly vpnSessionService: VpnSessionService) {}
+  constructor(
+    @Inject(VpnSessionService)
+    private readonly vpnSessionService: VpnSessionService,
+  ) {}
 
   @Post('sessions')
   @HttpCode(HttpStatus.OK)
