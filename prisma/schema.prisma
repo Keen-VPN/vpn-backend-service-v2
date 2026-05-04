@@ -158,7 +158,7 @@ model SessionAggregate {
 }
 
 model ProductEvent {
-  id               String   @id
+  id               String   @id @default(uuid())
   userId           String?  @map("user_id")
   eventName        String   @map("event_name")
   platform         String?

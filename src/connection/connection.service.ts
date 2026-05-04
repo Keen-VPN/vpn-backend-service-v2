@@ -197,10 +197,6 @@ export class ConnectionService {
   async recordIpAddressClick(eventDto: IpAddressClickEventDto, userId: string) {
     try {
       const properties = {
-        platform: eventDto.platform ?? null,
-        server_location: eventDto.server_location ?? null,
-        connection_status: eventDto.connection_status ?? null,
-        ip_address_present: eventDto.ip_address_present ?? null,
         app_version: eventDto.app_version ?? null,
       };
 
