@@ -239,11 +239,9 @@ export class ConnectionService {
       return { success: true };
     } catch (error) {
       SafeLogger.error('Error recording IP address click event', error);
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to record event';
       return {
         success: false,
-        error: errorMessage,
+        error: 'Failed to record event',
       };
     }
   }
