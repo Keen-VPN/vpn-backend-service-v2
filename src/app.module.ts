@@ -1,5 +1,6 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -19,12 +20,14 @@ import { NodesModule } from './nodes/nodes.module';
 import { SalesContactModule } from './sales-contact/sales-contact.module';
 import { SecurityMiddleware } from './common/middleware/security.middleware';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { VpnModule } from './vpn/vpn.module';
 
 @Module({
   imports: [
     ConfigModule,
     PrismaModule,
     NotificationModule,
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       {
         name: 'default',
@@ -43,6 +46,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     PreferencesModule,
     NodesModule,
     SalesContactModule,
+    VpnModule,
   ],
   controllers: [AppController],
   providers: [

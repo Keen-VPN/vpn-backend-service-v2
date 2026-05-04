@@ -266,6 +266,8 @@ describe('ConnectionService', () => {
           sessionStart: start,
           sessionEnd: end,
           durationSeconds: 300,
+          heartbeatTimestamp: end,
+          updatedAt: end,
           platform: 'ios',
           appVersion: '1.2.3',
           serverLocation: 'Nigeria · Lagos',
@@ -292,6 +294,36 @@ describe('ConnectionService', () => {
         expect.objectContaining({
           take: 50,
           skip: 0,
+        }),
+      );
+    });
+
+    it('should derive effective duration for open sessions from heartbeat', async () => {
+      const start = new Date('2026-04-15T09:00:00.000Z');
+      const heartbeat = new Date('2026-04-15T09:03:30.000Z');
+      mockPrisma.connectionSession.findMany.mockResolvedValue([
+        {
+          id: 'session-open-1',
+          sessionStart: start,
+          sessionEnd: null,
+          durationSeconds: 0,
+          heartbeatTimestamp: heartbeat,
+          updatedAt: heartbeat,
+          platform: 'ios_extension',
+          appVersion: null,
+          serverLocation: 'United Kingdom · London',
+        },
+      ] as any);
+
+      const result = await service.getConnectionSessions('user-123', 50, 0);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.[0]).toEqual(
+        expect.objectContaining({
+          id: 'session-open-1',
+          duration_seconds: 210,
+          platform: 'ios_extension',
+          session_end: null,
         }),
       );
     });
