@@ -446,6 +446,8 @@ export class ConnectionService {
           sessionStart: true,
           sessionEnd: true,
           durationSeconds: true,
+          heartbeatTimestamp: true,
+          updatedAt: true,
           platform: true,
           appVersion: true,
           serverLocation: true,
@@ -455,10 +457,27 @@ export class ConnectionService {
       return {
         success: true,
         data: sessions.map((session) => ({
+          // Keep history consistent with stats when app telemetry is missing:
+          // derive elapsed time from session_start -> (session_end | heartbeat | updated_at).
+          // This makes Settings-only extension flows first-class.
+          duration_seconds: Math.max(
+            session.durationSeconds ?? 0,
+            Math.max(
+              0,
+              Math.floor(
+                ((
+                  session.sessionEnd ??
+                  session.heartbeatTimestamp ??
+                  session.updatedAt
+                ).getTime() -
+                  session.sessionStart.getTime()) /
+                  1000,
+              ),
+            ),
+          ),
           id: session.id,
           session_start: session.sessionStart.toISOString(),
           session_end: session.sessionEnd?.toISOString() ?? null,
-          duration_seconds: session.durationSeconds ?? 0,
           platform: session.platform,
           app_version: session.appVersion ?? null,
           server_location: session.serverLocation ?? null,
