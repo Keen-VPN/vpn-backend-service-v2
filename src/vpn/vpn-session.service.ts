@@ -78,6 +78,7 @@ export class VpnSessionService {
 
       let sessionEnd = existingForUser?.sessionEnd ?? null;
       let disconnectReason = existingForUser?.disconnectReason ?? null;
+      let terminationReason = existingForUser?.terminationReason;
       let eventType: EventType =
         existingForUser?.eventType ?? EventType.SESSION_START;
 
@@ -85,6 +86,7 @@ export class VpnSessionService {
         // Close once: don't widen duration on replays.
         if (sessionEnd == null) {
           sessionEnd = endIn;
+          terminationReason = TerminationReason.USER_TERMINATION;
         }
         if (dto.disconnectReason != null && dto.disconnectReason !== '') {
           disconnectReason = dto.disconnectReason;
@@ -134,13 +136,12 @@ export class VpnSessionService {
           heartbeatTimestamp: mergedLastSeenAt,
         },
         update: {
-          userId: userId,
+          // Never reassign ownership for an existing clientSessionId.
           heartbeatTimestamp: mergedLastSeenAt,
           sessionEnd,
           disconnectReason,
           eventType,
-          terminationReason:
-            sessionEnd != null ? TerminationReason.USER_TERMINATION : undefined,
+          terminationReason,
         },
       });
 
@@ -199,6 +200,10 @@ export class VpnSessionService {
       UPDATE "connection_sessions"
       SET
         "session_end" = "heartbeat_timestamp",
+        "duration_seconds" = GREATEST(
+          "duration_seconds",
+          EXTRACT(EPOCH FROM ("heartbeat_timestamp" - "session_start"))::int
+        ),
         "event_type" = 'session_end'::event_type,
         "termination_reason" = 'connection_lost'::termination_reason,
         "disconnect_reason" = COALESCE("disconnect_reason", 'server_inferred_last_seen_timeout')
