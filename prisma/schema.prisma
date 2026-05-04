@@ -34,7 +34,9 @@ model User {
   subscriptionUsers       SubscriptionUser[]
   primaryLinks            LinkedAccount[]      @relation("primaryLinks")
   linkedLinks             LinkedAccount[]      @relation("linkedLinks")
-  connectionSessions      ConnectionSession[]
+  connectionSessions             ConnectionSession[]
+  subscriptionTransferRequests   SubscriptionTransferRequest[]
+  subscriptionCreditLedgers      SubscriptionCreditLedger[]
 
   @@index([provider])
   @@map("users")
@@ -64,6 +66,7 @@ model Subscription {
   subscriptionType           String             @default("stripe") @map("subscription_type")
   user                       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   subscriptionUsers          SubscriptionUser[]
+  creditLedgerEntries        SubscriptionCreditLedger[]
 
   @@unique([stripeSubscriptionId, currentPeriodStart], map: "subscription_period_unique")
   @@index([userId])
@@ -362,4 +365,85 @@ enum SubscriptionUserRole {
   LINKED @map("linked")
 
   @@map("subscription_user_role")
+}
+
+enum TransferRequestStatus {
+  PENDING   @map("pending")
+  APPROVED  @map("approved")
+  REJECTED  @map("rejected")
+
+  @@map("transfer_request_status")
+}
+
+/// Local entitlement vs Stripe billing sync after membership-transfer credit.
+enum BillingAlignmentStatus {
+  NOT_REQUIRED             @map("not_required")
+  LOCAL_ENTITLEMENT_ONLY   @map("local_entitlement_only")
+  STRIPE_ALIGNMENT_PENDING @map("stripe_alignment_pending")
+  STRIPE_ALIGNED           @map("stripe_aligned")
+  STRIPE_ALIGNMENT_FAILED  @map("stripe_alignment_failed")
+
+  @@map("billing_alignment_status")
+}
+
+/// One membership transfer request per user (competitor VPN → Keen credit).
+model SubscriptionTransferRequest {
+  id                  String                @id @default(uuid())
+  userId              String                @map("user_id")
+  provider            String
+  expiryDate          DateTime              @map("expiry_date") @db.Timestamptz(6)
+  /// Public HTTPS URL and/or placeholder when proof is stored in proofBlob.
+  proofUrl            String                @map("proof_url") @db.Text
+  proofMimeType       String?               @map("proof_mime_type")
+  proofBlob           Bytes?                @map("proof_blob")
+  /// SHA-256 (hex) of proof bytes when proof was uploaded to S3 (abuse detection).
+  proofHash           String?               @map("proof_hash") @db.VarChar(64)
+  proofSizeBytes      Int?                  @map("proof_size_bytes")
+  proofOriginalFilename String?             @map("proof_original_filename") @db.VarChar(255)
+  proofUploadedAt     DateTime?             @map("proof_uploaded_at") @db.Timestamptz(6)
+  /// Optional client-reported device fingerprint for cross-account risk checks.
+  clientDeviceFingerprint String?           @map("client_device_fingerprint") @db.VarChar(128)
+  riskScore           Int                   @default(0) @map("risk_score")
+  /// JSON string[] — e.g. DUPLICATE_PROOF, LONG_EXPIRY, NEW_ACCOUNT, MULTIPLE_ACCOUNT_DEVICE_MATCH
+  riskFlags           Json                  @default("[]") @map("risk_flags")
+  status              TransferRequestStatus @default(PENDING)
+  requestedCreditDays Int                   @map("requested_credit_days")
+  approvedCreditDays  Int?                  @map("approved_credit_days")
+  adminNote           String?               @map("admin_note") @db.Text
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  reviewedAt          DateTime?             @map("reviewed_at") @db.Timestamptz(6)
+  reviewedByAdminId   String?               @map("reviewed_by_admin_id")
+  billingAlignmentStatus BillingAlignmentStatus @default(NOT_REQUIRED) @map("billing_alignment_status")
+
+  user           User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creditLedger   SubscriptionCreditLedger?
+
+  @@unique([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([proofHash])
+  @@map("subscription_transfer_requests")
+}
+
+/// Audit trail when admin approves transfer credit (applied subscription end date change).
+model SubscriptionCreditLedger {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  transferRequestId String   @unique @map("transfer_request_id")
+  creditDays        Int      @map("credit_days")
+  subscriptionId    String?  @map("subscription_id")
+  previousPeriodEnd DateTime? @map("previous_period_end") @db.Timestamptz(6)
+  newPeriodEnd      DateTime @map("new_period_end") @db.Timestamptz(6)
+  metadata          Json?
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdByAdminId  String?  @map("created_by_admin_id")
+  billingAlignmentStatus BillingAlignmentStatus @default(NOT_REQUIRED) @map("billing_alignment_status")
+
+  user              User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transferRequest   SubscriptionTransferRequest @relation(fields: [transferRequestId], references: [id], onDelete: Cascade)
+  subscription      Subscription?              @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@map("subscription_credit_ledger")
 }

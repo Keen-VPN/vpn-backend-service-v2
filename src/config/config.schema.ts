@@ -79,4 +79,11 @@ export const configValidationSchema = Joi.object({
   SUPPORT_EMAIL: Joi.string().email().optional(),
   SALES_EMAIL: Joi.string().email().optional(),
   ACCOUNT_URL: Joi.string().uri().optional(),
+
+  /** Protects admin membership-transfer review APIs (X-Admin-Api-Key). Optional in dev. */
+  MEMBERSHIP_TRANSFER_ADMIN_KEY: Joi.string().min(16).optional(),
+  /** S3 bucket for membership-transfer proof images (presigned PUT/GET). Optional until feature is enabled. */
+  MEMBERSHIP_TRANSFER_S3_BUCKET: Joi.string().optional(),
+  /** AWS region for S3 client (defaults to us-east-1 in code when unset). */
+  AWS_REGION: Joi.string().optional(),
 });

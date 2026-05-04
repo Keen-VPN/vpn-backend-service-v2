@@ -25,8 +25,10 @@
     "prepare": "if [ \"$NODE_ENV\" != \"production\" ]; then husky; fi"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1041.0",
     "@aws-sdk/client-secrets-manager": "^3.992.0",
     "@aws-sdk/credential-providers": "^3.992.0",
+    "@aws-sdk/s3-request-presigner": "^3.1041.0",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/common": "^11.0.1",
