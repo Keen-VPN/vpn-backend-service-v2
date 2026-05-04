@@ -447,3 +447,72 @@ model SubscriptionCreditLedger {
   @@index([userId])
   @@map("subscription_credit_ledger")
 }
+
+enum AdminUserRole {
+  SUPER_ADMIN    @map("super_admin")
+  SUPPORT_ADMIN  @map("support_admin")
+  BILLING_ADMIN  @map("billing_admin")
+  READONLY_ADMIN @map("readonly_admin")
+
+  @@map("admin_user_role")
+}
+
+enum AdminUserStatus {
+  ACTIVE   @map("active")
+  DISABLED @map("disabled")
+
+  @@map("admin_user_status")
+}
+
+model AdminUser {
+  id           String         @id @default(uuid())
+  email        String         @unique @map("email")
+  passwordHash String         @map("password_hash")
+  name         String         @map("name")
+  role         AdminUserRole  @map("role")
+  status       AdminUserStatus @default(ACTIVE) @map("status")
+  lastLoginAt  DateTime?      @map("last_login_at") @db.Timestamptz(6)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sessions AdminSession[]
+  auditLogs AdminAuditLog[]
+
+  @@map("admin_users")
+}
+
+model AdminSession {
+  id                String    @id @default(uuid())
+  adminUserId       String    @map("admin_user_id")
+  sessionTokenHash  String    @unique @map("session_token_hash")
+  expiresAt         DateTime  @map("expires_at") @db.Timestamptz(6)
+  ipAddress         String?   @map("ip_address") @db.VarChar(45)
+  userAgent         String?   @map("user_agent") @db.Text
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+  @@index([expiresAt])
+  @@map("admin_sessions")
+}
+
+model AdminAuditLog {
+  id          String   @id @default(uuid())
+  adminUserId String?  @map("admin_user_id")
+  action      String   @map("action") @db.VarChar(128)
+  targetType  String?  @map("target_type") @db.VarChar(64)
+  targetId    String?  @map("target_id") @db.VarChar(64)
+  metadata    Json?    @map("metadata")
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  userAgent   String?  @map("user_agent") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([adminUserId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("admin_audit_logs")
+}

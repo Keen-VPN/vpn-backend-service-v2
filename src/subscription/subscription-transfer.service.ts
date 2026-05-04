@@ -282,8 +282,12 @@ export class SubscriptionTransferService {
     throw new NotFoundException('No proof available for this request');
   }
 
-  async adminApprove(id: string, dto: ApproveTransferRequestDto) {
-    const adminId = dto.reviewedByAdminId?.trim() || null;
+  async adminApprove(
+    id: string,
+    dto: ApproveTransferRequestDto,
+    adminUserId: string,
+  ) {
+    const adminId = adminUserId;
     const reviewedAt = new Date();
 
     const result = await this.prisma.$transaction(
@@ -375,8 +379,12 @@ export class SubscriptionTransferService {
     return { success: true, data: this.toPublicDto(result) };
   }
 
-  async adminReject(id: string, dto: RejectTransferRequestDto) {
-    const adminId = dto.reviewedByAdminId?.trim() || null;
+  async adminReject(
+    id: string,
+    dto: RejectTransferRequestDto,
+    adminUserId: string,
+  ) {
+    const adminId = adminUserId;
     const note = dto.adminNote?.trim();
     if (!note) {
       throw new BadRequestException('Rejection requires an admin note');

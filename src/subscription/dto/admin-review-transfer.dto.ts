@@ -23,14 +23,6 @@ export class ApproveTransferRequestDto {
   @IsString()
   @MaxLength(2000)
   adminNote?: string;
-
-  @ApiPropertyOptional({
-    description: 'Opaque admin id for audit (email, staff id, etc.)',
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(256)
-  reviewedByAdminId?: string;
 }
 
 export class RejectTransferRequestDto {
@@ -41,10 +33,4 @@ export class RejectTransferRequestDto {
   @IsNotEmpty()
   @MaxLength(2000)
   adminNote!: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(256)
-  reviewedByAdminId?: string;
 }

@@ -402,10 +402,10 @@ describe('SubscriptionTransferService', () => {
 
   it('reject requires admin note', async () => {
     await expect(
-      service.adminReject('req-1', { adminNote: '   ' }),
+      service.adminReject('req-1', { adminNote: '   ' }, 'admin-test'),
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
-      service.adminReject('req-1', {} as never),
+      service.adminReject('req-1', {} as never, 'admin-test'),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -443,7 +443,7 @@ describe('SubscriptionTransferService', () => {
       },
     );
 
-    await service.adminReject('req-1', { adminNote: 'no' });
+    await service.adminReject('req-1', { adminNote: 'no' }, 'admin-test');
 
     expect(mockPrisma.$transaction).toHaveBeenCalled();
     expect(mockPrisma.subscriptionCreditLedger.create).not.toHaveBeenCalled();
@@ -479,7 +479,7 @@ describe('SubscriptionTransferService', () => {
     );
 
     await expect(
-      service.adminApprove('req-1', { approvedCreditDays: 5 }),
+      service.adminApprove('req-1', { approvedCreditDays: 5 }, 'admin-test'),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -513,7 +513,7 @@ describe('SubscriptionTransferService', () => {
     );
 
     await expect(
-      service.adminApprove('req-1', { approvedCreditDays: 5 }),
+      service.adminApprove('req-1', { approvedCreditDays: 5 }, 'admin-test'),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -575,10 +575,13 @@ describe('SubscriptionTransferService', () => {
       },
     );
 
-    const res = await service.adminApprove('req-1', {
-      approvedCreditDays: 45,
-      reviewedByAdminId: 'admin-a',
-    });
+    const res = await service.adminApprove(
+      'req-1',
+      {
+        approvedCreditDays: 45,
+      },
+      'admin-a',
+    );
 
     expect(res.success).toBe(true);
     expect(newPeriodEnd).toBeDefined();
@@ -643,10 +646,13 @@ describe('SubscriptionTransferService', () => {
       },
     );
 
-    await service.adminApprove('req-1', {
-      approvedCreditDays: 45,
-      reviewedByAdminId: 'admin-a',
-    });
+    await service.adminApprove(
+      'req-1',
+      {
+        approvedCreditDays: 45,
+      },
+      'admin-a',
+    );
 
     expect(ledgerCreated).toBe(true);
   });
@@ -683,7 +689,7 @@ describe('SubscriptionTransferService', () => {
     );
 
     await expect(
-      service.adminApprove('req-1', { approvedCreditDays: 50 }),
+      service.adminApprove('req-1', { approvedCreditDays: 50 }, 'admin-test'),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -725,9 +731,13 @@ describe('SubscriptionTransferService', () => {
       },
     );
 
-    const res = await service.adminApprove('req-1', {
-      approvedCreditDays: 14,
-    });
+    const res = await service.adminApprove(
+      'req-1',
+      {
+        approvedCreditDays: 14,
+      },
+      'admin-test',
+    );
     expect(res.success).toBe(true);
   });
 
@@ -787,7 +797,11 @@ describe('SubscriptionTransferService', () => {
       },
     );
 
-    await service.adminApprove('req-1', { approvedCreditDays: 10 });
+    await service.adminApprove(
+      'req-1',
+      { approvedCreditDays: 10 },
+      'admin-test',
+    );
 
     expect(ledgerData?.billingAlignmentStatus).toBe('STRIPE_ALIGNMENT_PENDING');
   });

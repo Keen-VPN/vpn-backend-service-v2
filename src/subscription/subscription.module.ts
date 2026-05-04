@@ -9,12 +9,18 @@ import { AuthModule } from '../auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { PlansConfigService } from './config/plans.config';
 import { NotificationModule } from '../notification/notification.module';
-import { AdminApiKeyGuard } from '../auth/guards/admin-api-key.guard';
 import { MembershipTransferS3Service } from './membership-transfer-s3.service';
+import { AdminModule } from '../admin/admin.module';
 // Stripe subscription period alignment after transfer credit: see `stripe-billing-alignment.todo.ts`.
 
 @Module({
-  imports: [PrismaModule, AuthModule, ConfigModule, NotificationModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    ConfigModule,
+    NotificationModule,
+    AdminModule,
+  ],
   controllers: [SubscriptionController, AdminSubscriptionTransferController],
   providers: [
     SubscriptionService,
@@ -22,7 +28,6 @@ import { MembershipTransferS3Service } from './membership-transfer-s3.service';
     SubscriptionTransferService,
     TrialService,
     PlansConfigService,
-    AdminApiKeyGuard,
   ],
   exports: [SubscriptionService, TrialService, PlansConfigService],
 })
