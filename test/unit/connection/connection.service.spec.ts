@@ -1,4 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { InternalServerErrorException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ConnectionService } from '../../../src/connection/connection.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { NodesService } from '../../../src/nodes/nodes.service';
@@ -143,6 +145,73 @@ describe('ConnectionService', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
+    });
+  });
+
+  describe('recordIpAddressClick', () => {
+    it('should record a privacy-safe IP address click event', async () => {
+      mockPrisma.productEvent.create.mockResolvedValue({} as any);
+
+      const result = await service.recordIpAddressClick(
+        {
+          platform: 'ios',
+          server_location: 'United States',
+          connection_status: 'connected',
+          ip_address_present: true,
+          app_version: '1.0.0',
+        },
+        'user-123',
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.productEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 'user-123',
+          eventName: 'ip_address_clicked',
+          platform: 'ios',
+          serverLocation: 'United States',
+          connectionStatus: 'connected',
+          ipAddressPresent: true,
+          properties: { app_version: '1.0.0' },
+        }),
+      });
+    });
+
+    it('should store null properties when no app version is provided', async () => {
+      mockPrisma.productEvent.create.mockResolvedValue({} as any);
+
+      const result = await service.recordIpAddressClick(
+        {
+          platform: 'ios',
+          connection_status: 'connected',
+          ip_address_present: true,
+        },
+        'user-123',
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockPrisma.productEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          properties: Prisma.DbNull,
+        }),
+      });
+    });
+
+    it('should return 500 when recording IP address click event fails', async () => {
+      mockPrisma.productEvent.create.mockRejectedValue(
+        new Error('Database error'),
+      );
+
+      await expect(
+        service.recordIpAddressClick(
+          {
+            platform: 'macos',
+            connection_status: 'connected',
+            ip_address_present: true,
+          },
+          'user-123',
+        ),
+      ).rejects.toBeInstanceOf(InternalServerErrorException);
     });
   });
 

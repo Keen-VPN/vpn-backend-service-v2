@@ -23,6 +23,7 @@ import {
   LongestSessionResponseDto,
   UpdateLongestSessionDto,
 } from '../common/dto/user-longest-session.dto';
+import { IpAddressClickEventDto } from '../common/dto/product-event.dto';
 
 @ApiTags('Connection')
 @Controller('connection')
@@ -53,6 +54,28 @@ export class ConnectionController {
     @Body() sessionDto: ConnectionSessionDto,
   ): Promise<SuccessResponseDto> {
     return this.connectionService.recordSession(sessionDto, user.uid);
+  }
+
+  @Post('events/ip-address-click')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(SessionAuthGuard)
+  @ApiOperation({
+    summary: 'Record an IP address click product event',
+    description:
+      'Counts when a connected user opens the IP verification link. Raw IP addresses are intentionally not collected.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Event recorded successfully',
+    type: SuccessResponseDto,
+  })
+  @ApiBody({ type: IpAddressClickEventDto })
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  async recordIpAddressClick(
+    @CurrentUser() user: { uid: string },
+    @Body() eventDto: IpAddressClickEventDto,
+  ): Promise<SuccessResponseDto> {
+    return this.connectionService.recordIpAddressClick(eventDto, user.uid);
   }
 
   @Post('metrics/longest-session')
