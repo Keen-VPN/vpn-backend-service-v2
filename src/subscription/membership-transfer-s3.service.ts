@@ -16,7 +16,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const ALLOWED_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 export const MEMBERSHIP_TRANSFER_MAX_PROOF_BYTES = 5 * 1024 * 1024;
-const KEY_PREFIX = 'membership-transfer-proofs';
+// Store all membership proof uploads under the bucket's /uploads folder.
+const KEY_PREFIX = 'uploads/membership-transfer-proofs';
 /** Presigned PUT TTL (seconds). Keep short to reduce abuse window. */
 const PRESIGNED_PUT_EXPIRES_SECONDS = 90;
 
@@ -36,7 +37,12 @@ export class MembershipTransferS3Service {
       this.configService.get<string>('MEMBERSHIP_TRANSFER_S3_BUCKET') ||
       process.env.MEMBERSHIP_TRANSFER_S3_BUCKET ||
       '';
-    this.client = new S3Client({ region });
+    this.client = new S3Client({
+      region,
+      // Keep presigned browser uploads simple: only require checksum when S3 mandates it.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
+    });
   }
 
   enabled(): boolean {
