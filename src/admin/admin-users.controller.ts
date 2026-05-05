@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Inject,
@@ -22,12 +23,12 @@ import { CurrentAdmin } from './decorators/current-admin.decorator';
 import type { AdminRequestUser } from '../types/express';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { DisableAdminUserDto } from './dto/disable-admin-user.dto';
+import { UpdateAdminPasswordDto } from './dto/update-admin-password.dto';
 import { ADMIN_SESSION_COOKIE } from './admin.constants';
 
 @ApiTags('Admin — Users')
 @Controller('admin/users')
 @UseGuards(AdminAuthGuard, AdminPermissionsGuard)
-@RequireAdminPermissions('admin_users.manage')
 @ApiCookieAuth(ADMIN_SESSION_COOKIE)
 export class AdminUsersController {
   constructor(
@@ -36,6 +37,7 @@ export class AdminUsersController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @RequireAdminPermissions('admin_users.manage')
   @ApiOperation({
     summary: 'Create an admin user (super admin only for SUPER_ADMIN role)',
   })
@@ -52,8 +54,33 @@ export class AdminUsersController {
     return this.adminUsers.create(actor, body, ip, ua);
   }
 
+  @Post('me/password')
+  @HttpCode(HttpStatus.OK)
+  @RequireAdminPermissions('admin_users.manage')
+  @ApiOperation({
+    summary: 'Update your own admin password (super admin only)',
+  })
+  async updateOwnPassword(
+    @CurrentAdmin() actor: AdminRequestUser,
+    @Body() body: UpdateAdminPasswordDto,
+    @Req() req: Request,
+  ) {
+    const ua =
+      typeof req.headers['user-agent'] === 'string'
+        ? req.headers['user-agent']
+        : null;
+    return this.adminUsers.updateOwnPassword(
+      actor,
+      body.currentPassword,
+      body.newPassword,
+      req.ip || null,
+      ua,
+    );
+  }
+
   @Patch(':id')
   @HttpCode(HttpStatus.OK)
+  @RequireAdminPermissions('admin_users.manage')
   @ApiOperation({ summary: 'Disable an admin user' })
   async disable(
     @CurrentAdmin() actor: AdminRequestUser,
@@ -69,5 +96,12 @@ export class AdminUsersController {
         ? req.headers['user-agent']
         : null;
     return this.adminUsers.disable(actor, id, req.ip || null, ua);
+  }
+
+  @Get('overview')
+  @RequireAdminPermissions('users.read')
+  @ApiOperation({ summary: 'Admin users overview (count + longest sessions)' })
+  async overview() {
+    return this.adminUsers.getUsersOverview(20);
   }
 }

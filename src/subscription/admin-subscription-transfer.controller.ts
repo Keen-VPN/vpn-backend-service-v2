@@ -28,6 +28,7 @@ import { RequireAdminPermissions } from '../admin/decorators/require-admin-permi
 import { CurrentAdmin } from '../admin/decorators/current-admin.decorator';
 import type { AdminRequestUser } from '../types/express';
 import { SubscriptionTransferService } from './subscription-transfer.service';
+import { SubscriptionService } from './subscription.service';
 import {
   ApproveTransferRequestDto,
   RejectTransferRequestDto,
@@ -41,6 +42,8 @@ export class AdminSubscriptionTransferController {
   constructor(
     @Inject(SubscriptionTransferService)
     private readonly transferService: SubscriptionTransferService,
+    @Inject(SubscriptionService)
+    private readonly subscriptionService: SubscriptionService,
     @Inject(AdminAuditService) private readonly adminAudit: AdminAuditService,
   ) {}
 
@@ -57,6 +60,15 @@ export class AdminSubscriptionTransferController {
       filter = status as TransferRequestStatus;
     }
     return this.transferService.adminList(filter);
+  }
+
+  @Get('subscriptions')
+  @RequireAdminPermissions('subscriptions.read')
+  @ApiOperation({ summary: 'List subscriptions for admin review' })
+  @ApiResponse({ status: 200 })
+  async listSubscriptions(@Query('limit') limit?: string) {
+    const parsed = limit ? parseInt(limit, 10) : 50;
+    return this.subscriptionService.adminListSubscriptions(parsed);
   }
 
   @Get('transfer-requests/:id/proof-view')

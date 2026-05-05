@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AdminUserRole, AdminUserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -29,6 +30,9 @@ export class AdminUsersService {
     ip: string | null,
     userAgent: string | null,
   ) {
+    if (actor.role !== AdminUserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Only super admins may create admin users');
+    }
     if (
       dto.role === AdminUserRole.SUPER_ADMIN &&
       actor.role !== AdminUserRole.SUPER_ADMIN
@@ -72,6 +76,84 @@ export class AdminUsersService {
         name: user.name,
         role: user.role,
         status: user.status,
+      },
+    };
+  }
+
+  async updateOwnPassword(
+    actor: AdminRequestUser,
+    currentPassword: string,
+    newPassword: string,
+    ip: string | null,
+    userAgent: string | null,
+  ) {
+    if (actor.role !== AdminUserRole.SUPER_ADMIN) {
+      throw new ForbiddenException(
+        'Only super admins may update admin passwords',
+      );
+    }
+    assertStrongPassword(newPassword);
+    const me = await this.prisma.adminUser.findUnique({
+      where: { id: actor.id },
+    });
+    if (!me) {
+      throw new NotFoundException('Admin user not found');
+    }
+    const ok = await this.adminAuth.verifyPassword(
+      me.passwordHash,
+      currentPassword,
+    );
+    if (!ok) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+    const passwordHash = await this.adminAuth.hashPassword(newPassword);
+    await this.prisma.adminUser.update({
+      where: { id: actor.id },
+      data: { passwordHash },
+    });
+    await this.sessions.revokeAllActiveForUser(actor.id);
+    await this.audit.log({
+      adminUserId: actor.id,
+      action: 'admin.user.password_updated',
+      targetType: 'admin_user',
+      targetId: actor.id,
+      metadata: { email: me.email } as object,
+      ipAddress: ip,
+      userAgent,
+    });
+    return { success: true };
+  }
+
+  async getUsersOverview(limit = 20) {
+    const safeLimit = Number.isFinite(limit)
+      ? Math.max(1, Math.min(100, Math.floor(limit)))
+      : 20;
+    const [totalUsers, topUsers] = await Promise.all([
+      this.prisma.user.count(),
+      this.prisma.user.findMany({
+        orderBy: [{ longestSessionSeconds: 'desc' }, { createdAt: 'desc' }],
+        take: safeLimit,
+        select: {
+          id: true,
+          email: true,
+          displayName: true,
+          longestSessionSeconds: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        totalUsers,
+        users: topUsers.map((u) => ({
+          id: u.id,
+          email: u.email,
+          name: u.displayName ?? null,
+          longestSessionSeconds: u.longestSessionSeconds,
+          createdAt: u.createdAt.toISOString(),
+        })),
       },
     };
   }

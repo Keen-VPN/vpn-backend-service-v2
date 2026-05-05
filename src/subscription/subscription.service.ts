@@ -43,6 +43,44 @@ export class SubscriptionService {
     }
   }
 
+  async adminListSubscriptions(limit = 50) {
+    const safeLimit = Number.isFinite(limit)
+      ? Math.max(1, Math.min(200, Math.floor(limit)))
+      : 50;
+    const rows = await this.prisma.subscription.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: safeLimit,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+    return {
+      success: true,
+      data: rows.map((s) => ({
+        id: s.id,
+        status: s.status,
+        planName: s.planName,
+        subscriptionType: s.subscriptionType,
+        currentPeriodStart: s.currentPeriodStart?.toISOString() ?? null,
+        currentPeriodEnd: s.currentPeriodEnd?.toISOString() ?? null,
+        updatedAt: s.updatedAt.toISOString(),
+        user: {
+          id: s.user.id,
+          email: s.user.email,
+          name: s.user.displayName ?? null,
+          joinedAt: s.user.createdAt.toISOString(),
+        },
+      })),
+    };
+  }
+
   getPlanById(planId: string) {
     try {
       if (!planId) {
