@@ -195,6 +195,7 @@ export class SubscriptionTransferService {
             });
           }
 
+          let requestId: string;
           if (existing?.status === TransferRequestStatus.REJECTED) {
             const updated = await tx.subscriptionTransferRequest.updateMany({
               where: {
@@ -208,16 +209,51 @@ export class SubscriptionTransferService {
                 'A membership transfer request already exists for this account',
               );
             }
-            return tx.subscriptionTransferRequest.findUniqueOrThrow({
-              where: { id: existing.id },
+            requestId = existing.id;
+          } else {
+            const created = await tx.subscriptionTransferRequest.create({
+              data: {
+                userId,
+                ...writeData,
+              },
             });
+            requestId = created.id;
           }
 
-          return tx.subscriptionTransferRequest.create({
-            data: {
-              userId,
-              ...writeData,
-            },
+          // Re-check duplicate proof inside the write transaction so concurrent
+          // submissions cannot bypass the DUPLICATE_PROOF risk signal.
+          if (proofHash) {
+            const duplicate = await tx.subscriptionTransferRequest.findFirst({
+              where: {
+                proofHash,
+                userId: { not: userId },
+              },
+              select: { id: true },
+            });
+            if (
+              duplicate &&
+              !flags.includes(MEMBERSHIP_TRANSFER_RISK.DUPLICATE_PROOF)
+            ) {
+              const mergedFlags = [
+                ...flags,
+                MEMBERSHIP_TRANSFER_RISK.DUPLICATE_PROOF,
+              ];
+              const mergedScore = Math.min(
+                RISK_SCORE_CAP,
+                score + RISK_WEIGHT_DUPLICATE_PROOF,
+              );
+              await tx.subscriptionTransferRequest.update({
+                where: { id: requestId },
+                data: {
+                  riskFlags: mergedFlags as unknown as Prisma.InputJsonValue,
+                  riskScore: mergedScore,
+                },
+              });
+            }
+          }
+
+          return tx.subscriptionTransferRequest.findUniqueOrThrow({
+            where: { id: requestId },
           });
         },
         {
