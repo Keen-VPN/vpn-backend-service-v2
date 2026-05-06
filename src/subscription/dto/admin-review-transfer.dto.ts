@@ -9,7 +9,7 @@ import {
   Min,
 } from 'class-validator';
 
-const MAX_CREDIT = 180;
+const MAX_CREDIT = 365;
 
 export class ApproveTransferRequestDto {
   @ApiProperty({ minimum: 1, maximum: MAX_CREDIT })

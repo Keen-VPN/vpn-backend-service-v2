@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsEmail,
   IsISO8601,
   IsNotEmpty,
   IsOptional,
@@ -62,4 +63,13 @@ export class CreateTransferRequestDto {
   @IsString()
   @MaxLength(128)
   clientDeviceFingerprint?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Optional contact email used when the sign-in email is an Apple private relay address.',
+  })
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(320)
+  contactEmail?: string;
 }

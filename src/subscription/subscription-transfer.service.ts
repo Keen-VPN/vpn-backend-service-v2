@@ -33,7 +33,9 @@ import {
   RISK_WEIGHT_NEW_ACCOUNT,
 } from './membership-transfer.constants';
 
-export const MAX_TRANSFER_CREDIT_DAYS = 180;
+export const MAX_TRANSFER_CREDIT_DAYS = 365;
+const AUTO_APPROVE_TRANSFER_THRESHOLD_DAYS = 31;
+const AUTO_APPROVE_REVIEWER_ID = 'system_auto_approval';
 export const INTERNAL_PROOF_PLACEHOLDER = 'keen-internal:uploaded-proof';
 
 @Injectable()
@@ -185,6 +187,24 @@ export class SubscriptionTransferService {
       riskScore: score,
       riskFlags: flags,
     });
+
+    if (requestedCreditDays <= AUTO_APPROVE_TRANSFER_THRESHOLD_DAYS) {
+      SafeLogger.info('Membership transfer request auto-approved', {
+        service: SubscriptionTransferService.name,
+        userId,
+        requestId: row.id,
+        requestedCreditDays,
+      });
+      return this.adminApprove(
+        row.id,
+        {
+          approvedCreditDays: requestedCreditDays,
+          adminNote:
+            'Auto-approved: competitor subscription expiry is within 1 month',
+        },
+        AUTO_APPROVE_REVIEWER_ID,
+      );
+    }
 
     return { success: true, data: this.toPublicDto(row) };
   }

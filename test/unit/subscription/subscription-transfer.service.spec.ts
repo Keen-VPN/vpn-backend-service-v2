@@ -52,7 +52,7 @@ describe('SubscriptionTransferService', () => {
 
   const userId = 'user-1';
   const futureExpiry = new Date(
-    Date.now() + 30 * 24 * 60 * 60 * 1000,
+    Date.now() + 60 * 24 * 60 * 60 * 1000,
   ).toISOString();
 
   const defaultUser = {
@@ -210,6 +210,39 @@ describe('SubscriptionTransferService', () => {
         }),
       }),
     );
+  });
+
+  it('auto-approves request when expiry is within 1 month', async () => {
+    const nearExpiry = new Date(Date.now() + 10 * 86400000).toISOString();
+    const approved = publicRow({
+      status: TransferRequestStatus.APPROVED,
+      approvedCreditDays: 10,
+    });
+    mockPrisma.subscriptionTransferRequest.findUnique.mockResolvedValue(null);
+    mockPrisma.subscriptionTransferRequest.create.mockResolvedValue(
+      publicRow(),
+    );
+    const approveSpy = jest
+      .spyOn(service, 'adminApprove')
+      .mockResolvedValue({ success: true, data: approved });
+
+    const res = await service.createRequest(userId, {
+      provider: 'OtherVPN',
+      expiryDate: nearExpiry,
+      proofUrl: 'https://example.com/p.png',
+    });
+
+    expect(approveSpy).toHaveBeenCalledTimes(1);
+    expect(approveSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        approvedCreditDays: 10,
+      }),
+      'system_auto_approval',
+    );
+    expect(res.success).toBe(true);
+    expect(res.data?.status).toBe(TransferRequestStatus.APPROVED);
+    expect(res.data?.approvedCreditDays).toBe(10);
   });
 
   it('flags DUPLICATE_PROOF when same proofHash used by another user', async () => {
