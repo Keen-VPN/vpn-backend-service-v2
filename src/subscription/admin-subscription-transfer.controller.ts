@@ -142,16 +142,12 @@ export class AdminSubscriptionTransferController {
     @CurrentAdmin() admin: AdminRequestUser,
     @Req() req: Request,
   ) {
-    const res = await this.transferService.adminApprove(id, body, admin.id);
     const ua =
       typeof req.headers['user-agent'] === 'string'
         ? req.headers['user-agent']
         : null;
-    await this.adminAudit.log({
-      adminUserId: admin.id,
+    const res = await this.transferService.adminApprove(id, body, admin.id, {
       action: 'membership_transfer.approved',
-      targetType: 'subscription_transfer_request',
-      targetId: id,
       metadata: {
         approvedCreditDays: body.approvedCreditDays,
         adminEmail: admin.email,
@@ -172,16 +168,12 @@ export class AdminSubscriptionTransferController {
     @CurrentAdmin() admin: AdminRequestUser,
     @Req() req: Request,
   ) {
-    const res = await this.transferService.adminReject(id, body, admin.id);
     const ua =
       typeof req.headers['user-agent'] === 'string'
         ? req.headers['user-agent']
         : null;
-    await this.adminAudit.log({
-      adminUserId: admin.id,
+    const res = await this.transferService.adminReject(id, body, admin.id, {
       action: 'membership_transfer.rejected',
-      targetType: 'subscription_transfer_request',
-      targetId: id,
       metadata: { adminEmail: admin.email } as object,
       ipAddress: req.ip || null,
       userAgent: ua,

@@ -107,7 +107,6 @@ export class SubscriptionTransferService {
 
     let proofUrl = dto.proofUrl?.trim() ?? '';
     let proofMimeType: string | null = null;
-    const proofBlob: Buffer | null = null;
     let proofHash: string | null = null;
     let proofSizeBytes: number | null = null;
     let proofOriginalFilename: string | null = null;
@@ -167,7 +166,6 @@ export class SubscriptionTransferService {
         expiryDate,
         proofUrl,
         proofMimeType,
-        proofBlob,
         proofHash,
         proofSizeBytes,
         proofOriginalFilename,
@@ -314,6 +312,12 @@ export class SubscriptionTransferService {
     id: string,
     dto: ApproveTransferRequestDto,
     adminUserId: string,
+    audit?: {
+      action: string;
+      ipAddress?: string | null;
+      userAgent?: string | null;
+      metadata?: Prisma.InputJsonValue;
+    },
   ) {
     const adminId = adminUserId;
     const reviewedAt = new Date();
@@ -387,6 +391,20 @@ export class SubscriptionTransferService {
           },
         });
 
+        if (audit) {
+          await tx.adminAuditLog.create({
+            data: {
+              adminUserId: adminId,
+              action: audit.action,
+              targetType: 'subscription_transfer_request',
+              targetId: id,
+              metadata: audit.metadata ?? Prisma.JsonNull,
+              ipAddress: audit.ipAddress ?? null,
+              userAgent: audit.userAgent ?? null,
+            },
+          });
+        }
+
         return tx.subscriptionTransferRequest.findUniqueOrThrow({
           where: { id },
         });
@@ -411,6 +429,12 @@ export class SubscriptionTransferService {
     id: string,
     dto: RejectTransferRequestDto,
     adminUserId: string,
+    audit?: {
+      action: string;
+      ipAddress?: string | null;
+      userAgent?: string | null;
+      metadata?: Prisma.InputJsonValue;
+    },
   ) {
     const adminId = adminUserId;
     const note = dto.adminNote?.trim();
@@ -443,6 +467,21 @@ export class SubscriptionTransferService {
           'Request is not pending or was already processed',
         );
       }
+
+      if (audit) {
+        await tx.adminAuditLog.create({
+          data: {
+            adminUserId: adminId,
+            action: audit.action,
+            targetType: 'subscription_transfer_request',
+            targetId: id,
+            metadata: audit.metadata ?? Prisma.JsonNull,
+            ipAddress: audit.ipAddress ?? null,
+            userAgent: audit.userAgent ?? null,
+          },
+        });
+      }
+
       return tx.subscriptionTransferRequest.findUniqueOrThrow({
         where: { id },
       });
@@ -723,7 +762,7 @@ export class SubscriptionTransferService {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       reviewedAt: row.reviewedAt?.toISOString() ?? null,
-      reviewedByAdminId: row.reviewedByAdminId,
+      reviewedBySystem: row.reviewedByAdminId === AUTO_APPROVE_REVIEWER_ID,
     };
   }
 
@@ -756,6 +795,7 @@ export class SubscriptionTransferService {
     return {
       userId: row.userId,
       ...this.toPublicDto(row),
+      reviewedByAdminId: row.reviewedByAdminId,
       riskScore: row.riskScore,
       riskFlags: flags,
       proofMetadata: {

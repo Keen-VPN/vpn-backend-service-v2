@@ -77,13 +77,19 @@ async function bootstrap() {
 
   const fromEnv = parseCorsOrigins(configService.get<string>('CORS_ORIGINS'));
   assertNoWildcardOrigins(fromEnv);
+  const localhostOrigins =
+    env === 'development'
+      ? [
+          'http://localhost:3000',
+          'http://localhost:5173',
+          'http://localhost:8080',
+          'http://localhost:8081',
+        ]
+      : [];
   const allowedOrigins = [
     ...new Set([
       ...(fromEnv.length ? fromEnv : []),
-      'http://localhost:3000',
-      'http://localhost:5173',
-      'http://localhost:8080',
-      'http://localhost:8081',
+      ...localhostOrigins,
       'https://staging.vpnkeen.com',
       'https://vpnkeen.com',
       'https://www.vpnkeen.com',
