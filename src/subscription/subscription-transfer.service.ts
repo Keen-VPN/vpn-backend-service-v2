@@ -78,15 +78,6 @@ export class SubscriptionTransferService {
   }
 
   async createRequest(userId: string, dto: CreateTransferRequestDto) {
-    const existing = await this.prisma.subscriptionTransferRequest.findUnique({
-      where: { userId },
-    });
-    if (existing && existing.status !== TransferRequestStatus.REJECTED) {
-      throw new ConflictException(
-        'A membership transfer request already exists for this account',
-      );
-    }
-
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, createdAt: true },
@@ -180,51 +171,71 @@ export class SubscriptionTransferService {
       billingAlignmentStatus: BillingAlignmentStatus.NOT_REQUIRED,
     } satisfies Prisma.SubscriptionTransferRequestUpdateInput;
 
-    type TransferRequestRow = Awaited<
+    let row: Awaited<
       ReturnType<
         typeof this.prisma.subscriptionTransferRequest.findUniqueOrThrow
       >
     >;
-    let row: TransferRequestRow;
-    if (existing?.status === TransferRequestStatus.REJECTED) {
-      const updated = await this.prisma.subscriptionTransferRequest.updateMany({
-        where: { id: existing.id, status: TransferRequestStatus.REJECTED },
-        data: writeData,
-      });
-      if (updated.count !== 1) {
+    try {
+      row = await this.prisma.$transaction(
+        async (tx) => {
+          const existing = await tx.subscriptionTransferRequest.findUnique({
+            where: { userId },
+          });
+          if (existing && existing.status !== TransferRequestStatus.REJECTED) {
+            throw new ConflictException(
+              'A membership transfer request already exists for this account',
+            );
+          }
+
+          if (contactEmail) {
+            await tx.user.update({
+              where: { id: userId },
+              data: { contactEmail },
+            });
+          }
+
+          if (existing?.status === TransferRequestStatus.REJECTED) {
+            const updated = await tx.subscriptionTransferRequest.updateMany({
+              where: {
+                id: existing.id,
+                status: TransferRequestStatus.REJECTED,
+              },
+              data: writeData,
+            });
+            if (updated.count !== 1) {
+              throw new ConflictException(
+                'A membership transfer request already exists for this account',
+              );
+            }
+            return tx.subscriptionTransferRequest.findUniqueOrThrow({
+              where: { id: existing.id },
+            });
+          }
+
+          return tx.subscriptionTransferRequest.create({
+            data: {
+              userId,
+              ...writeData,
+            },
+          });
+        },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          maxWait: 5000,
+          timeout: 15000,
+        },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new ConflictException(
           'A membership transfer request already exists for this account',
         );
       }
-      row = await this.prisma.subscriptionTransferRequest.findUniqueOrThrow({
-        where: { id: existing.id },
-      });
-    } else {
-      try {
-        row = await this.prisma.subscriptionTransferRequest.create({
-          data: {
-            userId,
-            ...writeData,
-          },
-        });
-      } catch (error) {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2002'
-        ) {
-          throw new ConflictException(
-            'A membership transfer request already exists for this account',
-          );
-        }
-        throw error;
-      }
-    }
-
-    if (contactEmail) {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { contactEmail },
-      });
+      throw error;
     }
 
     SafeLogger.info('Membership transfer request created', {

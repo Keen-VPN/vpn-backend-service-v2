@@ -34,6 +34,8 @@ describe('SubscriptionTransferService', () => {
       findMany: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+      updateMany: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
     };
     subscriptionCreditLedger: { create: jest.Mock; findUnique: jest.Mock };
     subscription: {
@@ -43,7 +45,7 @@ describe('SubscriptionTransferService', () => {
       create: jest.Mock;
     };
     appleIAPPurchase: { findFirst: jest.Mock };
-    user: { findUnique: jest.Mock };
+    user: { findUnique: jest.Mock; update: jest.Mock };
     trialGrant: { findFirst: jest.Mock };
     deviceTrialFingerprint: { findFirst: jest.Mock };
     pushToken: { findFirst: jest.Mock };
@@ -99,6 +101,7 @@ describe('SubscriptionTransferService', () => {
         create: jest.fn(),
       },
       appleIAPPurchase: { findFirst: jest.fn() },
+      user: { update: jest.fn() },
     };
 
     mockPrisma = {
@@ -108,6 +111,8 @@ describe('SubscriptionTransferService', () => {
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
       },
       subscriptionCreditLedger: {
         create: jest.fn(),
@@ -120,7 +125,10 @@ describe('SubscriptionTransferService', () => {
         create: jest.fn(),
       },
       appleIAPPurchase: { findFirst: jest.fn() },
-      user: { findUnique: jest.fn().mockResolvedValue(defaultUser) },
+      user: {
+        findUnique: jest.fn().mockResolvedValue(defaultUser),
+        update: jest.fn().mockResolvedValue(defaultUser),
+      },
       trialGrant: { findFirst: jest.fn().mockResolvedValue(null) },
       deviceTrialFingerprint: { findFirst: jest.fn().mockResolvedValue(null) },
       pushToken: { findFirst: jest.fn().mockResolvedValue(null) },
@@ -128,6 +136,28 @@ describe('SubscriptionTransferService', () => {
         return fn(tx);
       }),
     };
+    mockPrisma.subscriptionTransferRequest.findUniqueOrThrow.mockImplementation(
+      async (args) => {
+        const row =
+          await mockPrisma.subscriptionTransferRequest.findUnique(args);
+        if (!row) throw new Error('not found');
+        return row;
+      },
+    );
+
+    tx.subscriptionTransferRequest.findUnique.mockImplementation((args) =>
+      mockPrisma.subscriptionTransferRequest.findUnique(args),
+    );
+    tx.subscriptionTransferRequest.create = jest.fn((args) =>
+      mockPrisma.subscriptionTransferRequest.create(args),
+    );
+    tx.subscriptionTransferRequest.updateMany.mockImplementation((args) =>
+      mockPrisma.subscriptionTransferRequest.updateMany(args),
+    );
+    tx.subscriptionTransferRequest.findUniqueOrThrow.mockImplementation(
+      (args) => mockPrisma.subscriptionTransferRequest.findUniqueOrThrow(args),
+    );
+    tx.user.update.mockImplementation((args) => mockPrisma.user.update(args));
 
     mockTransferS3 = {
       verifyUploadedProofObject: jest.fn(),
