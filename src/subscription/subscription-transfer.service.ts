@@ -117,13 +117,14 @@ export class SubscriptionTransferService {
       proofUploadedAt = verified.uploadedAt ?? now;
       proofOriginalFilename = this.sanitizeFilename(dto.proofOriginalFilename);
     } else if (proofUrl) {
+      let parsedUrl: URL;
       try {
-        const u = new URL(proofUrl);
-        if (u.protocol !== 'https:') {
-          throw new BadRequestException('proofUrl must use https');
-        }
+        parsedUrl = new URL(proofUrl);
       } catch {
         throw new BadRequestException('proofUrl must be a valid https URL');
+      }
+      if (parsedUrl.protocol !== 'https:') {
+        throw new BadRequestException('proofUrl must use https');
       }
     } else {
       throw new BadRequestException(
@@ -657,9 +658,16 @@ export class SubscriptionTransferService {
     const iapEnd =
       iap?.expiresDate && iap.expiresDate > now ? iap.expiresDate : null;
 
-    /** max(current entitlement end, now) across subscriptions + IAP */
+    // Do not treat "null end" subscriptions as mutable targets: they represent
+    // indefinite entitlement or externally managed baseline and must not be
+    // converted into a time-limited end date by transfer credit.
+    const finiteDirectSubs = directSubs.filter(
+      (s) => s.currentPeriodEnd != null,
+    );
+
+    /** max(current entitlement end, now) across finite subscriptions + IAP */
     let entitlementEnd = now;
-    for (const s of directSubs) {
+    for (const s of finiteDirectSubs) {
       if (s.currentPeriodEnd && s.currentPeriodEnd > entitlementEnd) {
         entitlementEnd = s.currentPeriodEnd;
       }
@@ -671,17 +679,10 @@ export class SubscriptionTransferService {
     const newPeriodEnd = addDaysUtc(entitlementEnd, approvedCreditDays);
 
     let targetSub: (typeof directSubs)[0] | null = null;
-    if (directSubs.length > 0) {
-      const nullEnd = directSubs.find((s) => s.currentPeriodEnd == null);
-      if (nullEnd) {
-        targetSub = nullEnd;
-      } else {
-        targetSub = directSubs.reduce((a, b) =>
-          a.currentPeriodEnd!.getTime() >= b.currentPeriodEnd!.getTime()
-            ? a
-            : b,
-        );
-      }
+    if (finiteDirectSubs.length > 0) {
+      targetSub = finiteDirectSubs.reduce((a, b) =>
+        a.currentPeriodEnd!.getTime() >= b.currentPeriodEnd!.getTime() ? a : b,
+      );
     }
 
     const hasStripe = await this.hasActiveStripeBackedSubscription(
