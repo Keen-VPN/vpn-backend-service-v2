@@ -297,6 +297,13 @@ export class SubscriptionTransferService {
             'Auto-approved: competitor subscription expiry is within 1 month',
         },
         AUTO_APPROVE_REVIEWER_ID,
+        {
+          action: 'membership_transfer.auto_approved',
+          metadata: {
+            approvedCreditDays: requestedCreditDays,
+            reviewer: AUTO_APPROVE_REVIEWER_ID,
+          } as Prisma.InputJsonValue,
+        },
       );
     }
 
