@@ -79,4 +79,28 @@ export const configValidationSchema = Joi.object({
   SUPPORT_EMAIL: Joi.string().email().optional(),
   SALES_EMAIL: Joi.string().email().optional(),
   ACCOUNT_URL: Joi.string().uri().optional(),
+
+  /** Admin session cookie max-age in seconds (300–2592000). Defaults to 7 days. */
+  ADMIN_SESSION_MAX_AGE_SEC: Joi.number()
+    .integer()
+    .min(300)
+    .max(2592000)
+    .optional(),
+  /** Cookie SameSite: lax | strict | none (use none + HTTPS when admin UI and API differ by site). */
+  ADMIN_SESSION_COOKIE_SAME_SITE: Joi.string()
+    .valid('lax', 'strict', 'none')
+    .optional(),
+  /** Optional explicit cookie Domain (e.g. .vpnkeen.com). */
+  ADMIN_SESSION_COOKIE_DOMAIN: Joi.string().optional(),
+  /** Login limiter backend: in_memory | redis. */
+  ADMIN_LOGIN_RATE_LIMITER_BACKEND: Joi.string()
+    .valid('in_memory', 'redis')
+    .default('in_memory'),
+  /** Optional expected instance count for safety warnings in production. */
+  APP_INSTANCE_COUNT: Joi.number().integer().min(1).optional(),
+  CORS_ORIGINS: Joi.string().optional(),
+  /** S3 bucket for membership-transfer proof images (presigned PUT/GET). Optional until feature is enabled. */
+  MEMBERSHIP_TRANSFER_S3_BUCKET: Joi.string().optional(),
+  /** AWS region for S3 client (defaults to us-east-1 in code when unset). */
+  AWS_REGION: Joi.string().optional(),
 });

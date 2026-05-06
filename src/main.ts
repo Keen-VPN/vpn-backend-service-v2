@@ -1,12 +1,19 @@
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { SafeLogger } from './common/utils/logger.util';
 import { SecretsUtil } from './common/utils/secrets.util';
+import { ADMIN_SESSION_COOKIE } from './admin/admin.constants';
+import {
+  assertNoWildcardOrigins,
+  parseCorsOrigins,
+} from './common/http/cors.util';
 
 async function bootstrap() {
   // Fetch large secrets from Secrets Manager if not provided in environment (for Staging/Prod)
@@ -46,11 +53,17 @@ async function bootstrap() {
     }
   }
 
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true, // Enable raw body for webhook signature verification
   });
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3000);
+
+  if (['staging', 'production'].includes(env)) {
+    app.set('trust proxy', 1);
+  }
+
+  app.use(cookieParser());
 
   // Security middleware
   app.use(
@@ -66,20 +79,32 @@ async function bootstrap() {
     }),
   );
 
-  // CORS configuration
-  const allowedOrigins = configService
-    .get<string>('CORS_ORIGINS')
-    ?.split(',') || [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'https://staging.vpnkeen.com',
-    'https://vpnkeen.com',
-    'http://localhost:8080',
+  const fromEnv = parseCorsOrigins(configService.get<string>('CORS_ORIGINS'));
+  assertNoWildcardOrigins(fromEnv);
+  const localhostOrigins =
+    env === 'development'
+      ? [
+          'http://localhost:3000',
+          'http://localhost:5173',
+          'http://localhost:8080',
+          'http://localhost:8081',
+        ]
+      : [];
+  const allowedOrigins = [
+    ...new Set([
+      ...(fromEnv.length ? fromEnv : []),
+      ...localhostOrigins,
+      'https://staging.vpnkeen.com',
+      'https://vpnkeen.com',
+      'https://www.vpnkeen.com',
+      'https://vpnkeen.netlify.app',
+      'https://keenvpnstaging.netlify.app',
+    ]),
   ];
 
   app.enableCors({
     origin: (
-      origin: string,
+      origin: string | undefined,
       callback: (err: Error | null, allow?: boolean) => void,
     ) => {
       if (!origin || allowedOrigins.includes(origin)) {
@@ -89,8 +114,13 @@ async function bootstrap() {
       }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'Cookie',
+    ],
   });
 
   // Global validation pipe
@@ -124,23 +154,16 @@ async function bootstrap() {
       },
       'bearer', // Ensure legacy compatibility with @ApiBearerAuth()
     )
+    .addCookieAuth(ADMIN_SESSION_COOKIE, {
+      type: 'apiKey',
+      in: 'cookie',
+      name: ADMIN_SESSION_COOKIE,
+      description:
+        'Admin dashboard session (HttpOnly cookie set by POST /api/admin/auth/login)',
+    })
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
-
-  app.enableCors({
-    origin: [
-      'http://localhost:8080',
-      'http://localhost:8081',
-      'https://staging.vpnkeen.com',
-      'https://vpnkeen.netlify.app',
-      'https://keenvpnstaging.netlify.app',
-      'https://vpnkeen.com',
-      'https://www.vpnkeen.com',
-    ],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
-  });
 
   await app.listen(port);
   SafeLogger.info(

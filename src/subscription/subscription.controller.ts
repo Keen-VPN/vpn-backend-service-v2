@@ -16,6 +16,7 @@ import {
   ApiResponse,
   ApiBody,
   ApiBearerAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { SubscriptionService } from './subscription.service';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
@@ -28,6 +29,9 @@ import {
   GetPlanByIdResponseDto,
 } from '../common/dto/response/subscription.response.dto';
 import { SessionTokenDto } from '../common/dto/session-token.dto';
+import { SubscriptionTransferService } from './subscription-transfer.service';
+import { CreateTransferRequestDto } from './dto/create-transfer-request.dto';
+import { PresignProofUploadDto } from './dto/presign-proof-upload.dto';
 
 @ApiTags('Subscription')
 @Controller('subscription')
@@ -35,6 +39,8 @@ export class SubscriptionController {
   constructor(
     @Inject(SubscriptionService)
     private readonly subscriptionService: SubscriptionService,
+    @Inject(SubscriptionTransferService)
+    private readonly subscriptionTransferService: SubscriptionTransferService,
   ) {}
 
   @Get('plans')
@@ -155,5 +161,59 @@ export class SubscriptionController {
   ) {
     const userId = user.uid;
     return this.subscriptionService.getHistoryEventDetails(userId, eventId);
+  }
+
+  @Get('transfer-request')
+  @UseGuards(SessionAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current user membership transfer request' })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  async getTransferRequest(@CurrentUser() user: { uid: string }) {
+    return this.subscriptionTransferService.getMyRequest(user.uid);
+  }
+
+  @Post('transfer-request/presigned-upload')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(SessionAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get presigned S3 PUT URL for membership transfer proof image',
+  })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
+  @ApiResponse({ status: 503, description: 'S3 not configured' })
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  async presignedMembershipTransferUpload(
+    @CurrentUser() user: { uid: string },
+    @Body() body: PresignProofUploadDto,
+  ) {
+    return this.subscriptionTransferService.createPresignedProofUpload(
+      user.uid,
+      body,
+    );
+  }
+
+  @Post('transfer-request')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(SessionAuthGuard)
+  @ApiBearerAuth()
+  @ApiConsumes('application/json')
+  @ApiOperation({
+    summary:
+      'Submit membership transfer request (competitor VPN → Keen credit)',
+  })
+  @ApiBody({ type: CreateTransferRequestDto })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 400 })
+  @ApiResponse({ status: 401 })
+  @ApiResponse({ status: 409, description: 'Already submitted' })
+  @Throttle({ default: { limit: 5, ttl: 3600000 } })
+  async createTransferRequest(
+    @CurrentUser() user: { uid: string },
+    @Body() body: CreateTransferRequestDto,
+  ) {
+    return this.subscriptionTransferService.createRequest(user.uid, body);
   }
 }
