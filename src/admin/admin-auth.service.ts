@@ -8,6 +8,7 @@ import { AdminSessionService, hashSessionToken } from './admin-session.service';
 import { AdminLoginRateLimiterService } from './admin-login-rate-limit.service';
 import { permissionsForRole, type AdminPermission } from './admin-permissions';
 import { DEFAULT_ADMIN_SESSION_MAX_AGE_SEC } from './admin.constants';
+import { SafeLogger } from '../common/utils/logger.util';
 
 export type AdminMePayload = {
   id: string;
@@ -64,14 +65,26 @@ export class AdminAuthService {
     });
 
     const fail = async (reason: string): Promise<never> => {
-      await this.audit.log({
-        adminUserId: user?.id ?? null,
-        action: 'admin.login.failure',
-        targetType: 'admin_session',
-        metadata: { reason } as object,
-        ipAddress: ip,
-        userAgent,
-      });
+      try {
+        await this.audit.log({
+          adminUserId: user?.id ?? null,
+          action: 'admin.login.failure',
+          targetType: 'admin_session',
+          metadata: { reason } as object,
+          ipAddress: ip,
+          userAgent,
+        });
+      } catch (error) {
+        SafeLogger.error(
+          'Failed to write admin login failure audit log',
+          error,
+          {
+            service: AdminAuthService.name,
+            reason,
+            email,
+          },
+        );
+      }
       throw new UnauthorizedException('Invalid email or password');
     };
 
