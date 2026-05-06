@@ -199,19 +199,25 @@ export class ConnectionService {
 
   async recordIpAddressClick(eventDto: IpAddressClickEventDto, userId: string) {
     try {
-      await this.prisma.productEvent.create({
-        data: {
-          userId,
-          eventName: 'ip_address_clicked',
-          platform: eventDto.platform ?? null,
-          serverLocation: eventDto.server_location ?? null,
-          connectionStatus: eventDto.connection_status ?? null,
-          ipAddressPresent: eventDto.ip_address_present ?? null,
-          properties: eventDto.app_version
-            ? { app_version: eventDto.app_version }
-            : Prisma.DbNull,
-        },
-      });
+      const propertiesJson = eventDto.app_version
+        ? JSON.stringify({ app_version: eventDto.app_version })
+        : null;
+      await this.prisma.$executeRaw`
+        INSERT INTO product_events
+          (id, user_id, event_name, platform, server_location, connection_status, ip_address_present, properties, created_at)
+        VALUES
+          (
+            gen_random_uuid()::text,
+            ${userId},
+            ${'ip_address_clicked'},
+            ${eventDto.platform ?? null},
+            ${eventDto.server_location ?? null},
+            ${eventDto.connection_status ?? null},
+            ${eventDto.ip_address_present ?? null},
+            ${propertiesJson}::jsonb,
+            NOW()
+          )
+      `;
 
       SafeLogger.info(
         'Product event recorded',
