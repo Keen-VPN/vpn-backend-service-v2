@@ -415,6 +415,8 @@ export class SubscriptionTransferService {
     },
   ) {
     const adminId = adminUserId;
+    const auditAdminUserId =
+      adminId === AUTO_APPROVE_REVIEWER_ID ? null : adminId;
     const reviewedAt = new Date();
 
     const result = await this.prisma.$transaction(
@@ -489,7 +491,7 @@ export class SubscriptionTransferService {
         if (audit) {
           await tx.adminAuditLog.create({
             data: {
-              adminUserId: adminId,
+              adminUserId: auditAdminUserId,
               action: audit.action,
               targetType: 'subscription_transfer_request',
               targetId: id,
