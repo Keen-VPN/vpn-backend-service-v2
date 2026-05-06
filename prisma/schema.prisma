@@ -13,6 +13,7 @@ model User {
   appleUserId             String?                  @unique @map("apple_user_id")
   googleUserId            String?                  @unique @map("google_user_id")
   email                   String                   @unique
+  contactEmail            String?                  @map("contact_email")
   displayName             String?                  @map("display_name")
   provider                String                   @default("google")
   emailVerified           Boolean                  @default(false) @map("email_verified")

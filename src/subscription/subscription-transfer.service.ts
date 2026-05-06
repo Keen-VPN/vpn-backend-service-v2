@@ -103,6 +103,7 @@ export class SubscriptionTransferService {
     if (expiryDate.getTime() <= now.getTime()) {
       throw new BadRequestException('Expiry date must be in the future');
     }
+    const contactEmail = dto.contactEmail?.trim().toLowerCase();
 
     let proofUrl = dto.proofUrl?.trim() ?? '';
     let proofMimeType: string | null = null;
@@ -179,6 +180,13 @@ export class SubscriptionTransferService {
         billingAlignmentStatus: BillingAlignmentStatus.NOT_REQUIRED,
       },
     });
+
+    if (contactEmail) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { contactEmail },
+      });
+    }
 
     SafeLogger.info('Membership transfer request created', {
       service: SubscriptionTransferService.name,
